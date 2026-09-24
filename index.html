@@ -537,6 +537,7 @@ const ROUTES = {
       { name: 'Ямское ОПРС',       lat: 50.9672,             lon: 47.2190 },
       { name: 'Новотулка',          lat: 50.83275914828956,  lon: 47.5577480772517 },
       { name: 'Мироновка',          lat: 50.7518,             lon: 47.4532 },
+      { name: 'Комсомольское',      lat: 50.8000,             lon: 47.0445 },
       { name: 'Дьяковка',           lat: 50.72059455885705,  lon: 46.78232837723893 },
       { name: 'Кирово',             lat: 50.80502894486692,  lon: 46.70056913229126 },
       { name: 'Красный Кут ДПРМ', lat: 50.9330,             lon: 46.9180 }
@@ -941,11 +942,22 @@ function buildRoutePointPopup(routeKey, idx) {
     const ipu = trueBearing(cur, pt);
     const decl = parseFloat(document.getElementById('decl').value) || 0;
     const mpu = norm360(ipu - decl);
+
     html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
     html += '<b>От текущего положения:</b><br>';
     html += 'Расстояние: <b>' + distKm.toFixed(2) + ' км</b><br>';
     html += 'ИПУ: <b>' + ipu.toFixed(0) + '°</b><br>';
     html += 'МПУ: <b>' + mpu.toFixed(0) + '°</b>';
+
+    // ETA по текущей скорости
+    const spdKmh = getCurrentSpeedKmh(pt);
+    if (spdKmh !== null && spdKmh > 1) {
+      const etaSec = (distKm / spdKmh) * 3600;
+      const v = convertSpeed(spdKmh / 3.6);
+      html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+      html += '<b>Скорость:</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
+      html += '<br><b>ETA:</b> <span style="color:#2a7"><b>' + fmtDuration(etaSec) + '</b></span>';
+    }
   } else {
     html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
   }
@@ -1217,6 +1229,40 @@ function getGPSSpeedKmh() {
   if (!rtTracking || !rtCurrentPosition) return null;
   if (rtCurrentPosition.speed === null || rtCurrentPosition.speed === undefined || isNaN(rtCurrentPosition.speed)) return null;
   return rtCurrentPosition.speed * 3.6;
+}
+
+// Получить текущую скорость в км/ч.
+// Приоритет: живой GPS (РВ) → расчёт путевой по ветру.
+function getCurrentSpeedKmh(targetPt) {
+  // 1. Живой GPS в РВ — приоритет
+  const gpsV = getGPSSpeedKmh();
+  if (gpsV !== null && gpsV > 1) return gpsV;
+
+  // 2. Иначе — путевая по ветру (если введены ветер и V)
+  const wdRaw = document.getElementById('windDir').value.trim();
+  const wsRaw = document.getElementById('windSpd').value.trim();
+  const asRaw = document.getElementById('airspeed').value.trim();
+  const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
+  const ws = wsRaw === '' ? NaN : parseFloat(wsRaw.replace(',', '.'));
+  const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
+  if (isNaN(wd) || isNaN(ws) || isNaN(as) || as <= 0) return null;
+
+  const cur = getCurrentPosition();
+  if (!cur || !targetPt) return null;
+
+  const ipu = trueBearing(cur, targetPt);
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const mpu = norm360(ipu - decl);
+
+  let uv = norm360(mpu - wd);
+  if (uv > 180) uv -= 360;
+
+  const sinUS = (ws / as) * Math.sin(toRad(uv));
+  const clampedSin = Math.max(-1, Math.min(1, sinUS));
+  const usDeg = toDeg(Math.asin(clampedSin));
+  const wGround = as * Math.cos(toRad(usDeg)) + ws * Math.cos(toRad(uv));
+
+  return wGround > 0.1 ? wGround : null;
 }
 
 function setNavTarget(lat, lon) {
