@@ -1028,13 +1028,11 @@ function buildRouteSegmentPopup(routeKey, idx) {
 
   // ЗМПУ участка = истинный пеленг A→B минус магнитное склонение
   const decl = parseFloat(document.getElementById('decl').value) || 0;
-  const ipu = trueBearing(A, B);
-  const zmpu = norm360(ipu - decl);
+  const zmpu = norm360(trueBearing(A, B) - decl);
 
   let html = '<b>' + route.name + '</b><br>';
   html += A.name + ' → ' + B.name + '<br>';
   html += 'Длина участка: <b>' + segLen.toFixed(2) + ' км</b><br>';
-  html += '<b>ИПУ:</b> ' + ipu.toFixed(0) + '°<br>';
   html += '<b>ЗМПУ:</b> <span style="color:#2a7"><b>' + zmpu.toFixed(0) + '°</b></span>';
 
   const cur = getCurrentPosition();
@@ -1061,14 +1059,12 @@ function buildRoutePointPopup(routeKey, idx) {
   const cur = getCurrentPosition();
   if (cur) {
     const distKm = distance(cur, pt) / 1000;
-    const ipu = trueBearing(cur, pt);
     const decl = parseFloat(document.getElementById('decl').value) || 0;
-    const mpu = norm360(ipu - decl);
+    const mpu = norm360(trueBearing(cur, pt) - decl);
 
     html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
     html += '<b>От текущего положения:</b><br>';
     html += 'Расстояние: <b>' + distKm.toFixed(2) + ' км</b><br>';
-    html += 'ИПУ: <b>' + ipu.toFixed(0) + '°</b><br>';
     html += 'МПУ: <b>' + mpu.toFixed(0) + '°</b>';
 
     const spdKmh = getCurrentSpeedKmh(pt);
