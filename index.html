@@ -181,6 +181,17 @@
   button.smallbtn { padding:4px 8px; font-size:11px; background:#f0f0f0; color:#333; border:1px solid #ccc; border-radius:4px; margin-left:6px; }
   button.smallbtn:active { background:#dde; }
 
+  button.target-edit-active {
+    background: #e67e22;
+    color: white;
+    border: none;
+    animation: pulse-target 1.2s infinite;
+  }
+  @keyframes pulse-target {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7); }
+    50%      { box-shadow: 0 0 0 8px rgba(230, 126, 34, 0); }
+  }
+
   select { width:100%; padding:3px; font-size:12px; margin-top:2px; }
 
   #result, #nav-result, #rt-result { margin-top:8px; padding:6px; background:#f0f8ff; border-radius:4px; min-height:20px; font-size:12px; }
@@ -318,7 +329,7 @@
 
   <!-- --- ВКЛАДКА НАВИГАЦИЯ --- -->
   <div class="tab-content" id="tab-nav">
-    <div class="subhint">Кликните по карте — это будет цель. Линия от стартовой точки до цели — это ЛЗП.</div>
+    <div class="subhint">Нажмите «🎯 Задать цель», затем кликните по карте. Линия от стартовой точки до цели — это ЛЗП.</div>
 
     <div class="oprs nav-box">
       <b>Текущее положение</b>
@@ -327,8 +338,12 @@
 
     <div class="oprs nav-box">
       <b>Цель</b>
-      <div id="nav-target" style="font-size:12px;color:#555">Кликните по карте, чтобы задать цель</div>
-      <button class="warn" onclick="clearNavTarget()" style="margin-top:4px;">Сбросить цель</button>
+      <div id="nav-target" style="font-size:12px;color:#555">Цель не задана</div>
+      <div style="margin-top:6px; display:flex; gap:6px;">
+        <button id="setTargetBtn" onclick="startTargetEdit()" style="flex:1;">🎯 Задать цель</button>
+        <button class="warn" onclick="clearNavTarget()" style="flex:1;">Сбросить цель</button>
+      </div>
+      <div id="targetEditHint" class="hint" style="display:none; color:#e67e22; font-weight:bold; margin-top:4px;">Кликните по карте — цель будет поставлена здесь</div>
     </div>
 
     <div class="oprs nav-box">
@@ -505,6 +520,9 @@ function switchTab(name) {
   map.closePopup();
   setMapOverlaysInteractive(name !== 'nav');
 
+  // При уходе с Навигации режим редактирования цели сбрасывается
+  if (name !== 'nav') targetEditMode = false;
+
   renderRTTrack();
   renderRTMarker();
   updateNavUI();
@@ -640,6 +658,7 @@ let navTarget = null;
 let navLineStart = null;
 let navTargetMarker = null;
 let navLine = null;
+let targetEditMode = false;
 
 let rtTracking = false;
 let rtWatchId = null;
@@ -1358,11 +1377,17 @@ function getCurrentSpeedKmh(targetPt) {
   return wGround > 0.1 ? wGround : null;
 }
 
+function startTargetEdit() {
+  targetEditMode = !targetEditMode;
+  updateNavUI();
+}
+
 function setNavTarget(lat, lon) {
   navTarget = { lat, lon };
   const cur = getCurrentPosition();
   if (cur) navLineStart = { lat: cur.lat, lon: cur.lon };
   else navLineStart = null;
+  targetEditMode = false;
   updateNavUI();
   updateRTUI();
 }
@@ -1370,6 +1395,7 @@ function setNavTarget(lat, lon) {
 function clearNavTarget() {
   navTarget = null;
   navLineStart = null;
+  targetEditMode = false;
   updateNavUI();
   updateRTUI();
 }
@@ -1484,14 +1510,32 @@ function updateNavUI() {
   if (navTarget) {
     tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
   } else {
-    tgtEl.innerHTML = '<span style="color:#888">Кликните по карте, чтобы задать цель</span>';
+    tgtEl.innerHTML = '<span style="color:#888">Цель не задана</span>';
   }
+
+  const setBtn = document.getElementById('setTargetBtn');
+  const hint = document.getElementById('targetEditHint');
+  if (setBtn) {
+    if (targetEditMode) {
+      setBtn.classList.add('target-edit-active');
+      setBtn.textContent = '✕ Отменить';
+    } else {
+      setBtn.classList.remove('target-edit-active');
+      setBtn.textContent = '🎯 Задать цель';
+    }
+  }
+  if (hint) hint.style.display = targetEditMode ? 'block' : 'none';
 
   const resEl = document.getElementById('nav-result');
   resEl.classList.remove('error');
 
   if (!cur) { resEl.innerHTML = 'Сначала определите своё местоположение (GPS или расчёт ОПРС).'; return; }
-  if (!navTarget) { resEl.innerHTML = 'Задайте цель кликом по карте.'; return; }
+  if (!navTarget) {
+    resEl.innerHTML = targetEditMode
+      ? 'Кликните по карте — там будет цель.'
+      : 'Нажмите «🎯 Задать цель», чтобы поставить цель.';
+    return;
+  }
 
   const n = computeNav();
   if (!n) { resEl.innerHTML = '—'; return; }
@@ -1528,7 +1572,9 @@ function updateNavUI() {
 }
 
 map.on('click', e => {
-  if (currentTab === 'nav') setNavTarget(e.latlng.lat, e.latlng.lng);
+  if (currentTab === 'nav' && targetEditMode) {
+    setNavTarget(e.latlng.lat, e.latlng.lng);
+  }
 });
 <!-- === КОНЕЦ БЛОКА: NAV === -->
 
