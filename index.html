@@ -14,7 +14,6 @@
   html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
   #map { height:100%; width:100%; }
 
-  /* В режиме Навигации слои не перехватывают клики */
   #map.nav-mode .leaflet-overlay-pane,
   #map.nav-mode .leaflet-marker-pane,
   #map.nav-mode .leaflet-shadow-pane,
@@ -273,8 +272,8 @@
 
     <div class="btn-row">
       <button onclick="clearFields()">Очистить поля</button>
-      <button onclick="clearTrack()">Очистить трек</button>
-      <button onclick="clearGps()">Очистить GPS</button>
+      <button onclick="clearTrack()">Очистить трек ОПРС</button>
+      <button onclick="clearGps()">Очистить трек GPS</button>
     </div>
 
     <div class="oprs course-box">
@@ -491,6 +490,7 @@ const SPEED_UNITS = {
 const SPEED_UNITS_ORDER = ['kmh', 'ms', 'kt'];
 
 const TRACK_KEY = 'oprs_nav_track_v1';
+const TRACK_GPS_KEY = 'oprs_nav_track_gps_v1';
 const RT_TRACK_KEY = 'oprs_nav_rt_track_v1';
 const MAX_DIST_KM = 300;
 const ANGLE_ERROR_DEG = 10;
@@ -505,9 +505,6 @@ const RT_MAX_POINTS = 10000;
 // ================ ВКЛАДКИ И ПАНЕЛЬ ================
 let currentTab = 'place';
 
-// Блокировка кликов по слоям: нужна ТОЛЬКО когда в Навигации
-// активен режим редактирования цели — чтобы клик по карте ставил цель,
-// а не открывал попапы слоёв.
 function updateMapInteractivity() {
   const mapEl = document.getElementById('map');
   const blockOverlays = (currentTab === 'nav' && targetEditMode === true);
@@ -528,7 +525,6 @@ function switchTab(name) {
 
   map.closePopup();
 
-  // При уходе с Навигации режим редактирования цели сбрасывается
   if (name !== 'nav') targetEditMode = false;
 
   updateMapInteractivity();
@@ -662,7 +658,12 @@ let trackSegments = [];
 let trackPointLayers = [];
 let posMarker = null;
 let gpsMarker = null;
+
+// Два независимых трека вне режима РВ:
+// track    — трек по ОПРС (кнопка «Рассчитать»)
+// trackGps — трек по GPS (кнопка «Получить МС»)
 let track = [];
+let trackGps = [];
 
 let navTarget = null;
 let navLineStart = null;
@@ -892,7 +893,6 @@ function updateSpeedHudVisibility() {
   }
 }
 
-// Ручное перетаскивание карты выключает слежение
 map.on('dragstart', () => {
   if (followMode && currentTab === 'rtnav') {
     followMode = false;
@@ -913,15 +913,19 @@ function planeIconSvg(courseDeg, color) {
 }
 function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [32, 32], iconAnchor: [16, 16] }); }
 function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [32, 32], iconAnchor: [16, 16] }); }
-function dotIcon() {
+
+// dotIcon с параметром цвета (по умолчанию зелёный)
+function dotIcon(color) {
+  const c = color || '#2a7';
   return L.divIcon({
     className: '',
     html: '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;">' +
-          '<div style="background:#2a7;border-radius:50%;width:10px;height:10px;border:2px solid white;box-shadow:0 0 3px #000;pointer-events:none;"></div>' +
+          '<div style="background:' + c + ';border-radius:50%;width:10px;height:10px;border:2px solid white;box-shadow:0 0 3px #000;pointer-events:none;"></div>' +
           '</div>',
     iconSize: [44, 44], iconAnchor: [22, 22]
   });
 }
+
 function routeDotIcon(color) {
   return L.divIcon({
     className: '',
@@ -962,15 +966,27 @@ function targetIcon() {
 
 <!-- === БЛОК 25: POSITION === -->
 // ================ ТЕКУЩЕЕ ПОЛОЖЕНИЕ ================
-// Приоритет: РВ (живой GPS) > последняя точка трека (ОПРС) > GPS-маркер
+// Приоритет: РВ (живой GPS) > свежайшая точка из двух треков > GPS-маркер
 function getCurrentPosition() {
   if (rtTracking && rtCurrentPosition) {
     return { lat: rtCurrentPosition.lat, lon: rtCurrentPosition.lon, source: 'GPS (РВ)' };
   }
-  if (track.length > 0) {
-    const last = track[track.length - 1];
-    return { lat: last.lat, lon: last.lon, source: 'трек (расчёт ОПРС)' };
+
+  const lastOprs = track.length > 0 ? track[track.length - 1] : null;
+  const lastGps = trackGps.length > 0 ? trackGps[trackGps.length - 1] : null;
+
+  let last = null, src = '';
+  if (lastOprs && lastGps) {
+    if (lastGps.t > lastOprs.t) { last = lastGps; src = 'GPS (Получить МС)'; }
+    else { last = lastOprs; src = 'трек (расчёт ОПРС)'; }
+  } else if (lastOprs) {
+    last = lastOprs; src = 'трек (расчёт ОПРС)';
+  } else if (lastGps) {
+    last = lastGps; src = 'GPS (Получить МС)';
   }
+
+  if (last) return { lat: last.lat, lon: last.lon, source: src };
+
   if (gpsMarker) {
     const ll = gpsMarker.getLatLng();
     return { lat: ll.lat, lon: ll.lng, source: 'GPS' };
@@ -1031,7 +1047,6 @@ function buildRouteSegmentPopup(routeKey, idx) {
   const B = route.points[idx + 1];
   const segLen = distance(A, B) / 1000;
 
-  // ЗМПУ участка = истинный пеленг A→B минус магнитное склонение
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const zmpu = norm360(trueBearing(A, B) - decl);
 
@@ -1040,7 +1055,6 @@ function buildRouteSegmentPopup(routeKey, idx) {
   html += 'Длина участка: <b>' + segLen.toFixed(2) + ' км</b><br>';
   html += '<b>ЗМПУ:</b> <span style="color:#2a7"><b>' + zmpu.toFixed(0) + '°</b></span>';
 
-  // Расчётный угол сноса для направления A→B, если задан ветер
   const wdRaw = document.getElementById('windDir').value.trim();
   const wsRaw = document.getElementById('windSpd').value.trim();
   const asRaw = document.getElementById('airspeed').value.trim();
@@ -1216,17 +1230,22 @@ function clearFields() {
   document.getElementById('result').classList.remove('error');
 }
 
+// Чистит только трек ОПРС (зелёный)
 function clearTrack() {
   track = [];
   saveTrack();
   renderTrack();
-  document.getElementById('result').textContent = 'Трек очищен.';
+  document.getElementById('result').textContent = 'Трек ОПРС очищен.';
   document.getElementById('result').classList.remove('error');
 }
 
+// Чистит трек GPS (оранжевый) и синий GPS-маркер
 function clearGps() {
+  trackGps = [];
+  saveTrackGps();
   if (gpsMarker) { map.removeLayer(gpsMarker); gpsMarker = null; }
-  document.getElementById('result').textContent = 'GPS-маркер удалён.';
+  renderTrack();
+  document.getElementById('result').textContent = 'Трек GPS очищен.';
   document.getElementById('result').classList.remove('error');
   updateNavUI();
 }
@@ -1291,7 +1310,7 @@ function alignToGPS() {
 <!-- === КОНЕЦ БЛОКА 32: ALIGN GPS === -->
 
 <!-- === БЛОК 33: TRACK === -->
-// ================ ТРЕК ================
+// ================ ТРЕКИ (ОПРС + GPS) ================
 function saveTrack() {
   try { localStorage.setItem(TRACK_KEY, JSON.stringify(track)); } catch (e) {}
 }
@@ -1301,10 +1320,19 @@ function loadTrack() {
     if (raw) track = JSON.parse(raw) || [];
   } catch (e) { track = []; }
 }
+function saveTrackGps() {
+  try { localStorage.setItem(TRACK_GPS_KEY, JSON.stringify(trackGps)); } catch (e) {}
+}
+function loadTrackGps() {
+  try {
+    const raw = localStorage.getItem(TRACK_GPS_KEY);
+    if (raw) trackGps = JSON.parse(raw) || [];
+  } catch (e) { trackGps = []; }
+}
 
-function buildSegmentPopup(fromIdx) {
-  const a = track[fromIdx];
-  const b = track[fromIdx + 1];
+function buildSegmentPopup(arr, fromIdx) {
+  const a = arr[fromIdx];
+  const b = arr[fromIdx + 1];
   const distKm = distance(a, b) / 1000;
   const dtSec = (b.t - a.t) / 1000;
   const timeStr = fmtDuration(dtSec);
@@ -1315,6 +1343,28 @@ function buildSegmentPopup(fromIdx) {
          'Длина: ' + distKm.toFixed(2) + ' км';
 }
 
+// Рисует один трек: сегменты + точки заданного цвета
+function drawOneTrack(arr, color, label) {
+  for (let i = 0; i < arr.length - 1; i++) {
+    const a = arr[i];
+    const b = arr[i + 1];
+    const pair = makeClickableLine(
+      [[a.lat, a.lon], [b.lat, b.lon]],
+      { color: color, weight: 2, opacity: 0.7, dashArray: '6,4' },
+      () => buildSegmentPopup(arr, i)
+    );
+    trackSegments.push(pair[0], pair[1]);
+  }
+  for (let i = 0; i < arr.length; i++) {
+    const p = arr[i];
+    const m = L.marker([p.lat, p.lon], { icon: dotIcon(color) })
+      .addTo(map)
+      .bindPopup(label + ' #' + (i + 1) + '<br>' + fmtTime(p.t) + '<br>' +
+                 p.lat.toFixed(5) + ', ' + p.lon.toFixed(5));
+    trackPointLayers.push(m);
+  }
+}
+
 function renderTrack() {
   trackSegments.forEach(l => map.removeLayer(l));
   trackSegments = [];
@@ -1322,35 +1372,29 @@ function renderTrack() {
   trackPointLayers = [];
   if (posMarker) { map.removeLayer(posMarker); posMarker = null; }
 
-  if (track.length === 0) { updateNavUI(); updateRTUI(); return; }
+  // ОПРС-трек — зелёный
+  drawOneTrack(track, '#2a7', 'Измерение ОПРС');
+  // GPS-трек — оранжевый
+  drawOneTrack(trackGps, '#e67e22', 'Точка GPS');
 
-  for (let i = 0; i < track.length - 1; i++) {
-    const a = track[i];
-    const b = track[i + 1];
-    const pair = makeClickableLine(
-      [[a.lat, a.lon], [b.lat, b.lon]],
-      { color: '#2a7', weight: 2, opacity: 0.6, dashArray: '6,4' },
-      buildSegmentPopup(i)
-    );
-    trackSegments.push(pair[0], pair[1]);
-  }
-  for (let i = 0; i < track.length - 1; i++) {
-    const p = track[i];
-    const m = L.marker([p.lat, p.lon], { icon: dotIcon() })
+  // Самолётик — на последней точке самого свежего трека
+  const lastOprs = track.length > 0 ? track[track.length - 1] : null;
+  const lastGps = trackGps.length > 0 ? trackGps[trackGps.length - 1] : null;
+  let plane = null;
+  if (lastOprs && lastGps) plane = (lastOprs.t > lastGps.t) ? lastOprs : lastGps;
+  else if (lastOprs) plane = lastOprs;
+  else if (lastGps) plane = lastGps;
+
+  if (plane) {
+    const courseMag = getCourseMag();
+    const decl = parseFloat(document.getElementById('decl').value) || 0;
+    const courseTrue = norm360(courseMag + decl);
+    posMarker = L.marker([plane.lat, plane.lon], { icon: planeIcon(courseTrue) })
       .addTo(map)
-      .bindPopup('Измерение #' + (i + 1) + '<br>' + fmtTime(p.t) + '<br>' +
-                 p.lat.toFixed(5) + ', ' + p.lon.toFixed(5));
-    trackPointLayers.push(m);
+      .bindPopup('Последнее местоположение<br>' + fmtTime(plane.t) + '<br>' +
+                 plane.lat.toFixed(5) + ', ' + plane.lon.toFixed(5));
+    trackPointLayers.push(posMarker);
   }
-  const last = track[track.length - 1];
-  const courseMag = getCourseMag();
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
-  const courseTrue = norm360(courseMag + decl);
-  posMarker = L.marker([last.lat, last.lon], { icon: planeIcon(courseTrue) })
-    .addTo(map)
-    .bindPopup('Измерение #' + track.length + '<br>' + fmtTime(last.t) + '<br>' +
-               last.lat.toFixed(5) + ', ' + last.lon.toFixed(5));
-  trackPointLayers.push(posMarker);
 
   updateNavUI();
   updateRTUI();
@@ -1486,7 +1530,6 @@ function computeNav() {
   return { cur, distKm, ipu, mpu, wind };
 }
 
-// Попап цели: Расстояние, ЗМПУ, ЛБУ, пройдено, УС, МК, ETE, ETA
 function buildNavPopupHtml() {
   const n = computeNav();
   if (!n) return '🎯 Цель';
@@ -1660,7 +1703,6 @@ function updateNavUI() {
   resEl.innerHTML = html;
 }
 
-// Цель ставится кликом только в режиме редактирования
 map.on('click', e => {
   if (currentTab === 'nav' && targetEditMode) {
     setNavTarget(e.latlng.lat, e.latlng.lng);
@@ -1975,12 +2017,11 @@ function getMyPosition() {
       }
       html += '<br><span style="color:#666;font-size:11px">Нажмите «📍 Привести к GPS», чтобы подставить пеленги.</span>';
 
-      // Попап привязываем, но не открываем
       gpsMarker.bindPopup(html);
 
-      // Добавляем точку в трек измерений — как при расчёте по пеленгам
-      track.push({ lat, lon, t: Date.now() });
-      saveTrack();
+      // Точка идёт в GPS-трек (отдельно от трека ОПРС)
+      trackGps.push({ lat, lon, t: Date.now() });
+      saveTrackGps();
       renderTrack();
 
       resultEl.innerHTML = html;
@@ -2157,7 +2198,7 @@ function calculate() {
       html += '<br>«' + s.name + '» (' + s.inputLabel + ') → <b>' + dkm.toFixed(1) + ' км</b>';
     });
     html += geomWarning;
-    html += '<br><span style="color:#666;font-size:11px">Точек в треке: ' + track.length + '</span>';
+    html += '<br><span style="color:#666;font-size:11px">Точек в треке ОПРС: ' + track.length + '</span>';
     resultEl.innerHTML = html;
     resultEl.classList.remove('error');
   } else {
@@ -2177,7 +2218,7 @@ function calculate() {
 }
 
 function onCourseChange() {
-  if (track.length > 0) renderTrack();
+  if (track.length > 0 || trackGps.length > 0) renderTrack();
 }
 <!-- === КОНЕЦ БЛОКА 37: CALC === -->
 
@@ -2191,6 +2232,7 @@ setInterval(() => {
 
 loadPreset();
 loadTrack();
+loadTrackGps();
 loadRTTrack();
 
 updateFollowBtn();
