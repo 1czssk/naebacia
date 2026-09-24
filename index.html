@@ -258,178 +258,6 @@
 <!-- === КОНЕЦ БЛОКА 7: BODY: HUD === -->
 
 <!-- === БЛОК 8: BODY: ПАНЕЛЬ === -->
-<div id="panel">
-  <div class="tabs">
-    <button class="tab-btn active" id="tabBtnPlace" onclick="switchTab('place')">📍 Место</button>
-    <button class="tab-btn" id="tabBtnNav" onclick="switchTab('nav')">🧭 Навигация</button>
-    <button class="tab-btn" id="tabBtnRtnav" onclick="switchTab('rtnav')">📡 РВ</button>
-    <button class="tab-btn" id="tabBtnLayers" onclick="switchTab('layers')">🗂 Слои</button>
-  </div>
-
-  <!-- --- ВКЛАДКА МЕСТО --- -->
-  <div class="tab-content active" id="tab-place">
-    <div class="subhint">МПР — магнитный пеленг радиостанции (с ВС на станцию). Пустые поля не учитываются.</div>
-
-    <div class="btn-row">
-      <button onclick="clearFields()">Очистить поля</button>
-      <button onclick="clearTrack()">Очистить трек ОПРС</button>
-      <button onclick="clearGps()">Очистить трек GPS</button>
-    </div>
-
-    <div class="oprs course-box">
-      <b>Курс полёта</b>
-      <div class="row">
-        <label>МК:</label> <input id="course" placeholder="0" inputmode="numeric" oninput="onCourseChange()"> °
-      </div>
-    </div>
-
-    <div class="oprs" id="block1">
-      <b>ОПРС 1 <span id="label1"></span> <span class="freq" id="freq1"></span></b>
-      <div class="row">
-        <label>МПР:</label> <input id="brg1" placeholder="—" inputmode="numeric" oninput="preview()"> °
-      </div>
-      <div class="calc-line" id="calc1"></div>
-    </div>
-
-    <div class="oprs" id="block2">
-      <b>ОПРС 2 <span id="label2"></span> <span class="freq" id="freq2"></span></b>
-      <div class="row">
-        <label>МПР:</label> <input id="brg2" placeholder="—" inputmode="numeric" oninput="preview()"> °
-      </div>
-      <div class="calc-line" id="calc2"></div>
-    </div>
-
-    <div class="oprs" id="block3">
-      <b>ОПРС 3 <span id="label3"></span> <span class="freq" id="freq3"></span></b>
-      <div class="row">
-        <label>МПР:</label> <input id="brg3" placeholder="—" inputmode="numeric" oninput="preview()"> °
-      </div>
-      <div class="calc-line" id="calc3"></div>
-    </div>
-
-    <div class="oprs vor" id="block4">
-      <b>VOR <span id="label4"></span> <span class="freq vor" id="freq4"></span></b>
-      <div class="row">
-        <label>Радиал:</label> <input id="vorRadial" placeholder="—" inputmode="numeric" oninput="preview()"> °
-      </div>
-      <div class="row">
-        <label>Дальность:</label> <input id="vorDist" placeholder="—" inputmode="decimal" oninput="preview()"> км
-      </div>
-      <div class="calc-line" id="calc4"></div>
-    </div>
-
-    <div class="row">
-      <label>Магн. склонение:</label>
-      <input id="decl" value="11" readonly style="width:50px;background:#eee;color:#555"> °
-      <button class="smallbtn" onclick="alignToGPS()" title="Подставить МПР так, чтобы расчёт дал точку GPS">📍 Привести к GPS</button>
-    </div>
-
-    <button class="primary big" onclick="calculate()"><b>Рассчитать</b></button>
-    <button class="gps big" id="gpsBtn" onclick="getMyPosition()"><b>📍 Получить МС</b></button>
-    <div id="result">Введите МПР и/или радиал VOR.</div>
-  </div>
-
-  <!-- --- ВКЛАДКА НАВИГАЦИЯ --- -->
-  <div class="tab-content" id="tab-nav">
-    <div class="subhint">Нажмите «🎯 Задать цель», затем кликните по карте. Линия от стартовой точки до цели — это ЛЗП.</div>
-
-    <div class="oprs nav-box">
-      <b>Текущее положение</b>
-      <div id="nav-pos" style="font-size:12px;color:#555">—</div>
-    </div>
-
-    <div class="oprs nav-box">
-      <b>Цель</b>
-      <div id="nav-target" style="font-size:12px;color:#555">Цель не задана</div>
-      <div style="margin-top:6px; display:flex; gap:6px;">
-        <button id="setTargetBtn" onclick="startTargetEdit()" style="flex:1;">🎯 Задать цель</button>
-        <button class="warn" onclick="clearNavTarget()" style="flex:1;">Сбросить цель</button>
-      </div>
-      <button class="refresh" id="refreshRouteBtnNav" onclick="refreshRoute()" style="width:100%; margin-top:6px;">↻ Обновить маршрут</button>
-      <div id="targetEditHint" class="hint" style="display:none; color:#e67e22; font-weight:bold; margin-top:4px;">Кликните по карте — цель будет поставлена здесь</div>
-    </div>
-
-    <div class="oprs nav-box">
-      <b>Ветер и скорость</b>
-      <div class="row">
-        <label>δ (напр. ветра):</label>
-        <input id="windDir" placeholder="—" inputmode="numeric" oninput="updateNavUI()"> °
-      </div>
-      <div class="row">
-        <label>U (скорость ветра):</label>
-        <input id="windSpd" placeholder="—" inputmode="decimal" oninput="updateNavUI()"> км/ч
-      </div>
-      <div class="row">
-        <label>V (возд. скорость):</label>
-        <input id="airspeed" placeholder="180" value="180" inputmode="decimal" oninput="updateNavUI()"> км/ч
-      </div>
-      <div class="hint">δ — магнитное направление, ОТКУДА дует ветер</div>
-    </div>
-
-    <div id="nav-result">Задайте цель на карте.</div>
-  </div>
-
-  <!-- --- ВКЛАДКА РВ --- -->
-  <div class="tab-content" id="tab-rtnav">
-    <div class="subhint">Живая навигация по GPS. Позиция обновляется каждую секунду. Цель задаётся на вкладке Навигация.</div>
-
-    <button class="gps big" id="rtToggleBtn" onclick="toggleRT()"><b>▶ Старт РВ</b></button>
-
-    <div class="oprs rt-box">
-      <b>Текущая позиция</b>
-      <div id="rt-pos" style="font-size:12px;color:#555">GPS не активен</div>
-    </div>
-
-    <div class="oprs rt-box">
-      <b>Параметры движения</b>
-      <div class="rt-stats">
-        <div>Скорость: <b id="rt-speed">—</b></div>
-        <div>Курс: <b id="rt-heading">—</b></div>
-        <div>Точность: <b id="rt-acc">—</b></div>
-        <div>Обновлено: <b id="rt-age">—</b></div>
-      </div>
-      <div class="row" style="margin-top:6px;">
-        <button class="units" onclick="cycleSpeedUnit()">Единицы: <b id="speedUnitLabel">км/ч</b></button>
-      </div>
-    </div>
-
-    <div class="oprs rt-box">
-      <b>Статистика трека РВ</b>
-      <div class="rt-stats">
-        <div>Точек: <b id="rt-points">0</b></div>
-        <div>Длина: <b id="rt-dist">0 км</b></div>
-        <div>Время: <b id="rt-time">0:00</b></div>
-        <div>Средняя: <b id="rt-avg">—</b></div>
-      </div>
-      <div class="hint" style="margin-top:6px;">Режим «следить / свободно» — кнопка рядом с индикатором скорости внизу экрана.</div>
-      <button class="warn" onclick="clearRTTrack()" style="margin-top:4px;">Очистить трек РВ</button>
-    </div>
-
-    <div class="oprs nav-box">
-      <b>Цель (общая с Навигацией)</b>
-      <div id="rt-target" style="font-size:12px;color:#555">Задайте цель на вкладке Навигация</div>
-      <button class="refresh" id="refreshRouteBtnRT" onclick="refreshRoute()" style="width:100%; margin-top:6px;">↻ Обновить маршрут</button>
-    </div>
-
-    <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
-  </div>
-
-  <!-- --- ВКЛАДКА СЛОИ --- -->
-  <div class="tab-content" id="tab-layers">
-    <div class="subhint">Управление отображением слоёв на карте.</div>
-
-    <div class="row">
-      <label>Карта:</label>
-      <select id="mapStyle" onchange="switchMap()">
-        <option value="OpenTopoMap" selected>OpenTopoMap (топо)</option>
-        <option value="OpenStreetMap.Mapnik">OpenStreetMap (дороги)</option>
-        <option value="CartoDB.Positron">CartoDB Positron (светлая)</option>
-        <option value="CartoDB.DarkMatter">CartoDB Dark Matter (тёмная)</option>
-        <option value="Esri.WorldImagery">Esri (спутник)</option>
-        <option value="Esri.WorldTopoMap">Esri World Topo</option>
-      </select>
-    </div>
-
     <div class="oprs routes-box">
       <b>Маршруты</b>
       <div class="route-toggle">
@@ -447,23 +275,17 @@
         <span class="route-swatch" style="background:#a0a"></span>
         <label for="routeLOCAL">Местный</label>
       </div>
-    </div>
-
-    <div class="oprs areas-box">
-      <b>Зоны и районы</b>
       <div class="route-toggle">
-        <input type="checkbox" id="toggleZones" onchange="renderAreas()">
-        <span class="route-swatch" style="background:rgba(220,50,50,0.4);border:1px solid #dc3232;"></span>
-        <label for="toggleZones">Зоны (ПЗ) — R 2,5 км</label>
+        <input type="checkbox" id="routeGAGARIN_FWD" onchange="renderRoutes()">
+        <span class="route-swatch" style="background:#e33"></span>
+        <label for="routeGAGARIN_FWD">Гагарин (туда)</label>
       </div>
       <div class="route-toggle">
-        <input type="checkbox" id="toggleSectors" onchange="renderAreas()">
-        <span class="route-swatch" style="background:rgba(50,50,220,0.4);border:1px solid #3232dc;"></span>
-        <label for="toggleSectors">Районы (ЗПП) — R 5 км</label>
+        <input type="checkbox" id="routeGAGARIN_BACK" onchange="renderRoutes()">
+        <span class="route-swatch" style="background:#e6a"></span>
+        <label for="routeGAGARIN_BACK">Гагарин (обратно)</label>
       </div>
     </div>
-  </div>
-</div>
 <!-- === КОНЕЦ БЛОКА 8: BODY: ПАНЕЛЬ === -->
 
 <!-- === БЛОК 9: BODY: КАРТА === -->
@@ -617,10 +439,32 @@ const ROUTES = {
       { name: 'Кирово',             lat: 50.80502894486692,  lon: 46.70056913229126 },
       { name: 'Красный Кут ДПРМ', lat: 50.9330,             lon: 46.9180 }
     ]
+  },
+  GAGARIN_FWD: {
+    name: 'Гагарин (туда)', color: '#e33',
+    points: [
+      { name: 'UWSK (ДПРМ)',      lat: 50.9230, lon: 46.9180 },
+      { name: 'тр. Зорино',       lat: 51.1167, lon: 46.9667 },
+      { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
+      { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
+      { name: 'MAKEM',            lat: 51.8145, lon: 46.3970 },
+      { name: 'UWSG (Гагарин)',   lat: 51.7128, lon: 46.3878 }
+    ]
+  },
+  GAGARIN_BACK: {
+    name: 'Гагарин (обратно)', color: '#e6a',
+    points: [
+      { name: 'UWSG (Гагарин)',   lat: 51.7128, lon: 46.3878 },
+      { name: 'MAKEM',            lat: 51.8145, lon: 46.3970 },
+      { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
+      { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
+      { name: 'тр. Зорино',       lat: 51.1167, lon: 46.9667 },
+      { name: 'UWSK (ДПРМ)',      lat: 50.9230, lon: 46.9180 }
+    ]
   }
 };
 
-let routeLayers = { A4: [], A5: [], LOCAL: [] };
+let routeLayers = { A4: [], A5: [], LOCAL: [], GAGARIN_FWD: [], GAGARIN_BACK: [] };
 <!-- === КОНЕЦ БЛОКА 15: DATA: ROUTES === -->
 
 <!-- === БЛОК 16: DATA: ZONES === -->
@@ -1126,7 +970,7 @@ function buildRoutePointPopup(routeKey, idx) {
 }
 
 function renderRoutes() {
-  ['A4', 'A5', 'LOCAL'].forEach(key => {
+  ['A4', 'A5', 'LOCAL', 'GAGARIN_FWD', 'GAGARIN_BACK'].forEach(key => {
     routeLayers[key].forEach(l => map.removeLayer(l));
     routeLayers[key] = [];
     const cb = document.getElementById('route' + key);
@@ -1153,7 +997,6 @@ function renderRoutes() {
   });
 }
 <!-- === КОНЕЦ БЛОКА 27: ROUTES RENDER === -->
-
 <!-- === БЛОК 28: AREAS RENDER === -->
 // ================ РЕНДЕР ЗОН И РАЙОНОВ ================
 function renderAreas() {
