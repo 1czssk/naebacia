@@ -180,6 +180,8 @@
   button.units:active { background:#dde; }
   button.smallbtn { padding:4px 8px; font-size:11px; background:#f0f0f0; color:#333; border:1px solid #ccc; border-radius:4px; margin-left:6px; }
   button.smallbtn:active { background:#dde; }
+  button.refresh { background:#2a7; color:white; border:none; padding:10px; font-size:13px; border-radius:4px; }
+  button.refresh:active { background:#185; }
 
   button.target-edit-active {
     background: #e67e22;
@@ -225,6 +227,7 @@
     button { padding:8px 12px; font-size:13px; }
     button.primary, button.gps, button.big { padding:12px 14px; font-size:15px; width:100%; margin-top:6px; }
     button.smallbtn { padding:6px 10px; font-size:12px; }
+    button.refresh { padding:12px; font-size:14px; }
     .tab-btn { padding: 10px 4px; font-size: 13px; }
     #hudContainer { bottom: 75px; }
     #hudContainer #speedHud { padding: 6px 18px; }
@@ -319,7 +322,7 @@
     <div class="row">
       <label>Магн. склонение:</label>
       <input id="decl" value="11" readonly style="width:50px;background:#eee;color:#555"> °
-      <button class="smallbtn" onclick="alignToGPS()" title="Подставить пеленги так, чтобы расчёт дал точку GPS">📍 Привести к GPS</button>
+      <button class="smallbtn" onclick="alignToGPS()" title="Подставить МПР так, чтобы расчёт дал точку GPS">📍 Привести к GPS</button>
     </div>
 
     <button class="primary big" onclick="calculate()"><b>Рассчитать</b></button>
@@ -343,6 +346,7 @@
         <button id="setTargetBtn" onclick="startTargetEdit()" style="flex:1;">🎯 Задать цель</button>
         <button class="warn" onclick="clearNavTarget()" style="flex:1;">Сбросить цель</button>
       </div>
+      <button class="refresh" id="refreshRouteBtnNav" onclick="refreshRoute()" style="width:100%; margin-top:6px;">↻ Обновить маршрут</button>
       <div id="targetEditHint" class="hint" style="display:none; color:#e67e22; font-weight:bold; margin-top:4px;">Кликните по карте — цель будет поставлена здесь</div>
     </div>
 
@@ -405,6 +409,7 @@
     <div class="oprs nav-box">
       <b>Цель (общая с Навигацией)</b>
       <div id="rt-target" style="font-size:12px;color:#555">Задайте цель на вкладке Навигация</div>
+      <button class="refresh" id="refreshRouteBtnRT" onclick="refreshRoute()" style="width:100%; margin-top:6px;">↻ Обновить маршрут</button>
     </div>
 
     <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
@@ -1035,6 +1040,31 @@ function buildRouteSegmentPopup(routeKey, idx) {
   html += 'Длина участка: <b>' + segLen.toFixed(2) + ' км</b><br>';
   html += '<b>ЗМПУ:</b> <span style="color:#2a7"><b>' + zmpu.toFixed(0) + '°</b></span>';
 
+  // Расчётный угол сноса для направления A→B, если задан ветер
+  const wdRaw = document.getElementById('windDir').value.trim();
+  const wsRaw = document.getElementById('windSpd').value.trim();
+  const asRaw = document.getElementById('airspeed').value.trim();
+  const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
+  const ws = wsRaw === '' ? NaN : parseFloat(wsRaw.replace(',', '.'));
+  const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
+
+  if (!isNaN(wd) && !isNaN(ws) && !isNaN(as) && as > 0) {
+    let uv = norm360(zmpu - wd);
+    if (uv > 180) uv -= 360;
+    const sinUS = (ws / as) * Math.sin(toRad(uv));
+    const clampedSin = Math.max(-1, Math.min(1, sinUS));
+    const usDeg = toDeg(Math.asin(clampedSin));
+
+    html += '<br><b>УСр:</b> ' + usDeg.toFixed(1) + '°';
+    if (Math.abs(usDeg) > 0.5) {
+      html += usDeg > 0
+        ? ' <span style="color:#c00">вправо</span>'
+        : ' <span style="color:#c00">влево</span>';
+    }
+    const mk = norm360(zmpu - usDeg);
+    html += '<br><b>МК:</b> ' + mk.toFixed(0) + '°';
+  }
+
   const cur = getCurrentPosition();
   if (cur) {
     const offHtml = fmtOffset(cur, A, B);
@@ -1245,6 +1275,7 @@ function alignToGPS() {
   const gpsPt = { lat: ll.lat, lon: ll.lng };
   const decl = parseFloat(document.getElementById('decl').value) || 0;
 
+  // Только NDB — VOR вспомогательный, в приведении не участвует
   for (let i = 0; i < 3; i++) {
     const s = PRESET[i];
     const brgTrue = trueBearing(gpsPt, s);
@@ -1252,14 +1283,8 @@ function alignToGPS() {
     document.getElementById('brg' + (i + 1)).value = mpr.toFixed(0);
   }
 
-  const v = PRESET[3];
-  const radial = norm360(trueBearing(v, gpsPt) - decl);
-  const dkm = distance(v, gpsPt) / 1000;
-  document.getElementById('vorRadial').value = radial.toFixed(0);
-  document.getElementById('vorDist').value = dkm.toFixed(1);
-
   preview();
-  resultEl.textContent = '📍 Поля приведены к GPS: ' +
+  resultEl.textContent = '📍 Поля МПР приведены к GPS: ' +
     ddToDM(gpsPt.lat, true) + ' ' + ddToDM(gpsPt.lon, false) +
     '. Нажмите «Рассчитать» — результат должен совпасть с GPS-точкой.';
 }
@@ -1412,6 +1437,22 @@ function clearNavTarget() {
   updateRTUI();
 }
 
+// Обновить ЛЗП: цель остаётся, старт ЛЗП переезжает в текущее положение
+function refreshRoute() {
+  if (!navTarget) {
+    alert('Сначала задайте цель.');
+    return;
+  }
+  const cur = getCurrentPosition();
+  if (!cur) {
+    alert('Нет текущего положения. Включите GPS или посчитайте по ОПРС.');
+    return;
+  }
+  navLineStart = { lat: cur.lat, lon: cur.lon };
+  updateNavUI();
+  updateRTUI();
+}
+
 function computeNav() {
   const cur = getCurrentPosition();
   if (!cur || !navTarget) return null;
@@ -1454,7 +1495,6 @@ function buildNavPopupHtml() {
   html += '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
-  // ЛБУ и пройденное (если задана фиксированная ЛЗП)
   if (navLineStart) {
     const cur = getCurrentPosition();
     if (cur) {
@@ -1466,7 +1506,6 @@ function buildNavPopupHtml() {
     }
   }
 
-  // ETE/ETA: сначала живой GPS (РВ), потом путевая по ветру
   let etaSec = null;
   const gpsSpeedKmh = getGPSSpeedKmh();
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
@@ -1936,7 +1975,14 @@ function getMyPosition() {
       }
       html += '<br><span style="color:#666;font-size:11px">Нажмите «📍 Привести к GPS», чтобы подставить пеленги.</span>';
 
-      gpsMarker.bindPopup(html).openPopup();
+      // Попап привязываем, но не открываем
+      gpsMarker.bindPopup(html);
+
+      // Добавляем точку в трек измерений — как при расчёте по пеленгам
+      track.push({ lat, lon, t: Date.now() });
+      saveTrack();
+      renderTrack();
+
       resultEl.innerHTML = html;
       updateNavUI();
       updateRTUI();
