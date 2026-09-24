@@ -500,10 +500,14 @@ const RT_MAX_POINTS = 10000;
 // ================ ВКЛАДКИ И ПАНЕЛЬ ================
 let currentTab = 'place';
 
-function setMapOverlaysInteractive(enabled) {
+// Блокировка кликов по слоям: нужна ТОЛЬКО когда в Навигации
+// активен режим редактирования цели — чтобы клик по карте ставил цель,
+// а не открывал попапы слоёв.
+function updateMapInteractivity() {
   const mapEl = document.getElementById('map');
-  if (enabled) mapEl.classList.remove('nav-mode');
-  else mapEl.classList.add('nav-mode');
+  const blockOverlays = (currentTab === 'nav' && targetEditMode === true);
+  if (blockOverlays) mapEl.classList.add('nav-mode');
+  else mapEl.classList.remove('nav-mode');
 }
 
 function switchTab(name) {
@@ -518,10 +522,11 @@ function switchTab(name) {
   document.getElementById('tab-layers').classList.toggle('active', name === 'layers');
 
   map.closePopup();
-  setMapOverlaysInteractive(name !== 'nav');
 
   // При уходе с Навигации режим редактирования цели сбрасывается
   if (name !== 'nav') targetEditMode = false;
+
+  updateMapInteractivity();
 
   renderRTTrack();
   renderRTMarker();
@@ -1387,6 +1392,7 @@ function getCurrentSpeedKmh(targetPt) {
 
 function startTargetEdit() {
   targetEditMode = !targetEditMode;
+  updateMapInteractivity();
   updateNavUI();
 }
 
@@ -1396,6 +1402,7 @@ function setNavTarget(lat, lon) {
   if (cur) navLineStart = { lat: cur.lat, lon: cur.lon };
   else navLineStart = null;
   targetEditMode = false;
+  updateMapInteractivity();
   updateNavUI();
   updateRTUI();
 }
@@ -1404,6 +1411,7 @@ function clearNavTarget() {
   navTarget = null;
   navLineStart = null;
   targetEditMode = false;
+  updateMapInteractivity();
   updateNavUI();
   updateRTUI();
 }
@@ -1441,17 +1449,16 @@ function computeNav() {
   return { cur, distKm, ipu, mpu, wind };
 }
 
+// Попап цели: Расстояние, ЗМПУ, ЛБУ, пройдено, УС, МК, ETE, ETA
 function buildNavPopupHtml() {
   const n = computeNav();
   if (!n) return '🎯 Цель';
-
-  const fmpu = getGPSHeadingMag();
-  const gpsSpeedKmh = getGPSSpeedKmh();
 
   let html = '<b>🎯 Цель</b><br>';
   html += '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
+  // ЛБУ и пройденное (если задана фиксированная ЛЗП)
   if (navLineStart) {
     const cur = getCurrentPosition();
     if (cur) {
@@ -1463,24 +1470,42 @@ function buildNavPopupHtml() {
     }
   }
 
-  if (fmpu !== null) {
-    html += '<br><b>ФМПУ:</b> <span style="color:#08c"><b>' + fmpu.toFixed(0) + '°</b></span>';
-    let delta = norm360(fmpu - n.mpu);
-    if (delta > 180) delta -= 360;
-    if (Math.abs(delta) >= 3) {
-      html += ' <span style="color:#c00">(' + (delta > 0 ? '+' : '') + delta.toFixed(0) + '°)</span>';
-    }
+  // ETE/ETA: сначала живой GPS (РВ), потом путевая по ветру
+  let etaSec = null;
+  const gpsSpeedKmh = getGPSSpeedKmh();
+  if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
+    etaSec = (n.distKm / gpsSpeedKmh) * 3600;
+  } else if (n.wind && n.wind.etaSec !== null) {
+    etaSec = n.wind.etaSec;
   }
 
-  if (n.wind) html += '<br><b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
+  const hasWind = !!n.wind;
+  const hasEta = etaSec !== null;
 
-  if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
-    const v = convertSpeed(gpsSpeedKmh / 3.6);
-    html += '<br><b>Путевая (GPS):</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
-    const etaSec = (n.distKm / gpsSpeedKmh) * 3600;
-    html += '<br><b>ETA:</b> ' + fmtDuration(etaSec);
-  } else if (n.wind && n.wind.etaSec !== null) {
-    html += '<br><b>ETA:</b> ' + fmtDuration(n.wind.etaSec);
+  if (hasWind || hasEta) {
+    html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+
+    if (hasWind) {
+      html += '<b>УС:</b> ' + n.wind.usDeg.toFixed(1) + '°';
+      if (Math.abs(n.wind.usDeg) > 0.5) {
+        html += n.wind.usDeg > 0
+          ? ' <span style="color:#c00">вправо</span>'
+          : ' <span style="color:#c00">влево</span>';
+      }
+      html += '<br><b>МК:</b> <span style="color:#2a7"><b>' + n.wind.mk.toFixed(0) + '°</b></span>';
+    }
+
+    if (hasEta) {
+      const etaDate = new Date(Date.now() + etaSec * 1000);
+      const etaAbs = String(etaDate.getHours()).padStart(2, '0') + ':' +
+                     String(etaDate.getMinutes()).padStart(2, '0');
+      if (hasWind) html += '<br>';
+      html += '<b>ETE:</b> ' + fmtDuration(etaSec);
+      html += '<br><b>ETA:</b> ' + etaAbs;
+    }
+  } else {
+    html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+    html += '<span style="color:#888;font-size:11px">Заполните ветер и скорость или включите GPS</span>';
   }
 
   return html;
@@ -1549,7 +1574,6 @@ function updateNavUI() {
   if (!n) { resEl.innerHTML = '—'; return; }
 
   let html = '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
-  html += '<b>ИПУ:</b> ' + n.ipu.toFixed(0) + '°<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
   if (navLineStart) {
@@ -1560,17 +1584,39 @@ function updateNavUI() {
     }
   }
 
-  if (n.wind) {
+  let etaSec = null;
+  const gpsSpeedKmh = getGPSSpeedKmh();
+  if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
+    etaSec = (n.distKm / gpsSpeedKmh) * 3600;
+  } else if (n.wind && n.wind.etaSec !== null) {
+    etaSec = n.wind.etaSec;
+  }
+
+  if (n.wind || etaSec !== null) {
     html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
-    html += '<b>УВ:</b> ' + n.wind.uv.toFixed(0) + '°';
-    html += n.wind.uv > 0 ? ' <span style="color:#888">(справа)</span>' : (n.wind.uv < 0 ? ' <span style="color:#888">(слева)</span>' : '');
-    html += '<br><b>УС:</b> ' + n.wind.usDeg.toFixed(1) + '°';
-    if (Math.abs(n.wind.usDeg) > 0.5) {
-      html += n.wind.usDeg > 0 ? ' <span style="color:#c00">вправо</span>' : ' <span style="color:#c00">влево</span>';
+
+    if (n.wind) {
+      html += '<b>УВ:</b> ' + n.wind.uv.toFixed(0) + '°';
+      html += n.wind.uv > 0
+        ? ' <span style="color:#888">(справа)</span>'
+        : (n.wind.uv < 0 ? ' <span style="color:#888">(слева)</span>' : '');
+      html += '<br><b>УС:</b> ' + n.wind.usDeg.toFixed(1) + '°';
+      if (Math.abs(n.wind.usDeg) > 0.5) {
+        html += n.wind.usDeg > 0
+          ? ' <span style="color:#c00">вправо</span>'
+          : ' <span style="color:#c00">влево</span>';
+      }
+      html += '<br><b style="color:#2a7">МК: ' + n.wind.mk.toFixed(0) + '°</b><br>';
+      html += '<b>Путевая:</b> ' + n.wind.wGround.toFixed(0) + ' км/ч<br>';
     }
-    html += '<br><b style="color:#2a7">МК: ' + n.wind.mk.toFixed(0) + '°</b><br>';
-    html += '<b>Путевая:</b> ' + n.wind.wGround.toFixed(0) + ' км/ч<br>';
-    html += '<b>ETA:</b> ' + (n.wind.etaSec !== null ? fmtDuration(n.wind.etaSec) : '—');
+
+    if (etaSec !== null) {
+      const etaDate = new Date(Date.now() + etaSec * 1000);
+      const etaAbs = String(etaDate.getHours()).padStart(2, '0') + ':' +
+                     String(etaDate.getMinutes()).padStart(2, '0');
+      html += '<b>ETE:</b> ' + fmtDuration(etaSec) + '<br>';
+      html += '<b>ETA:</b> ' + etaAbs;
+    }
   } else {
     html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
     html += '<span style="color:#888;font-size:11px">Заполните поля ветра и скорости, чтобы рассчитать УС и МК</span>';
@@ -1579,6 +1625,7 @@ function updateNavUI() {
   resEl.innerHTML = html;
 }
 
+// Цель ставится кликом только в режиме редактирования
 map.on('click', e => {
   if (currentTab === 'nav' && targetEditMode) {
     setNavTarget(e.latlng.lat, e.latlng.lng);
