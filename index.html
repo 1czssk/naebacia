@@ -1,26 +1,28 @@
 <!DOCTYPE html>
-<html lang="ru">
+<!-- ================================================================
+     БЛОК: HEAD
+     Мета, заголовок, подключение внешних библиотек
+     ================================================================ -->
 <head>
 <meta charset="utf-8">
 <title>ОПРС → Местоположение</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<!-- === БЛОК: STYLE: БАЗА === -->
 <style>
   html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
   #map { height:100%; width:100%; }
 
+  /* В режиме Навигации слои не перехватывают клики */
   #map.nav-mode .leaflet-overlay-pane,
   #map.nav-mode .leaflet-marker-pane,
   #map.nav-mode .leaflet-shadow-pane,
-  #map.nav-mode .leaflet-tooltip-pane {
-    pointer-events: none !important;
-  }
+  #map.nav-mode .leaflet-tooltip-pane { pointer-events: none !important; }
   #map.nav-mode .leaflet-overlay-pane *,
   #map.nav-mode .leaflet-marker-pane *,
   #map.nav-mode .leaflet-shadow-pane *,
-  #map.nav-mode .leaflet-tooltip-pane * {
-    pointer-events: none !important;
-  }
+  #map.nav-mode .leaflet-tooltip-pane * { pointer-events: none !important; }
 
   #toggleBtn {
     position:absolute; top:10px; left:10px; z-index:1100;
@@ -30,41 +32,6 @@
     min-width:44px; min-height:44px;
   }
   #toggleBtn:active { background:#185; }
-
-  #speedHud {
-    position: fixed;
-    bottom: 70px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 900;
-    background: rgba(0, 0, 0, 0.68);
-    color: white;
-    padding: 8px 22px 8px 22px;
-    border-radius: 40px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-    pointer-events: none;
-    text-shadow: 0 0 6px rgba(0,0,0,0.8);
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    border: 2px solid rgba(255,255,255,0.15);
-    font-family: -apple-system, "Segoe UI", sans-serif;
-  }
-  #speedHud.hidden { display: none; }
-  #speedHud #speedHudValue {
-    font-size: 34px;
-    font-weight: 700;
-    min-width: 64px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
-  #speedHud #speedHudUnit {
-    font-size: 14px;
-    font-weight: 400;
-    opacity: 0.85;
-    line-height: 1;
-  }
 
   #panel {
     position:absolute; top:10px; left:10px; z-index:1000;
@@ -110,8 +77,79 @@
   .tab-content { display: none; }
   .tab-content.active { display: block; }
 
-  #panel h3 { margin:0 0 4px 0; font-size:15px; }
   .subhint { color:#666; font-size:11px; margin:0 0 6px 0; }
+</style>
+<!-- === КОНЕЦ БЛОКА: STYLE: БАЗА === -->
+
+<!-- === БЛОК: STYLE: HUD === -->
+<style>
+  #hudContainer {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+  #hudContainer.hidden { display: none; }
+
+  #hudContainer #speedHud {
+    background: rgba(0, 0, 0, 0.68);
+    color: white;
+    padding: 8px 22px;
+    border-radius: 40px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    border: 2px solid rgba(255,255,255,0.15);
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  #hudContainer #speedHudValue {
+    font-size: 34px;
+    font-weight: 700;
+    min-width: 64px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  #hudContainer #speedHudUnit {
+    font-size: 14px;
+    font-weight: 400;
+    opacity: 0.85;
+    line-height: 1;
+  }
+  #hudContainer #followBtn {
+    pointer-events: auto;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    margin: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.15);
+    background: rgba(0, 0, 0, 0.68);
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    transition: background 0.2s ease, opacity 0.2s ease, transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #hudContainer #followBtn.active { background: #2a7; }
+  #hudContainer #followBtn.inactive { opacity: 0.6; }
+  #hudContainer #followBtn:active { transform: scale(0.95); }
+</style>
+<!-- === КОНЕЦ БЛОКА: STYLE: HUD === -->
+
+<!-- === БЛОК: STYLE: ЭЛЕМЕНТЫ === -->
+<style>
   .oprs { border:1px solid #ddd; padding:6px; margin-bottom:6px; border-radius:4px; }
   .oprs.vor { border-color: #c9f; background:#faf5ff; }
   .oprs.course-box { border-color:#2a7; background:#f0fff5; }
@@ -126,6 +164,7 @@
   .freq.vor { background:#e0d0f5; color:#4a2a7a; }
   .calc-line { font-size:11px; color:#555; margin-top:2px; }
   .calc-line b { color:#2a7; }
+
   button { padding:5px 10px; margin:2px 2px 0 0; cursor:pointer; font-size:12px; font-family:inherit; }
   button.primary { background:#2a7; color:white; border:none; }
   button.primary:active { background:#185; }
@@ -141,61 +180,33 @@
   button.units:active { background:#dde; }
   button.smallbtn { padding:4px 8px; font-size:11px; background:#f0f0f0; color:#333; border:1px solid #ccc; border-radius:4px; margin-left:6px; }
   button.smallbtn:active { background:#dde; }
+
   select { width:100%; padding:3px; font-size:12px; margin-top:2px; }
+
   #result, #nav-result, #rt-result { margin-top:8px; padding:6px; background:#f0f8ff; border-radius:4px; min-height:20px; font-size:12px; }
   #result.error, #nav-result.error, #rt-result.error { background:#ffeaea; color:#a00; font-weight:bold; }
   #nav-result { background:#fff5ec; }
   #rt-result { background:#f0f8ff; }
+
   .hint { color:#666; font-size:11px; margin:4px 0; }
   .warn { color:#c00; font-weight:bold; }
-  .ok { color:green; }
   .row { margin:4px 0; }
   label { color:#333; }
   .btn-row { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
   .btn-row button { flex:1 1 auto; min-width:80px; }
+
   .route-toggle { display:flex; align-items:center; gap:6px; margin:4px 0; }
   .route-toggle input { width:auto; }
   .route-toggle label { cursor:pointer; user-select:none; }
   .route-swatch { display:inline-block; width:14px; height:14px; border-radius:2px; }
+
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
+</style>
+<!-- === КОНЕЦ БЛОКА: STYLE: ЭЛЕМЕНТЫ === -->
 
-  .ios-toggle {
-    position: relative;
-    display: inline-block;
-    width: 51px;
-    height: 31px;
-    background: #ccc;
-    border-radius: 16px;
-    cursor: pointer;
-    transition: background 0.25s ease;
-    vertical-align: middle;
-    user-select: none;
-    flex-shrink: 0;
-  }
-  .ios-toggle::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 27px;
-    height: 27px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.05);
-    transition: transform 0.25s ease;
-  }
-  .ios-toggle.on { background: #34c759; }
-  .ios-toggle.on::after { transform: translateX(20px); }
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    user-select: none;
-    padding: 4px 0;
-  }
-
+<!-- === БЛОК: STYLE: МОБИЛЬНАЯ === -->
+<style>
   @media (max-width: 600px) {
     #panel { width: calc(100% - 20px); max-width: 400px; font-size:14px; }
     #panel.hidden { transform: translateX(-110%); }
@@ -204,20 +215,36 @@
     button.primary, button.gps, button.big { padding:12px 14px; font-size:15px; width:100%; margin-top:6px; }
     button.smallbtn { padding:6px 10px; font-size:12px; }
     .tab-btn { padding: 10px 4px; font-size: 13px; }
-    #speedHud { bottom: 75px; padding: 6px 18px; }
-    #speedHud #speedHudValue { font-size: 30px; min-width: 56px; }
-    #speedHud #speedHudUnit { font-size: 13px; }
+    #hudContainer { bottom: 75px; }
+    #hudContainer #speedHud { padding: 6px 18px; }
+    #hudContainer #speedHudValue { font-size: 30px; min-width: 56px; }
+    #hudContainer #speedHudUnit { font-size: 13px; }
+    #hudContainer #followBtn { width: 40px; height: 40px; font-size: 18px; }
   }
 </style>
+<!-- === КОНЕЦ БЛОКА: STYLE: МОБИЛЬНАЯ === -->
+
 </head>
+
 <body>
+
+<!-- === БЛОК: BODY: КНОПКА МЕНЮ === -->
 <button id="toggleBtn" onclick="togglePanel()">☰</button>
+<!-- === КОНЕЦ БЛОКА: BODY: КНОПКА МЕНЮ === -->
 
-<div id="speedHud" class="hidden">
-  <span id="speedHudValue">0</span>
-  <span id="speedHudUnit">км/ч</span>
+<!-- === БЛОК: BODY: HUD === -->
+<div id="hudContainer" class="hidden">
+  <div id="speedHud">
+    <span id="speedHudValue">0</span>
+    <span id="speedHudUnit">км/ч</span>
+  </div>
+  <button id="followBtn" onclick="toggleFollowMode()" title="Следить за позицией">
+    <span id="followBtnIcon">🎯</span>
+  </button>
 </div>
+<!-- === КОНЕЦ БЛОКА: BODY: HUD === -->
 
+<!-- === БЛОК: BODY: ПАНЕЛЬ === -->
 <div id="panel">
   <div class="tabs">
     <button class="tab-btn active" id="tabBtnPlace" onclick="switchTab('place')">📍 Место</button>
@@ -226,7 +253,7 @@
     <button class="tab-btn" id="tabBtnLayers" onclick="switchTab('layers')">🗂 Слои</button>
   </div>
 
-  <!-- ======================= МЕСТО ======================= -->
+  <!-- --- ВКЛАДКА МЕСТО --- -->
   <div class="tab-content active" id="tab-place">
     <div class="subhint">МПР — магнитный пеленг радиостанции (с ВС на станцию). Пустые поля не учитываются.</div>
 
@@ -289,7 +316,7 @@
     <div id="result">Введите МПР и/или радиал VOR.</div>
   </div>
 
-  <!-- ======================= НАВИГАЦИЯ ======================= -->
+  <!-- --- ВКЛАДКА НАВИГАЦИЯ --- -->
   <div class="tab-content" id="tab-nav">
     <div class="subhint">Кликните по карте — это будет цель. Линия от стартовой точки до цели — это ЛЗП.</div>
 
@@ -324,7 +351,7 @@
     <div id="nav-result">Задайте цель на карте.</div>
   </div>
 
-  <!-- ======================= НАВИГАЦИЯ РВ ======================= -->
+  <!-- --- ВКЛАДКА РВ --- -->
   <div class="tab-content" id="tab-rtnav">
     <div class="subhint">Живая навигация по GPS. Позиция обновляется каждую секунду. Цель задаётся на вкладке Навигация.</div>
 
@@ -356,10 +383,7 @@
         <div>Время: <b id="rt-time">0:00</b></div>
         <div>Средняя: <b id="rt-avg">—</b></div>
       </div>
-      <div class="toggle-row" style="margin-top:6px;" onclick="toggleFollow()">
-        <div class="ios-toggle on" id="rtFollowToggle"></div>
-        <span style="font-size:13px;">Следить за позицией</span>
-      </div>
+      <div class="hint" style="margin-top:6px;">Режим «следить / свободно» — кнопка рядом с индикатором скорости внизу экрана.</div>
       <button class="warn" onclick="clearRTTrack()" style="margin-top:4px;">Очистить трек РВ</button>
     </div>
 
@@ -371,7 +395,7 @@
     <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
   </div>
 
-  <!-- ======================= СЛОИ ======================= -->
+  <!-- --- ВКЛАДКА СЛОИ --- -->
   <div class="tab-content" id="tab-layers">
     <div class="subhint">Управление отображением слоёв на карте.</div>
 
@@ -421,13 +445,20 @@
     </div>
   </div>
 </div>
+<!-- === КОНЕЦ БЛОКА: BODY: ПАНЕЛЬ === -->
 
+<!-- === БЛОК: BODY: КАРТА === -->
 <div id="map"></div>
+<!-- === КОНЕЦ БЛОКА: BODY: КАРТА === -->
 
+<!-- === БЛОК: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
 <script>
-// ============== НАСТРОЙКИ ==============
+<!-- === КОНЕЦ БЛОКА: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
+
+<!-- === БЛОК: CONFIG === -->
+// ================ КОНФИГУРАЦИЯ ================
 const FOLLOW_KEY = 'oprs_rt_follow';
 const SPEED_UNIT_KEY = 'oprs_speed_unit';
 
@@ -439,7 +470,19 @@ const SPEED_UNITS = {
 };
 const SPEED_UNITS_ORDER = ['kmh', 'ms', 'kt'];
 
-// ============== ВКЛАДКИ ==============
+const TRACK_KEY = 'oprs_nav_track_v1';
+const RT_TRACK_KEY = 'oprs_nav_rt_track_v1';
+const MAX_DIST_KM = 300;
+const ANGLE_ERROR_DEG = 10;
+const ANGLE_WARN_DEG = 20;
+const ERROR_LINE_KM = 50;
+const HITBOX_WEIGHT = 25;
+const RT_MIN_STEP_M = 5;
+const RT_MAX_POINTS = 10000;
+<!-- === КОНЕЦ БЛОКА: CONFIG === -->
+
+<!-- === БЛОК: TABS === -->
+// ================ ВКЛАДКИ И ПАНЕЛЬ ================
 let currentTab = 'place';
 
 function setMapOverlaysInteractive(enabled) {
@@ -460,7 +503,6 @@ function switchTab(name) {
   document.getElementById('tab-layers').classList.toggle('active', name === 'layers');
 
   map.closePopup();
-
   setMapOverlaysInteractive(name !== 'nav');
 
   renderRTTrack();
@@ -468,9 +510,12 @@ function switchTab(name) {
   updateNavUI();
   updateRTUI();
   updateSpeedHudVisibility();
+
+  if (name === 'rtnav' && followMode && rtCurrentPosition) {
+    map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(), { animate: false });
+  }
 }
 
-// ---------- Сворачивание панели ----------
 function togglePanel() {
   const p = document.getElementById('panel');
   p.classList.toggle('hidden');
@@ -480,8 +525,10 @@ if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
   document.getElementById('toggleBtn').textContent = '☰';
 }
+<!-- === КОНЕЦ БЛОКА: TABS === -->
 
-// ---------- Карта ----------
+<!-- === БЛОК: MAP === -->
+// ================ КАРТА ================
 const map = L.map('map').setView([51.1, 46.7], 10);
 let currentLayer = null;
 
@@ -497,16 +544,20 @@ function switchMap() {
   }
 }
 switchMap();
+<!-- === КОНЕЦ БЛОКА: MAP === -->
 
-// ---------- Точки ОПРС ----------
+<!-- === БЛОК: DATA: ОПРС === -->
+// ================ ДАННЫЕ: ОПРС ================
 const PRESET = [
   { name: 'Красный Кут',   lat: 50.9330, lon: 46.9180, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
   { name: 'Ямское',         lat: 50.9675, lon: 47.2190, freq: '1245 кГц',  type: 'NDB', color: 'red' },
   { name: 'Комсомольское',  lat: 50.8000, lon: 47.0445, freq: '310 кГц',   type: 'NDB', color: 'orange' },
   { name: 'Саратов VOR',    lat: 51.5628, lon: 46.0458, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
 ];
+<!-- === КОНЕЦ БЛОКА: DATA: ОПРС === -->
 
-// ---------- Маршруты ----------
+<!-- === БЛОК: DATA: ROUTES === -->
+// ================ ДАННЫЕ: МАРШРУТЫ ================
 const ROUTES = {
   A4: {
     name: 'А4', color: '#c80',
@@ -545,6 +596,11 @@ const ROUTES = {
   }
 };
 
+let routeLayers = { A4: [], A5: [], LOCAL: [] };
+<!-- === КОНЕЦ БЛОКА: DATA: ROUTES === -->
+
+<!-- === БЛОК: DATA: ZONES === -->
+// ================ ДАННЫЕ: ЗОНЫ И РАЙОНЫ ================
 const ZONES = [
   { id: 'ПЗ №1', name: 'пр. Орлов',          lat: 51.08667, lon: 47.05500 },
   { id: 'ПЗ №2', name: 'н.п. Рудня',          lat: 51.01667, lon: 47.07167 },
@@ -566,19 +622,11 @@ const SECTORS = [
   { id: 'ЗПП №6', name: 'пр. Новый',            lat: 51.09167, lon: 47.40000 }
 ];
 
-let routeLayers = { A4: [], A5: [], LOCAL: [] };
 let areaLayers = { zones: [], sectors: [] };
+<!-- === КОНЕЦ БЛОКА: DATA: ZONES === -->
 
-const TRACK_KEY = 'oprs_nav_track_v1';
-const RT_TRACK_KEY = 'oprs_nav_rt_track_v1';
-const MAX_DIST_KM = 300;
-const ANGLE_ERROR_DEG = 10;
-const ANGLE_WARN_DEG = 20;
-const ERROR_LINE_KM = 50;
-const HITBOX_WEIGHT = 25;
-const RT_MIN_STEP_M = 5;
-const RT_MAX_POINTS = 10000;
-
+<!-- === БЛОК: STATE === -->
+// ================ ПЕРЕМЕННЫЕ СОСТОЯНИЯ ================
 let oprsMarkers = [null, null, null, null];
 let stationLines = [];
 let errorLines = [];
@@ -600,8 +648,10 @@ let rtTrack = [];
 let rtLineLayer = null;
 let rtStartMarker = null;
 let rtMarker = null;
+<!-- === КОНЕЦ БЛОКА: STATE === -->
 
-// ---------- Wake Lock ----------
+<!-- === БЛОК: WAKELOCK === -->
+// ================ WAKE LOCK ================
 let wakeLock = null;
 
 async function requestWakeLock() {
@@ -625,8 +675,10 @@ document.addEventListener('visibilitychange', async () => {
     await requestWakeLock();
   }
 });
+<!-- === КОНЕЦ БЛОКА: WAKELOCK === -->
 
-// ---------- Утилиты ----------
+<!-- === БЛОК: MATH === -->
+// ================ МАТЕМАТИКА И УТИЛИТЫ ================
 function toRad(d) { return d * Math.PI / 180; }
 function toDeg(r) { return r * 180 / Math.PI; }
 function norm360(d) { return ((d % 360) + 360) % 360; }
@@ -685,7 +737,6 @@ function parseDistance(v) {
   return isNaN(n) ? null : n;
 }
 
-// makeClickableLine: принимает popupContent — СТРОКУ или ФУНКЦИЮ
 function makeClickableLine(latlngs, options, popupContent) {
   const visible = L.polyline(latlngs, Object.assign({}, options, { interactive: false })).addTo(map);
   const hitbox = L.polyline(latlngs, {
@@ -694,8 +745,10 @@ function makeClickableLine(latlngs, options, popupContent) {
   hitbox.bindPopup(popupContent, { autoPan: true });
   return [visible, hitbox];
 }
+<!-- === КОНЕЦ БЛОКА: MATH === -->
 
-// ============== ЛБУ ==============
+<!-- === БЛОК: OFFSET === -->
+// ================ ЛБУ (боковое уклонение) ================
 function computeOffset(P, A, B) {
   const R = 6371000;
   const lat0 = (A.lat + B.lat + P.lat) / 3;
@@ -741,8 +794,10 @@ function fmtOffset(P, A, B) {
   html += '<br><b>Пройдено по линии:</b> ' + fmtDist(off.s_proj) + spNote;
   return html;
 }
+<!-- === КОНЕЦ БЛОКА: OFFSET === -->
 
-// ============== Скорость ==============
+<!-- === БЛОК: SPEED === -->
+// ================ ЕДИНИЦЫ СКОРОСТИ ================
 function convertSpeed(mps) {
   if (mps === null || mps === undefined || isNaN(mps)) return null;
   return mps * SPEED_UNITS[rtSpeedUnit].factor;
@@ -760,32 +815,66 @@ function cycleSpeedUnit() {
   updateSpeedUnitLabel();
   updateRTUI();
 }
+<!-- === КОНЕЦ БЛОКА: SPEED === -->
 
-// ============== Тумблер ==============
-function toggleFollow() {
-  const el = document.getElementById('rtFollowToggle');
-  el.classList.toggle('on');
-  const on = el.classList.contains('on');
-  localStorage.setItem(FOLLOW_KEY, on ? '1' : '0');
-  if (on && rtCurrentPosition) {
-    map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(), { animate: false });
+<!-- === БЛОК: FOLLOW === -->
+// ================ РЕЖИМ СЛЕЖЕНИЯ ================
+let followMode = localStorage.getItem(FOLLOW_KEY) !== '0';
+
+function isFollowOn() { return followMode; }
+
+function toggleFollowMode() {
+  followMode = !followMode;
+  localStorage.setItem(FOLLOW_KEY, followMode ? '1' : '0');
+  updateFollowBtn();
+  if (followMode && rtCurrentPosition && currentTab === 'rtnav') {
+    map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(),
+                { animate: true, duration: 0.5 });
   }
 }
 
-function isFollowOn() {
-  return document.getElementById('rtFollowToggle').classList.contains('on');
+function updateFollowBtn() {
+  const btn = document.getElementById('followBtn');
+  const icon = document.getElementById('followBtnIcon');
+  if (!btn || !icon) return;
+  if (followMode) {
+    btn.classList.add('active');
+    btn.classList.remove('inactive');
+    icon.textContent = '🎯';
+    btn.title = 'Слежу за позицией (нажмите — свободный режим)';
+  } else {
+    btn.classList.remove('active');
+    btn.classList.add('inactive');
+    icon.textContent = '✋';
+    btn.title = 'Свободный режим (нажмите — следить за позицией)';
+  }
 }
+<!-- === КОНЕЦ БЛОКА: FOLLOW === -->
 
+<!-- === БЛОК: HUD === -->
+// ================ HUD СКОРОСТИ ================
 function updateSpeedHudVisibility() {
-  const hud = document.getElementById('speedHud');
+  const hud = document.getElementById('hudContainer');
   if (currentTab === 'rtnav' && rtTracking) {
     hud.classList.remove('hidden');
+    updateFollowBtn();
   } else {
     hud.classList.add('hidden');
   }
 }
 
-// ============== Иконки ==============
+// Ручное перетаскивание карты выключает слежение
+map.on('dragstart', () => {
+  if (followMode && currentTab === 'rtnav') {
+    followMode = false;
+    localStorage.setItem(FOLLOW_KEY, '0');
+    updateFollowBtn();
+  }
+});
+<!-- === КОНЕЦ БЛОКА: HUD === -->
+
+<!-- === БЛОК: ICONS === -->
+// ================ ИКОНКИ ================
 function planeIconSvg(courseDeg, color) {
   const fill = color || '#2a7';
   return '<svg viewBox="-12 -12 24 24" width="32" height="32" ' +
@@ -840,8 +929,10 @@ function targetIcon() {
     iconSize: [32, 32], iconAnchor: [16, 16]
   });
 }
+<!-- === КОНЕЦ БЛОКА: ICONS === -->
 
-// ============== Текущее положение ==============
+<!-- === БЛОК: POSITION === -->
+// ================ ТЕКУЩЕЕ ПОЛОЖЕНИЕ ================
 // Приоритет: РВ (живой GPS) > последняя точка трека (ОПРС) > GPS-маркер
 function getCurrentPosition() {
   if (rtTracking && rtCurrentPosition) {
@@ -857,8 +948,10 @@ function getCurrentPosition() {
   }
   return null;
 }
+<!-- === КОНЕЦ БЛОКА: POSITION === -->
 
-// ============== Попап станции ОПРС ==============
+<!-- === БЛОК: STATION POPUPS === -->
+// ================ ПОПАПЫ ОПРС ================
 function buildStationPopup(idx) {
   const p = PRESET[idx];
   let html = '<b>' + p.name + '</b><br>' + p.freq + '<br>' +
@@ -889,10 +982,6 @@ function updateMarker(idx) {
     .addTo(map).bindPopup(() => buildStationPopup(idx));
 }
 
-function refreshStationPopups() {
-  // содержимое попапа ОПРС пересчитывается автоматически (передан функцией)
-}
-
 function loadPreset() {
   PRESET.forEach((p, i) => {
     document.getElementById('label' + (i + 1)).textContent = '(' + p.name + ')';
@@ -903,8 +992,10 @@ function loadPreset() {
   });
   map.fitBounds(PRESET.map(p => [p.lat, p.lon]), { padding: [60, 60] });
 }
+<!-- === КОНЕЦ БЛОКА: STATION POPUPS === -->
 
-// ============== Попап сегмента маршрута ==============
+<!-- === БЛОК: ROUTES RENDER === -->
+// ================ РЕНДЕР МАРШРУТОВ ================
 function buildRouteSegmentPopup(routeKey, idx) {
   const route = ROUTES[routeKey];
   const A = route.points[idx];
@@ -928,7 +1019,6 @@ function buildRouteSegmentPopup(routeKey, idx) {
   return html;
 }
 
-// ============== Попап ППМ (точки маршрута) ==============
 function buildRoutePointPopup(routeKey, idx) {
   const route = ROUTES[routeKey];
   const pt = route.points[idx];
@@ -949,7 +1039,6 @@ function buildRoutePointPopup(routeKey, idx) {
     html += 'ИПУ: <b>' + ipu.toFixed(0) + '°</b><br>';
     html += 'МПУ: <b>' + mpu.toFixed(0) + '°</b>';
 
-    // ETA по текущей скорости
     const spdKmh = getCurrentSpeedKmh(pt);
     if (spdKmh !== null && spdKmh > 1) {
       const etaSec = (distKm / spdKmh) * 3600;
@@ -964,7 +1053,6 @@ function buildRoutePointPopup(routeKey, idx) {
   return html;
 }
 
-// ============== Рендер маршрутов ==============
 function renderRoutes() {
   ['A4', 'A5', 'LOCAL'].forEach(key => {
     routeLayers[key].forEach(l => map.removeLayer(l));
@@ -973,7 +1061,6 @@ function renderRoutes() {
     if (!cb || !cb.checked) return;
     const route = ROUTES[key];
 
-    // Каждый сегмент — кликабельная линия с попапом-функцией
     for (let i = 0; i < route.points.length - 1; i++) {
       const A = route.points[i];
       const B = route.points[i + 1];
@@ -985,7 +1072,6 @@ function renderRoutes() {
       routeLayers[key].push(pair[0], pair[1]);
     }
 
-    // Точки маршрута — кликабельные с попапом-функцией
     route.points.forEach((pt, i) => {
       const m = L.marker([pt.lat, pt.lon], { icon: routeDotIcon(route.color) })
         .addTo(map)
@@ -994,8 +1080,10 @@ function renderRoutes() {
     });
   });
 }
+<!-- === КОНЕЦ БЛОКА: ROUTES RENDER === -->
 
-// ============== Зоны и районы ==============
+<!-- === БЛОК: AREAS RENDER === -->
+// ================ РЕНДЕР ЗОН И РАЙОНОВ ================
 function renderAreas() {
   areaLayers.zones.forEach(l => map.removeLayer(l));
   areaLayers.zones = [];
@@ -1022,8 +1110,10 @@ function renderAreas() {
     });
   }
 }
+<!-- === КОНЕЦ БЛОКА: AREAS RENDER === -->
 
-// ============== 50-км линии при ошибке ==============
+<!-- === БЛОК: ERROR LINES === -->
+// ================ 50-КМ ЛИНИИ ПРИ ОШИБКЕ ================
 function drawErrorLines(sources) {
   errorLines.forEach(l => map.removeLayer(l));
   errorLines = [];
@@ -1044,12 +1134,15 @@ function drawErrorLines(sources) {
     errorLines.push(pair[0], pair[1]);
   });
 }
+
 function clearErrorLines() {
   errorLines.forEach(l => map.removeLayer(l));
   errorLines = [];
 }
+<!-- === КОНЕЦ БЛОКА: ERROR LINES === -->
 
-// ============== Очистка ==============
+<!-- === БЛОК: CLEAR === -->
+// ================ ОЧИСТКА ================
 function clearFields() {
   ['brg1','brg2','brg3','vorRadial','vorDist','course'].forEach(id => {
     document.getElementById(id).value = '';
@@ -1079,8 +1172,10 @@ function clearGps() {
   document.getElementById('result').classList.remove('error');
   updateNavUI();
 }
+<!-- === КОНЕЦ БЛОКА: CLEAR === -->
 
-// ============== Предпросмотр ==============
+<!-- === БЛОК: PREVIEW === -->
+// ================ ПРЕДПРОСМОТР ПЕЛЕНГОВ ================
 function preview() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   for (let i = 0; i < 3; i++) {
@@ -1104,8 +1199,10 @@ function preview() {
     } else el4.innerHTML = '';
   } else el4.innerHTML = '';
 }
+<!-- === КОНЕЦ БЛОКА: PREVIEW === -->
 
-// ============== Привести к GPS ==============
+<!-- === БЛОК: ALIGN GPS === -->
+// ================ ПРИВЕСТИ К GPS ================
 function alignToGPS() {
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -1120,7 +1217,6 @@ function alignToGPS() {
   const gpsPt = { lat: ll.lat, lon: ll.lng };
   const decl = parseFloat(document.getElementById('decl').value) || 0;
 
-  // ОПРС: МПР от GPS к ОПРС = ИПУ(GPS→ОПРС) − δ
   for (let i = 0; i < 3; i++) {
     const s = PRESET[i];
     const brgTrue = trueBearing(gpsPt, s);
@@ -1128,7 +1224,6 @@ function alignToGPS() {
     document.getElementById('brg' + (i + 1)).value = mpr.toFixed(0);
   }
 
-  // VOR: радиал = ИПУ(VOR→GPS) − δ, дальность = расстояние
   const v = PRESET[3];
   const radial = norm360(trueBearing(v, gpsPt) - decl);
   const dkm = distance(v, gpsPt) / 1000;
@@ -1140,8 +1235,10 @@ function alignToGPS() {
     ddToDM(gpsPt.lat, true) + ' ' + ddToDM(gpsPt.lon, false) +
     '. Нажмите «Рассчитать» — результат должен совпасть с GPS-точкой.';
 }
+<!-- === КОНЕЦ БЛОКА: ALIGN GPS === -->
 
-// ============== Трек (ручной) ==============
+<!-- === БЛОК: TRACK === -->
+// ================ ТРЕК ================
 function saveTrack() {
   try { localStorage.setItem(TRACK_KEY, JSON.stringify(track)); } catch (e) {}
 }
@@ -1205,11 +1302,10 @@ function renderTrack() {
   updateNavUI();
   updateRTUI();
 }
+<!-- === КОНЕЦ БЛОКА: TRACK === -->
 
-// ================================================================
-// ================= МОДУЛЬ НАВИГАЦИИ =============================
-// ================================================================
-
+<!-- === БЛОК: NAV === -->
+// ================ МОДУЛЬ НАВИГАЦИИ ================
 function getGPSHeadingMag() {
   if (!rtTracking || !rtCurrentPosition) return null;
   let heading = rtCurrentPosition.heading;
@@ -1231,14 +1327,11 @@ function getGPSSpeedKmh() {
   return rtCurrentPosition.speed * 3.6;
 }
 
-// Получить текущую скорость в км/ч.
-// Приоритет: живой GPS (РВ) → расчёт путевой по ветру.
+// Скорость для ETA: сначала GPS, потом путевая по ветру
 function getCurrentSpeedKmh(targetPt) {
-  // 1. Живой GPS в РВ — приоритет
   const gpsV = getGPSSpeedKmh();
   if (gpsV !== null && gpsV > 1) return gpsV;
 
-  // 2. Иначе — путевая по ветру (если введены ветер и V)
   const wdRaw = document.getElementById('windDir').value.trim();
   const wsRaw = document.getElementById('windSpd').value.trim();
   const asRaw = document.getElementById('airspeed').value.trim();
@@ -1268,11 +1361,8 @@ function getCurrentSpeedKmh(targetPt) {
 function setNavTarget(lat, lon) {
   navTarget = { lat, lon };
   const cur = getCurrentPosition();
-  if (cur) {
-    navLineStart = { lat: cur.lat, lon: cur.lon };
-  } else {
-    navLineStart = null;
-  }
+  if (cur) navLineStart = { lat: cur.lat, lon: cur.lon };
+  else navLineStart = null;
   updateNavUI();
   updateRTUI();
 }
@@ -1348,9 +1438,7 @@ function buildNavPopupHtml() {
     }
   }
 
-  if (n.wind) {
-    html += '<br><b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
-  }
+  if (n.wind) html += '<br><b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
 
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
     const v = convertSpeed(gpsSpeedKmh / 3.6);
@@ -1402,14 +1490,8 @@ function updateNavUI() {
   const resEl = document.getElementById('nav-result');
   resEl.classList.remove('error');
 
-  if (!cur) {
-    resEl.innerHTML = 'Сначала определите своё местоположение (GPS или расчёт ОПРС).';
-    return;
-  }
-  if (!navTarget) {
-    resEl.innerHTML = 'Задайте цель кликом по карте.';
-    return;
-  }
+  if (!cur) { resEl.innerHTML = 'Сначала определите своё местоположение (GPS или расчёт ОПРС).'; return; }
+  if (!navTarget) { resEl.innerHTML = 'Задайте цель кликом по карте.'; return; }
 
   const n = computeNav();
   if (!n) { resEl.innerHTML = '—'; return; }
@@ -1430,13 +1512,11 @@ function updateNavUI() {
     html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
     html += '<b>УВ:</b> ' + n.wind.uv.toFixed(0) + '°';
     html += n.wind.uv > 0 ? ' <span style="color:#888">(справа)</span>' : (n.wind.uv < 0 ? ' <span style="color:#888">(слева)</span>' : '');
-    html += '<br>';
-    html += '<b>УС:</b> ' + n.wind.usDeg.toFixed(1) + '°';
+    html += '<br><b>УС:</b> ' + n.wind.usDeg.toFixed(1) + '°';
     if (Math.abs(n.wind.usDeg) > 0.5) {
       html += n.wind.usDeg > 0 ? ' <span style="color:#c00">вправо</span>' : ' <span style="color:#c00">влево</span>';
     }
-    html += '<br>';
-    html += '<b style="color:#2a7">МК: ' + n.wind.mk.toFixed(0) + '°</b><br>';
+    html += '<br><b style="color:#2a7">МК: ' + n.wind.mk.toFixed(0) + '°</b><br>';
     html += '<b>Путевая:</b> ' + n.wind.wGround.toFixed(0) + ' км/ч<br>';
     html += '<b>ETA:</b> ' + (n.wind.etaSec !== null ? fmtDuration(n.wind.etaSec) : '—');
   } else {
@@ -1448,24 +1528,13 @@ function updateNavUI() {
 }
 
 map.on('click', e => {
-  if (currentTab === 'nav') {
-    setNavTarget(e.latlng.lat, e.latlng.lng);
-  }
+  if (currentTab === 'nav') setNavTarget(e.latlng.lat, e.latlng.lng);
 });
+<!-- === КОНЕЦ БЛОКА: NAV === -->
 
-// ================================================================
-// ============== КОНЕЦ МОДУЛЯ НАВИГАЦИИ ==========================
-// ================================================================
-
-
-// ================================================================
-// ============== МОДУЛЬ НАВИГАЦИИ РВ =============================
-// ================================================================
-
-function toggleRT() {
-  if (rtTracking) stopRT();
-  else startRT();
-}
+<!-- === БЛОК: RTNAV === -->
+// ================ МОДУЛЬ НАВИГАЦИИ РВ ================
+function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
 function startRT() {
   if (!navigator.geolocation) { alert('Геолокация не поддерживается.'); return; }
@@ -1485,7 +1554,6 @@ function startRT() {
   document.getElementById('rt-result').classList.remove('error');
 
   requestWakeLock();
-
   updateRTUI();
   updateSpeedHudVisibility();
 }
@@ -1501,7 +1569,6 @@ function stopRT() {
   document.getElementById('rtToggleBtn').classList.add('gps');
 
   releaseWakeLock();
-
   updateRTUI();
   updateSpeedHudVisibility();
 }
@@ -1514,7 +1581,6 @@ function onRTPosition(pos) {
   const heading = (pos.coords.heading !== null && !isNaN(pos.coords.heading)) ? pos.coords.heading : null;
 
   const now = Date.now();
-
   const last = rtTrack[rtTrack.length - 1];
   let shouldAdd = false;
   if (!last) shouldAdd = true;
@@ -1533,7 +1599,6 @@ function onRTPosition(pos) {
   renderRTMarker();
   updateRTUI();
 
-  // Если попап цели или ЛЗП открыт — обновим содержимое
   const newPopupHtml = buildNavPopupHtml();
   if (navTargetMarker && navTargetMarker.isPopupOpen && navTargetMarker.isPopupOpen()) {
     navTargetMarker.setPopupContent(newPopupHtml);
@@ -1566,7 +1631,6 @@ function saveRTTrack() {
     localStorage.setItem(RT_TRACK_KEY, JSON.stringify(toSave));
   } catch (e) {}
 }
-
 function loadRTTrack() {
   try {
     const raw = localStorage.getItem(RT_TRACK_KEY);
@@ -1587,10 +1651,8 @@ function clearRTTrack() {
 
 function renderRTTrack() {
   const show = currentTab === 'rtnav';
-
   if (rtLineLayer) { map.removeLayer(rtLineLayer); rtLineLayer = null; }
   if (rtStartMarker) { map.removeLayer(rtStartMarker); rtStartMarker = null; }
-
   if (!show || rtTrack.length === 0) return;
 
   const latlngs = rtTrack.map(p => [p.lat, p.lon]);
@@ -1599,8 +1661,7 @@ function renderRTTrack() {
   }).addTo(map);
 
   const start = rtTrack[0];
-  rtStartMarker = L.marker([start.lat, start.lon], { icon: rtStartIcon(), interactive: false })
-    .addTo(map);
+  rtStartMarker = L.marker([start.lat, start.lon], { icon: rtStartIcon(), interactive: false }).addTo(map);
 }
 
 function renderRTMarker() {
@@ -1609,20 +1670,16 @@ function renderRTMarker() {
     if (rtMarker) { map.removeLayer(rtMarker); rtMarker = null; }
     return;
   }
-
   let course = rtCurrentPosition.heading;
   if (course === null || course === undefined || isNaN(course)) {
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
       const b = rtTrack[rtTrack.length - 1];
-      if (distance(a, b) > 1) course = trueBearing(a, b);
-      else course = 0;
+      if (distance(a, b) > 1) course = trueBearing(a, b); else course = 0;
     } else course = 0;
   }
-
   const lat = rtCurrentPosition.lat;
   const lon = rtCurrentPosition.lon;
-
   if (rtMarker) {
     rtMarker.setLatLng([lat, lon]);
     rtMarker.setIcon(planeIconBlue(course));
@@ -1674,11 +1731,8 @@ function updateRTUI() {
   }
 
   const tgtEl = document.getElementById('rt-target');
-  if (navTarget) {
-    tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
-  } else {
-    tgtEl.innerHTML = '<span style="color:#888">Задайте цель на вкладке Навигация</span>';
-  }
+  if (navTarget) tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
+  else tgtEl.innerHTML = '<span style="color:#888">Задайте цель на вкладке Навигация</span>';
 
   if (rtCurrentPosition && rtCurrentPosition.speed !== null) {
     const v = convertSpeed(rtCurrentPosition.speed);
@@ -1691,18 +1745,9 @@ function updateRTUI() {
   if (!resEl) return;
   resEl.classList.remove('error');
 
-  if (!rtTracking && !rtCurrentPosition) {
-    resEl.innerHTML = 'Нажмите «Старт РВ», чтобы начать.';
-    return;
-  }
-  if (!rtCurrentPosition) {
-    resEl.innerHTML = 'Ожидание первой позиции GPS...';
-    return;
-  }
-  if (!navTarget) {
-    resEl.innerHTML = 'Задайте цель на вкладке Навигация.';
-    return;
-  }
+  if (!rtTracking && !rtCurrentPosition) { resEl.innerHTML = 'Нажмите «Старт РВ», чтобы начать.'; return; }
+  if (!rtCurrentPosition) { resEl.innerHTML = 'Ожидание первой позиции GPS...'; return; }
+  if (!navTarget) { resEl.innerHTML = 'Задайте цель на вкладке Навигация.'; return; }
 
   const n = computeNav();
   if (!n) { resEl.innerHTML = '—'; return; }
@@ -1730,9 +1775,7 @@ function updateRTUI() {
     }
   }
 
-  if (n.wind) {
-    html += ' &nbsp; <b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
-  }
+  if (n.wind) html += ' &nbsp; <b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
 
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
     const v = convertSpeed(gpsSpeedKmh / 3.6);
@@ -1743,13 +1786,10 @@ function updateRTUI() {
 
   resEl.innerHTML = html;
 }
+<!-- === КОНЕЦ БЛОКА: RTNAV === -->
 
-// ================================================================
-// ============== КОНЕЦ МОДУЛЯ РВ =================================
-// ================================================================
-
-
-// ---------- Получить МС ----------
+<!-- === БЛОК: GPS ONCE === -->
+// ================ ПОЛУЧИТЬ МС (одноразовый GPS) ================
 function getMyPosition() {
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -1820,8 +1860,10 @@ function getMyPosition() {
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 }
+<!-- === КОНЕЦ БЛОКА: GPS ONCE === -->
 
-// ---------- Расчёт по пеленгам ----------
+<!-- === БЛОК: CALC === -->
+// ================ РАСЧЁТ ПО ПЕЛЕНГАМ ================
 function calculate() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const sources = [];
@@ -1994,25 +2036,21 @@ function calculate() {
 function onCourseChange() {
   if (track.length > 0) renderTrack();
 }
+<!-- === КОНЕЦ БЛОКА: CALC === -->
 
+<!-- === БЛОК: INIT === -->
+// ================ ИНИЦИАЛИЗАЦИЯ ================
 setInterval(() => {
   if (rtTracking && rtCurrentPosition && currentTab === 'rtnav') {
     updateRTUI();
   }
 }, 1000);
 
-// ---------- Инициализация ----------
 loadPreset();
 loadTrack();
 loadRTTrack();
 
-(function restoreFollowToggle() {
-  const saved = localStorage.getItem(FOLLOW_KEY);
-  if (saved === '0') {
-    document.getElementById('rtFollowToggle').classList.remove('on');
-  }
-})();
-
+updateFollowBtn();
 updateSpeedUnitLabel();
 
 renderTrack();
@@ -2020,6 +2058,8 @@ renderRoutes();
 renderAreas();
 updateNavUI();
 updateRTUI();
+<!-- === КОНЕЦ БЛОКА: INIT === -->
+
 </script>
 </body>
 </html>
