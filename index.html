@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ================================================================
-     БЛОК: HEAD
+     БЛОК 1: HEAD
      Мета, заголовок, подключение внешних библиотек
      ================================================================ -->
 <head>
@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-<!-- === БЛОК: STYLE: БАЗА === -->
+<!-- === БЛОК 2: STYLE: БАЗА === -->
 <style>
   html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
   #map { height:100%; width:100%; }
@@ -79,9 +79,9 @@
 
   .subhint { color:#666; font-size:11px; margin:0 0 6px 0; }
 </style>
-<!-- === КОНЕЦ БЛОКА: STYLE: БАЗА === -->
+<!-- === КОНЕЦ БЛОКА 2: STYLE: БАЗА === -->
 
-<!-- === БЛОК: STYLE: HUD === -->
+<!-- === БЛОК 3: STYLE: HUD === -->
 <style>
   #hudContainer {
     position: fixed;
@@ -146,9 +146,9 @@
   #hudContainer #followBtn.inactive { opacity: 0.6; }
   #hudContainer #followBtn:active { transform: scale(0.95); }
 </style>
-<!-- === КОНЕЦ БЛОКА: STYLE: HUD === -->
+<!-- === КОНЕЦ БЛОКА 3: STYLE: HUD === -->
 
-<!-- === БЛОК: STYLE: ЭЛЕМЕНТЫ === -->
+<!-- === БЛОК 4: STYLE: ЭЛЕМЕНТЫ === -->
 <style>
   .oprs { border:1px solid #ddd; padding:6px; margin-bottom:6px; border-radius:4px; }
   .oprs.vor { border-color: #c9f; background:#faf5ff; }
@@ -214,9 +214,9 @@
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
 </style>
-<!-- === КОНЕЦ БЛОКА: STYLE: ЭЛЕМЕНТЫ === -->
+<!-- === КОНЕЦ БЛОКА 4: STYLE: ЭЛЕМЕНТЫ === -->
 
-<!-- === БЛОК: STYLE: МОБИЛЬНАЯ === -->
+<!-- === БЛОК 5: STYLE: МОБИЛЬНАЯ === -->
 <style>
   @media (max-width: 600px) {
     #panel { width: calc(100% - 20px); max-width: 400px; font-size:14px; }
@@ -233,17 +233,17 @@
     #hudContainer #followBtn { width: 40px; height: 40px; font-size: 18px; }
   }
 </style>
-<!-- === КОНЕЦ БЛОКА: STYLE: МОБИЛЬНАЯ === -->
+<!-- === КОНЕЦ БЛОКА 5: STYLE: МОБИЛЬНАЯ === -->
 
 </head>
 
 <body>
 
-<!-- === БЛОК: BODY: КНОПКА МЕНЮ === -->
+<!-- === БЛОК 6: BODY: КНОПКА МЕНЮ === -->
 <button id="toggleBtn" onclick="togglePanel()">☰</button>
-<!-- === КОНЕЦ БЛОКА: BODY: КНОПКА МЕНЮ === -->
+<!-- === КОНЕЦ БЛОКА 6: BODY: КНОПКА МЕНЮ === -->
 
-<!-- === БЛОК: BODY: HUD === -->
+<!-- === БЛОК 7: BODY: HUD === -->
 <div id="hudContainer" class="hidden">
   <div id="speedHud">
     <span id="speedHudValue">0</span>
@@ -253,9 +253,9 @@
     <span id="followBtnIcon">🎯</span>
   </button>
 </div>
-<!-- === КОНЕЦ БЛОКА: BODY: HUD === -->
+<!-- === КОНЕЦ БЛОКА 7: BODY: HUD === -->
 
-<!-- === БЛОК: BODY: ПАНЕЛЬ === -->
+<!-- === БЛОК 8: BODY: ПАНЕЛЬ === -->
 <div id="panel">
   <div class="tabs">
     <button class="tab-btn active" id="tabBtnPlace" onclick="switchTab('place')">📍 Место</button>
@@ -460,19 +460,19 @@
     </div>
   </div>
 </div>
-<!-- === КОНЕЦ БЛОКА: BODY: ПАНЕЛЬ === -->
+<!-- === КОНЕЦ БЛОКА 8: BODY: ПАНЕЛЬ === -->
 
-<!-- === БЛОК: BODY: КАРТА === -->
+<!-- === БЛОК 9: BODY: КАРТА === -->
 <div id="map"></div>
-<!-- === КОНЕЦ БЛОКА: BODY: КАРТА === -->
+<!-- === КОНЕЦ БЛОКА 9: BODY: КАРТА === -->
 
-<!-- === БЛОК: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
+<!-- === БЛОК 10: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
 <script>
-<!-- === КОНЕЦ БЛОКА: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
+<!-- === КОНЕЦ БЛОКА 10: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
 
-<!-- === БЛОК: CONFIG === -->
+<!-- === БЛОК 11: CONFIG === -->
 // ================ КОНФИГУРАЦИЯ ================
 const FOLLOW_KEY = 'oprs_rt_follow';
 const SPEED_UNIT_KEY = 'oprs_speed_unit';
@@ -494,9 +494,9 @@ const ERROR_LINE_KM = 50;
 const HITBOX_WEIGHT = 25;
 const RT_MIN_STEP_M = 5;
 const RT_MAX_POINTS = 10000;
-<!-- === КОНЕЦ БЛОКА: CONFIG === -->
+<!-- === КОНЕЦ БЛОКА 11: CONFIG === -->
 
-<!-- === БЛОК: TABS === -->
+<!-- === БЛОК 12: TABS === -->
 // ================ ВКЛАДКИ И ПАНЕЛЬ ================
 let currentTab = 'place';
 
@@ -543,9 +543,9 @@ if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
   document.getElementById('toggleBtn').textContent = '☰';
 }
-<!-- === КОНЕЦ БЛОКА: TABS === -->
+<!-- === КОНЕЦ БЛОКА 12: TABS === -->
 
-<!-- === БЛОК: MAP === -->
+<!-- === БЛОК 13: MAP === -->
 // ================ КАРТА ================
 const map = L.map('map').setView([51.1, 46.7], 10);
 let currentLayer = null;
@@ -562,9 +562,9 @@ function switchMap() {
   }
 }
 switchMap();
-<!-- === КОНЕЦ БЛОКА: MAP === -->
+<!-- === КОНЕЦ БЛОКА 13: MAP === -->
 
-<!-- === БЛОК: DATA: ОПРС === -->
+<!-- === БЛОК 14: DATA: ОПРС === -->
 // ================ ДАННЫЕ: ОПРС ================
 const PRESET = [
   { name: 'Красный Кут',   lat: 50.9330, lon: 46.9180, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
@@ -572,9 +572,9 @@ const PRESET = [
   { name: 'Комсомольское',  lat: 50.8000, lon: 47.0445, freq: '310 кГц',   type: 'NDB', color: 'orange' },
   { name: 'Саратов VOR',    lat: 51.5628, lon: 46.0458, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
 ];
-<!-- === КОНЕЦ БЛОКА: DATA: ОПРС === -->
+<!-- === КОНЕЦ БЛОКА 14: DATA: ОПРС === -->
 
-<!-- === БЛОК: DATA: ROUTES === -->
+<!-- === БЛОК 15: DATA: ROUTES === -->
 // ================ ДАННЫЕ: МАРШРУТЫ ================
 const ROUTES = {
   A4: {
@@ -615,9 +615,9 @@ const ROUTES = {
 };
 
 let routeLayers = { A4: [], A5: [], LOCAL: [] };
-<!-- === КОНЕЦ БЛОКА: DATA: ROUTES === -->
+<!-- === КОНЕЦ БЛОКА 15: DATA: ROUTES === -->
 
-<!-- === БЛОК: DATA: ZONES === -->
+<!-- === БЛОК 16: DATA: ZONES === -->
 // ================ ДАННЫЕ: ЗОНЫ И РАЙОНЫ ================
 const ZONES = [
   { id: 'ПЗ №1', name: 'пр. Орлов',          lat: 51.08667, lon: 47.05500 },
@@ -641,9 +641,9 @@ const SECTORS = [
 ];
 
 let areaLayers = { zones: [], sectors: [] };
-<!-- === КОНЕЦ БЛОКА: DATA: ZONES === -->
+<!-- === КОНЕЦ БЛОКА 16: DATA: ZONES === -->
 
-<!-- === БЛОК: STATE === -->
+<!-- === БЛОК 17: STATE === -->
 // ================ ПЕРЕМЕННЫЕ СОСТОЯНИЯ ================
 let oprsMarkers = [null, null, null, null];
 let stationLines = [];
@@ -667,9 +667,9 @@ let rtTrack = [];
 let rtLineLayer = null;
 let rtStartMarker = null;
 let rtMarker = null;
-<!-- === КОНЕЦ БЛОКА: STATE === -->
+<!-- === КОНЕЦ БЛОКА 17: STATE === -->
 
-<!-- === БЛОК: WAKELOCK === -->
+<!-- === БЛОК 18: WAKELOCK === -->
 // ================ WAKE LOCK ================
 let wakeLock = null;
 
@@ -694,9 +694,9 @@ document.addEventListener('visibilitychange', async () => {
     await requestWakeLock();
   }
 });
-<!-- === КОНЕЦ БЛОКА: WAKELOCK === -->
+<!-- === КОНЕЦ БЛОКА 18: WAKELOCK === -->
 
-<!-- === БЛОК: MATH === -->
+<!-- === БЛОК 19: MATH === -->
 // ================ МАТЕМАТИКА И УТИЛИТЫ ================
 function toRad(d) { return d * Math.PI / 180; }
 function toDeg(r) { return r * 180 / Math.PI; }
@@ -764,9 +764,9 @@ function makeClickableLine(latlngs, options, popupContent) {
   hitbox.bindPopup(popupContent, { autoPan: true });
   return [visible, hitbox];
 }
-<!-- === КОНЕЦ БЛОКА: MATH === -->
+<!-- === КОНЕЦ БЛОКА 19: MATH === -->
 
-<!-- === БЛОК: OFFSET === -->
+<!-- === БЛОК 20: OFFSET === -->
 // ================ ЛБУ (боковое уклонение) ================
 function computeOffset(P, A, B) {
   const R = 6371000;
@@ -813,9 +813,9 @@ function fmtOffset(P, A, B) {
   html += '<br><b>Пройдено по линии:</b> ' + fmtDist(off.s_proj) + spNote;
   return html;
 }
-<!-- === КОНЕЦ БЛОКА: OFFSET === -->
+<!-- === КОНЕЦ БЛОКА 20: OFFSET === -->
 
-<!-- === БЛОК: SPEED === -->
+<!-- === БЛОК 21: SPEED === -->
 // ================ ЕДИНИЦЫ СКОРОСТИ ================
 function convertSpeed(mps) {
   if (mps === null || mps === undefined || isNaN(mps)) return null;
@@ -834,9 +834,9 @@ function cycleSpeedUnit() {
   updateSpeedUnitLabel();
   updateRTUI();
 }
-<!-- === КОНЕЦ БЛОКА: SPEED === -->
+<!-- === КОНЕЦ БЛОКА 21: SPEED === -->
 
-<!-- === БЛОК: FOLLOW === -->
+<!-- === БЛОК 22: FOLLOW === -->
 // ================ РЕЖИМ СЛЕЖЕНИЯ ================
 let followMode = localStorage.getItem(FOLLOW_KEY) !== '0';
 
@@ -868,9 +868,9 @@ function updateFollowBtn() {
     btn.title = 'Свободный режим (нажмите — следить за позицией)';
   }
 }
-<!-- === КОНЕЦ БЛОКА: FOLLOW === -->
+<!-- === КОНЕЦ БЛОКА 22: FOLLOW === -->
 
-<!-- === БЛОК: HUD === -->
+<!-- === БЛОК 23: HUD === -->
 // ================ HUD СКОРОСТИ ================
 function updateSpeedHudVisibility() {
   const hud = document.getElementById('hudContainer');
@@ -890,9 +890,9 @@ map.on('dragstart', () => {
     updateFollowBtn();
   }
 });
-<!-- === КОНЕЦ БЛОКА: HUD === -->
+<!-- === КОНЕЦ БЛОКА 23: HUD === -->
 
-<!-- === БЛОК: ICONS === -->
+<!-- === БЛОК 24: ICONS === -->
 // ================ ИКОНКИ ================
 function planeIconSvg(courseDeg, color) {
   const fill = color || '#2a7';
@@ -948,9 +948,9 @@ function targetIcon() {
     iconSize: [32, 32], iconAnchor: [16, 16]
   });
 }
-<!-- === КОНЕЦ БЛОКА: ICONS === -->
+<!-- === КОНЕЦ БЛОКА 24: ICONS === -->
 
-<!-- === БЛОК: POSITION === -->
+<!-- === БЛОК 25: POSITION === -->
 // ================ ТЕКУЩЕЕ ПОЛОЖЕНИЕ ================
 // Приоритет: РВ (живой GPS) > последняя точка трека (ОПРС) > GPS-маркер
 function getCurrentPosition() {
@@ -967,9 +967,9 @@ function getCurrentPosition() {
   }
   return null;
 }
-<!-- === КОНЕЦ БЛОКА: POSITION === -->
+<!-- === КОНЕЦ БЛОКА 25: POSITION === -->
 
-<!-- === БЛОК: STATION POPUPS === -->
+<!-- === БЛОК 26: STATION POPUPS === -->
 // ================ ПОПАПЫ ОПРС ================
 function buildStationPopup(idx) {
   const p = PRESET[idx];
@@ -1011,9 +1011,9 @@ function loadPreset() {
   });
   map.fitBounds(PRESET.map(p => [p.lat, p.lon]), { padding: [60, 60] });
 }
-<!-- === КОНЕЦ БЛОКА: STATION POPUPS === -->
+<!-- === КОНЕЦ БЛОКА 26: STATION POPUPS === -->
 
-<!-- === БЛОК: ROUTES RENDER === -->
+<!-- === БЛОК 27: ROUTES RENDER === -->
 // ================ РЕНДЕР МАРШРУТОВ ================
 function buildRouteSegmentPopup(routeKey, idx) {
   const route = ROUTES[routeKey];
@@ -1099,9 +1099,9 @@ function renderRoutes() {
     });
   });
 }
-<!-- === КОНЕЦ БЛОКА: ROUTES RENDER === -->
+<!-- === КОНЕЦ БЛОКА 27: ROUTES RENDER === -->
 
-<!-- === БЛОК: AREAS RENDER === -->
+<!-- === БЛОК 28: AREAS RENDER === -->
 // ================ РЕНДЕР ЗОН И РАЙОНОВ ================
 function renderAreas() {
   areaLayers.zones.forEach(l => map.removeLayer(l));
@@ -1129,9 +1129,9 @@ function renderAreas() {
     });
   }
 }
-<!-- === КОНЕЦ БЛОКА: AREAS RENDER === -->
+<!-- === КОНЕЦ БЛОКА 28: AREAS RENDER === -->
 
-<!-- === БЛОК: ERROR LINES === -->
+<!-- === БЛОК 29: ERROR LINES === -->
 // ================ 50-КМ ЛИНИИ ПРИ ОШИБКЕ ================
 function drawErrorLines(sources) {
   errorLines.forEach(l => map.removeLayer(l));
@@ -1158,9 +1158,9 @@ function clearErrorLines() {
   errorLines.forEach(l => map.removeLayer(l));
   errorLines = [];
 }
-<!-- === КОНЕЦ БЛОКА: ERROR LINES === -->
+<!-- === КОНЕЦ БЛОКА 29: ERROR LINES === -->
 
-<!-- === БЛОК: CLEAR === -->
+<!-- === БЛОК 30: CLEAR === -->
 // ================ ОЧИСТКА ================
 function clearFields() {
   ['brg1','brg2','brg3','vorRadial','vorDist','course'].forEach(id => {
@@ -1191,9 +1191,9 @@ function clearGps() {
   document.getElementById('result').classList.remove('error');
   updateNavUI();
 }
-<!-- === КОНЕЦ БЛОКА: CLEAR === -->
+<!-- === КОНЕЦ БЛОКА 30: CLEAR === -->
 
-<!-- === БЛОК: PREVIEW === -->
+<!-- === БЛОК 31: PREVIEW === -->
 // ================ ПРЕДПРОСМОТР ПЕЛЕНГОВ ================
 function preview() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
@@ -1218,9 +1218,9 @@ function preview() {
     } else el4.innerHTML = '';
   } else el4.innerHTML = '';
 }
-<!-- === КОНЕЦ БЛОКА: PREVIEW === -->
+<!-- === КОНЕЦ БЛОКА 31: PREVIEW === -->
 
-<!-- === БЛОК: ALIGN GPS === -->
+<!-- === БЛОК 32: ALIGN GPS === -->
 // ================ ПРИВЕСТИ К GPS ================
 function alignToGPS() {
   const resultEl = document.getElementById('result');
@@ -1254,9 +1254,9 @@ function alignToGPS() {
     ddToDM(gpsPt.lat, true) + ' ' + ddToDM(gpsPt.lon, false) +
     '. Нажмите «Рассчитать» — результат должен совпасть с GPS-точкой.';
 }
-<!-- === КОНЕЦ БЛОКА: ALIGN GPS === -->
+<!-- === КОНЕЦ БЛОКА 32: ALIGN GPS === -->
 
-<!-- === БЛОК: TRACK === -->
+<!-- === БЛОК 33: TRACK === -->
 // ================ ТРЕК ================
 function saveTrack() {
   try { localStorage.setItem(TRACK_KEY, JSON.stringify(track)); } catch (e) {}
@@ -1321,9 +1321,9 @@ function renderTrack() {
   updateNavUI();
   updateRTUI();
 }
-<!-- === КОНЕЦ БЛОКА: TRACK === -->
+<!-- === КОНЕЦ БЛОКА 33: TRACK === -->
 
-<!-- === БЛОК: NAV === -->
+<!-- === БЛОК 34: NAV === -->
 // ================ МОДУЛЬ НАВИГАЦИИ ================
 function getGPSHeadingMag() {
   if (!rtTracking || !rtCurrentPosition) return null;
@@ -1576,9 +1576,9 @@ map.on('click', e => {
     setNavTarget(e.latlng.lat, e.latlng.lng);
   }
 });
-<!-- === КОНЕЦ БЛОКА: NAV === -->
+<!-- === КОНЕЦ БЛОКА 34: NAV === -->
 
-<!-- === БЛОК: RTNAV === -->
+<!-- === БЛОК 35: RTNAV === -->
 // ================ МОДУЛЬ НАВИГАЦИИ РВ ================
 function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
@@ -1832,9 +1832,9 @@ function updateRTUI() {
 
   resEl.innerHTML = html;
 }
-<!-- === КОНЕЦ БЛОКА: RTNAV === -->
+<!-- === КОНЕЦ БЛОКА 35: RTNAV === -->
 
-<!-- === БЛОК: GPS ONCE === -->
+<!-- === БЛОК 36: GPS ONCE === -->
 // ================ ПОЛУЧИТЬ МС (одноразовый GPS) ================
 function getMyPosition() {
   const resultEl = document.getElementById('result');
@@ -1906,9 +1906,9 @@ function getMyPosition() {
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 }
-<!-- === КОНЕЦ БЛОКА: GPS ONCE === -->
+<!-- === КОНЕЦ БЛОКА 36: GPS ONCE === -->
 
-<!-- === БЛОК: CALC === -->
+<!-- === БЛОК 37: CALC === -->
 // ================ РАСЧЁТ ПО ПЕЛЕНГАМ ================
 function calculate() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
@@ -2082,9 +2082,9 @@ function calculate() {
 function onCourseChange() {
   if (track.length > 0) renderTrack();
 }
-<!-- === КОНЕЦ БЛОКА: CALC === -->
+<!-- === КОНЕЦ БЛОКА 37: CALC === -->
 
-<!-- === БЛОК: INIT === -->
+<!-- === БЛОК 38: INIT === -->
 // ================ ИНИЦИАЛИЗАЦИЯ ================
 setInterval(() => {
   if (rtTracking && rtCurrentPosition && currentTab === 'rtnav') {
@@ -2104,7 +2104,7 @@ renderRoutes();
 renderAreas();
 updateNavUI();
 updateRTUI();
-<!-- === КОНЕЦ БЛОКА: INIT === -->
+<!-- === КОНЕЦ БЛОКА 38: INIT === -->
 
 </script>
 </body>
