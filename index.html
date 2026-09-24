@@ -1021,9 +1021,16 @@ function buildRouteSegmentPopup(routeKey, idx) {
   const B = route.points[idx + 1];
   const segLen = distance(A, B) / 1000;
 
+  // ЗМПУ участка = истинный пеленг A→B минус магнитное склонение
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const ipu = trueBearing(A, B);
+  const zmpu = norm360(ipu - decl);
+
   let html = '<b>' + route.name + '</b><br>';
   html += A.name + ' → ' + B.name + '<br>';
-  html += 'Длина участка: <b>' + segLen.toFixed(2) + ' км</b>';
+  html += 'Длина участка: <b>' + segLen.toFixed(2) + ' км</b><br>';
+  html += '<b>ИПУ:</b> ' + ipu.toFixed(0) + '°<br>';
+  html += '<b>ЗМПУ:</b> <span style="color:#2a7"><b>' + zmpu.toFixed(0) + '°</b></span>';
 
   const cur = getCurrentPosition();
   if (cur) {
@@ -1033,7 +1040,8 @@ function buildRouteSegmentPopup(routeKey, idx) {
       html += offHtml;
     }
   } else {
-    html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
+    html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+    html += '<span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
   }
   return html;
 }
