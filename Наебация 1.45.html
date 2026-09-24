@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ОПРС → Местоположение</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
+  #map { height:100%; width:100%; }
+
+  #map.nav-mode .leaflet-overlay-pane,
+  #map.nav-mode .leaflet-marker-pane,
+  #map.nav-mode .leaflet-shadow-pane,
+  #map.nav-mode .leaflet-tooltip-pane {
+    pointer-events: none !important;
+  }
+  #map.nav-mode .leaflet-overlay-pane *,
+  #map.nav-mode .leaflet-marker-pane *,
+  #map.nav-mode .leaflet-shadow-pane *,
+  #map.nav-mode .leaflet-tooltip-pane * {
+    pointer-events: none !important;
+  }
+
+  #toggleBtn {
+    position:absolute; top:10px; left:10px; z-index:1100;
+    background:#2a7; color:white; border:none; border-radius:6px;
+    padding:8px 12px; font-size:18px; cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    min-width:44px; min-height:44px;
+  }
+  #toggleBtn:active { background:#185; }
+
+  #speedHud {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    background: rgba(0, 0, 0, 0.68);
+    color: white;
+    padding: 8px 22px 8px 22px;
+    border-radius: 40px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    pointer-events: none;
+    text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    border: 2px solid rgba(255,255,255,0.15);
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  #speedHud.hidden { display: none; }
+  #speedHud #speedHudValue {
+    font-size: 34px;
+    font-weight: 700;
+    min-width: 64px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  #speedHud #speedHudUnit {
+    font-size: 14px;
+    font-weight: 400;
+    opacity: 0.85;
+    line-height: 1;
+  }
+
+  #panel {
+    position:absolute; top:10px; left:10px; z-index:1000;
+    background:white; padding:12px; border-radius:8px;
+    box-shadow:0 0 10px rgba(0,0,0,0.3); width:340px; font-size:13px;
+    max-height: calc(100% - 20px); overflow-y: auto;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    padding-top:52px;
+  }
+  #panel.hidden {
+    transform: translateX(-380px);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #ddd;
+  }
+  .tab-btn {
+    padding: 9px 4px;
+    font-size: 13px;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #333;
+    font-family: inherit;
+    margin: 0;
+    text-align: center;
+    font-weight: normal;
+  }
+  .tab-btn.active {
+    background: #2a7;
+    color: white;
+    border-color: #2a7;
+    font-weight: bold;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  #panel h3 { margin:0 0 4px 0; font-size:15px; }
+  .subhint { color:#666; font-size:11px; margin:0 0 6px 0; }
+  .oprs { border:1px solid #ddd; padding:6px; margin-bottom:6px; border-radius:4px; }
+  .oprs.vor { border-color: #c9f; background:#faf5ff; }
+  .oprs.course-box { border-color:#2a7; background:#f0fff5; }
+  .oprs.routes-box { border-color:#c80; background:#fff8f0; }
+  .oprs.areas-box { border-color:#d95; background:#fff5f0; }
+  .oprs.nav-box { border-color:#e67e22; background:#fff8f0; }
+  .oprs.rt-box { border-color:#08c; background:#f0f8ff; }
+  .oprs b { display:block; margin-bottom:4px; font-size:13px; }
+  .oprs input { width:70px; padding:2px 4px; font-size:12px; }
+  .oprs input[readonly] { background:#eee; color:#555; }
+  .freq { display:inline-block; background:#eef; color:#336; padding:1px 6px; border-radius:3px; font-size:11px; margin-left:4px; font-weight:normal; }
+  .freq.vor { background:#e0d0f5; color:#4a2a7a; }
+  .calc-line { font-size:11px; color:#555; margin-top:2px; }
+  .calc-line b { color:#2a7; }
+  button { padding:5px 10px; margin:2px 2px 0 0; cursor:pointer; font-size:12px; font-family:inherit; }
+  button.primary { background:#2a7; color:white; border:none; }
+  button.primary:active { background:#185; }
+  button.gps { background:#08c; color:white; border:none; }
+  button.gps:active { background:#069; }
+  button.gps:disabled { background:#aaa; }
+  button.warn { background:#e67e22; color:white; border:none; }
+  button.warn:active { background:#c4621a; }
+  button.stop { background:#c00; color:white; border:none; }
+  button.stop:active { background:#900; }
+  button.big { width:100%; padding:14px; font-size:15px; margin-top:6px; }
+  button.units { padding:4px 10px; font-size:12px; background:#eef; color:#333; border:1px solid #ccc; border-radius:4px; }
+  button.units:active { background:#dde; }
+  button.smallbtn { padding:4px 8px; font-size:11px; background:#f0f0f0; color:#333; border:1px solid #ccc; border-radius:4px; margin-left:6px; }
+  button.smallbtn:active { background:#dde; }
+  select { width:100%; padding:3px; font-size:12px; margin-top:2px; }
+  #result, #nav-result, #rt-result { margin-top:8px; padding:6px; background:#f0f8ff; border-radius:4px; min-height:20px; font-size:12px; }
+  #result.error, #nav-result.error, #rt-result.error { background:#ffeaea; color:#a00; font-weight:bold; }
+  #nav-result { background:#fff5ec; }
+  #rt-result { background:#f0f8ff; }
+  .hint { color:#666; font-size:11px; margin:4px 0; }
+  .warn { color:#c00; font-weight:bold; }
+  .ok { color:green; }
+  .row { margin:4px 0; }
+  label { color:#333; }
+  .btn-row { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
+  .btn-row button { flex:1 1 auto; min-width:80px; }
+  .route-toggle { display:flex; align-items:center; gap:6px; margin:4px 0; }
+  .route-toggle input { width:auto; }
+  .route-toggle label { cursor:pointer; user-select:none; }
+  .route-swatch { display:inline-block; width:14px; height:14px; border-radius:2px; }
+  .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
+  .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
+
+  .ios-toggle {
+    position: relative;
+    display: inline-block;
+    width: 51px;
+    height: 31px;
+    background: #ccc;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background 0.25s ease;
+    vertical-align: middle;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .ios-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.05);
+    transition: transform 0.25s ease;
+  }
+  .ios-toggle.on { background: #34c759; }
+  .ios-toggle.on::after { transform: translateX(20px); }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+  }
+
+  @media (max-width: 600px) {
+    #panel { width: calc(100% - 20px); max-width: 400px; font-size:14px; }
+    #panel.hidden { transform: translateX(-110%); }
+    .oprs input { width:80px; font-size:14px; padding:4px; }
+    button { padding:8px 12px; font-size:13px; }
+    button.primary, button.gps, button.big { padding:12px 14px; font-size:15px; width:100%; margin-top:6px; }
+    button.smallbtn { padding:6px 10px; font-size:12px; }
+    .tab-btn { padding: 10px 4px; font-size: 13px; }
+    #speedHud { bottom: 75px; padding: 6px 18px; }
+    #speedHud #speedHudValue { font-size: 30px; min-width: 56px; }
+    #speedHud #speedHudUnit { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<button id="toggleBtn" onclick="togglePanel()">☰</button>
+
+<div id="speedHud" class="hidden">
+  <span id="speedHudValue">0</span>
+  <span id="speedHudUnit">км/ч</span>
+</div>
+
+<div id="panel">
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtnPlace" onclick="switchTab('place')">📍 Место</button>
+    <button class="tab-btn" id="tabBtnNav" onclick="switchTab('nav')">🧭 Навигация</button>
+    <button class="tab-btn" id="tabBtnRtnav" onclick="switchTab('rtnav')">📡 РВ</button>
+    <button class="tab-btn" id="tabBtnLayers" onclick="switchTab('layers')">🗂 Слои</button>
+  </div>
+
+  <!-- ======================= МЕСТО ======================= -->
+  <div class="tab-content active" id="tab-place">
+    <div class="subhint">МПР — магнитный пеленг радиостанции (с ВС на станцию). Пустые поля не учитываются.</div>
+
+    <div class="btn-row">
+      <button onclick="clearFields()">Очистить поля</button>
+      <button onclick="clearTrack()">Очистить трек</button>
+      <button onclick="clearGps()">Очистить GPS</button>
+    </div>
+
+    <div class="oprs course-box">
+      <b>Курс полёта</b>
+      <div class="row">
+        <label>МК:</label> <input id="course" placeholder="0" inputmode="numeric" oninput="onCourseChange()"> °
+      </div>
+    </div>
+
+    <div class="oprs" id="block1">
+      <b>ОПРС 1 <span id="label1"></span> <span class="freq" id="freq1"></span></b>
+      <div class="row">
+        <label>МПР:</label> <input id="brg1" placeholder="—" inputmode="numeric" oninput="preview()"> °
+      </div>
+      <div class="calc-line" id="calc1"></div>
+    </div>
+
+    <div class="oprs" id="block2">
+      <b>ОПРС 2 <span id="label2"></span> <span class="freq" id="freq2"></span></b>
+      <div class="row">
+        <label>МПР:</label> <input id="brg2" placeholder="—" inputmode="numeric" oninput="preview()"> °
+      </div>
+      <div class="calc-line" id="calc2"></div>
+    </div>
+
+    <div class="oprs" id="block3">
+      <b>ОПРС 3 <span id="label3"></span> <span class="freq" id="freq3"></span></b>
+      <div class="row">
+        <label>МПР:</label> <input id="brg3" placeholder="—" inputmode="numeric" oninput="preview()"> °
+      </div>
+      <div class="calc-line" id="calc3"></div>
+    </div>
+
+    <div class="oprs vor" id="block4">
+      <b>VOR <span id="label4"></span> <span class="freq vor" id="freq4"></span></b>
+      <div class="row">
+        <label>Радиал:</label> <input id="vorRadial" placeholder="—" inputmode="numeric" oninput="preview()"> °
+      </div>
+      <div class="row">
+        <label>Дальность:</label> <input id="vorDist" placeholder="—" inputmode="decimal" oninput="preview()"> км
+      </div>
+      <div class="calc-line" id="calc4"></div>
+    </div>
+
+    <div class="row">
+      <label>Магн. склонение:</label>
+      <input id="decl" value="11" readonly style="width:50px;background:#eee;color:#555"> °
+      <button class="smallbtn" onclick="alignToGPS()" title="Подставить пеленги так, чтобы расчёт дал точку GPS">📍 Привести к GPS</button>
+    </div>
+
+    <button class="primary big" onclick="calculate()"><b>Рассчитать</b></button>
+    <button class="gps big" id="gpsBtn" onclick="getMyPosition()"><b>📍 Получить МС</b></button>
+    <div id="result">Введите МПР и/или радиал VOR.</div>
+  </div>
+
+  <!-- ======================= НАВИГАЦИЯ ======================= -->
+  <div class="tab-content" id="tab-nav">
+    <div class="subhint">Кликните по карте — это будет цель. Линия от стартовой точки до цели — это ЛЗП.</div>
+
+    <div class="oprs nav-box">
+      <b>Текущее положение</b>
+      <div id="nav-pos" style="font-size:12px;color:#555">—</div>
+    </div>
+
+    <div class="oprs nav-box">
+      <b>Цель</b>
+      <div id="nav-target" style="font-size:12px;color:#555">Кликните по карте, чтобы задать цель</div>
+      <button class="warn" onclick="clearNavTarget()" style="margin-top:4px;">Сбросить цель</button>
+    </div>
+
+    <div class="oprs nav-box">
+      <b>Ветер и скорость</b>
+      <div class="row">
+        <label>δ (напр. ветра):</label>
+        <input id="windDir" placeholder="—" inputmode="numeric" oninput="updateNavUI()"> °
+      </div>
+      <div class="row">
+        <label>U (скорость ветра):</label>
+        <input id="windSpd" placeholder="—" inputmode="decimal" oninput="updateNavUI()"> км/ч
+      </div>
+      <div class="row">
+        <label>V (возд. скорость):</label>
+        <input id="airspeed" placeholder="180" value="180" inputmode="decimal" oninput="updateNavUI()"> км/ч
+      </div>
+      <div class="hint">δ — магнитное направление, ОТКУДА дует ветер</div>
+    </div>
+
+    <div id="nav-result">Задайте цель на карте.</div>
+  </div>
+
+  <!-- ======================= НАВИГАЦИЯ РВ ======================= -->
+  <div class="tab-content" id="tab-rtnav">
+    <div class="subhint">Живая навигация по GPS. Позиция обновляется каждую секунду. Цель задаётся на вкладке Навигация.</div>
+
+    <button class="gps big" id="rtToggleBtn" onclick="toggleRT()"><b>▶ Старт РВ</b></button>
+
+    <div class="oprs rt-box">
+      <b>Текущая позиция</b>
+      <div id="rt-pos" style="font-size:12px;color:#555">GPS не активен</div>
+    </div>
+
+    <div class="oprs rt-box">
+      <b>Параметры движения</b>
+      <div class="rt-stats">
+        <div>Скорость: <b id="rt-speed">—</b></div>
+        <div>Курс: <b id="rt-heading">—</b></div>
+        <div>Точность: <b id="rt-acc">—</b></div>
+        <div>Обновлено: <b id="rt-age">—</b></div>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button class="units" onclick="cycleSpeedUnit()">Единицы: <b id="speedUnitLabel">км/ч</b></button>
+      </div>
+    </div>
+
+    <div class="oprs rt-box">
+      <b>Статистика трека РВ</b>
+      <div class="rt-stats">
+        <div>Точек: <b id="rt-points">0</b></div>
+        <div>Длина: <b id="rt-dist">0 км</b></div>
+        <div>Время: <b id="rt-time">0:00</b></div>
+        <div>Средняя: <b id="rt-avg">—</b></div>
+      </div>
+      <div class="toggle-row" style="margin-top:6px;" onclick="toggleFollow()">
+        <div class="ios-toggle on" id="rtFollowToggle"></div>
+        <span style="font-size:13px;">Следить за позицией</span>
+      </div>
+      <button class="warn" onclick="clearRTTrack()" style="margin-top:4px;">Очистить трек РВ</button>
+    </div>
+
+    <div class="oprs nav-box">
+      <b>Цель (общая с Навигацией)</b>
+      <div id="rt-target" style="font-size:12px;color:#555">Задайте цель на вкладке Навигация</div>
+    </div>
+
+    <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
+  </div>
+
+  <!-- ======================= СЛОИ ======================= -->
+  <div class="tab-content" id="tab-layers">
+    <div class="subhint">Управление отображением слоёв на карте.</div>
+
+    <div class="row">
+      <label>Карта:</label>
+      <select id="mapStyle" onchange="switchMap()">
+        <option value="OpenTopoMap" selected>OpenTopoMap (топо)</option>
+        <option value="OpenStreetMap.Mapnik">OpenStreetMap (дороги)</option>
+        <option value="CartoDB.Positron">CartoDB Positron (светлая)</option>
+        <option value="CartoDB.DarkMatter">CartoDB Dark Matter (тёмная)</option>
+        <option value="Esri.WorldImagery">Esri (спутник)</option>
+        <option value="Esri.WorldTopoMap">Esri World Topo</option>
+      </select>
+    </div>
+
+    <div class="oprs routes-box">
+      <b>Маршруты</b>
+      <div class="route-toggle">
+        <input type="checkbox" id="routeA4" onchange="renderRoutes()">
+        <span class="route-swatch" style="background:#c80"></span>
+        <label for="routeA4">А4 — 153 км</label>
+      </div>
+      <div class="route-toggle">
+        <input type="checkbox" id="routeA5" onchange="renderRoutes()">
+        <span class="route-swatch" style="background:#08c"></span>
+        <label for="routeA5">А5 — 210 км</label>
+      </div>
+      <div class="route-toggle">
+        <input type="checkbox" id="routeLOCAL" onchange="renderRoutes()">
+        <span class="route-swatch" style="background:#0a0"></span>
+        <label for="routeLOCAL">Местный</label>
+      </div>
+    </div>
+
+    <div class="oprs areas-box">
+      <b>Зоны и районы</b>
+      <div class="route-toggle">
+        <input type="checkbox" id="toggleZones" onchange="renderAreas()">
+        <span class="route-swatch" style="background:rgba(220,50,50,0.4);border:1px solid #dc3232;"></span>
+        <label for="toggleZones">Зоны (ПЗ) — R 2,5 км</label>
+      </div>
+      <div class="route-toggle">
+        <input type="checkbox" id="toggleSectors" onchange="renderAreas()">
+        <span class="route-swatch" style="background:rgba(50,50,220,0.4);border:1px solid #3232dc;"></span>
+        <label for="toggleSectors">Районы (ЗПП) — R 5 км</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
+<script>
+// ============== НАСТРОЙКИ ==============
+const FOLLOW_KEY = 'oprs_rt_follow';
+const SPEED_UNIT_KEY = 'oprs_speed_unit';
+
+let rtSpeedUnit = localStorage.getItem(SPEED_UNIT_KEY) || 'kmh';
+const SPEED_UNITS = {
+  kmh: { label: 'км/ч', factor: 3.6 },
+  ms:  { label: 'м/с',  factor: 1 },
+  kt:  { label: 'узлы', factor: 1.94384 }
+};
+const SPEED_UNITS_ORDER = ['kmh', 'ms', 'kt'];
+
+// ============== ВКЛАДКИ ==============
+let currentTab = 'place';
+
+function setMapOverlaysInteractive(enabled) {
+  const mapEl = document.getElementById('map');
+  if (enabled) mapEl.classList.remove('nav-mode');
+  else mapEl.classList.add('nav-mode');
+}
+
+function switchTab(name) {
+  currentTab = name;
+  document.getElementById('tabBtnPlace').classList.toggle('active', name === 'place');
+  document.getElementById('tabBtnNav').classList.toggle('active', name === 'nav');
+  document.getElementById('tabBtnRtnav').classList.toggle('active', name === 'rtnav');
+  document.getElementById('tabBtnLayers').classList.toggle('active', name === 'layers');
+  document.getElementById('tab-place').classList.toggle('active', name === 'place');
+  document.getElementById('tab-nav').classList.toggle('active', name === 'nav');
+  document.getElementById('tab-rtnav').classList.toggle('active', name === 'rtnav');
+  document.getElementById('tab-layers').classList.toggle('active', name === 'layers');
+
+  map.closePopup();
+
+  setMapOverlaysInteractive(name !== 'nav');
+
+  renderRTTrack();
+  renderRTMarker();
+  updateNavUI();
+  updateRTUI();
+  updateSpeedHudVisibility();
+}
+
+// ---------- Сворачивание панели ----------
+function togglePanel() {
+  const p = document.getElementById('panel');
+  p.classList.toggle('hidden');
+  document.getElementById('toggleBtn').textContent = p.classList.contains('hidden') ? '☰' : '✕';
+}
+if (window.innerWidth <= 600) {
+  document.getElementById('panel').classList.add('hidden');
+  document.getElementById('toggleBtn').textContent = '☰';
+}
+
+// ---------- Карта ----------
+const map = L.map('map').setView([51.1, 46.7], 10);
+let currentLayer = null;
+
+function switchMap() {
+  const provider = document.getElementById('mapStyle').value;
+  if (currentLayer) map.removeLayer(currentLayer);
+  try {
+    currentLayer = L.tileLayer.provider(provider).addTo(map);
+  } catch (e) {
+    currentLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+  }
+}
+switchMap();
+
+// ---------- Точки ОПРС ----------
+const PRESET = [
+  { name: 'Красный Кут',   lat: 50.9330, lon: 46.9180, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
+  { name: 'Ямское',         lat: 50.9675, lon: 47.2190, freq: '1245 кГц',  type: 'NDB', color: 'red' },
+  { name: 'Комсомольское',  lat: 50.8000, lon: 47.0445, freq: '310 кГц',   type: 'NDB', color: 'orange' },
+  { name: 'Саратов VOR',    lat: 51.5628, lon: 46.0458, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
+];
+
+// ---------- Маршруты ----------
+const ROUTES = {
+  A4: {
+    name: 'А4', color: '#c80',
+    points: [
+      { name: 'Комсомольское (ДПРМ)', lat: 50.8000, lon: 47.0445 },
+      { name: 'Луговское',              lat: 50.6263, lon: 46.4725 },
+      { name: 'свх. Орловский',         lat: 50.5517, lon: 47.1590 },
+      { name: 'Мироновка',              lat: 50.7518, lon: 47.4532 },
+      { name: 'Комсомольское (ДПРМ)', lat: 50.8000, lon: 47.0445 }
+    ]
+  },
+  A5: {
+    name: 'А5', color: '#08c',
+    points: [
+      { name: 'Красный Кут ДПРМ',      lat: 50.9330, lon: 46.9180 },
+      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9672, lon: 47.2190 },
+      { name: 'н.п. Трудовик',         lat: 50.7783, lon: 47.7117 },
+      { name: 'н.п. Орлов Гай',        lat: 50.9250, lon: 48.1875 },
+      { name: 'н.п. Солнечный',        lat: 51.1703, lon: 47.9217 },
+      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9672, lon: 47.2190 },
+      { name: 'Красный Кут ДПРМ',      lat: 50.9330, lon: 46.9180 }
+    ]
+  },
+  LOCAL: {
+    name: 'Местный', color: '#0a0',
+    points: [
+      { name: 'Красный Кут ДПРМ', lat: 50.9330,             lon: 46.9180 },
+      { name: 'Ямское ОПРС',       lat: 50.9672,             lon: 47.2190 },
+      { name: 'Новотулка',          lat: 50.83275914828956,  lon: 47.5577480772517 },
+      { name: 'Мироновка',          lat: 50.7518,             lon: 47.4532 },
+      { name: 'Дьяковка',           lat: 50.72059455885705,  lon: 46.78232837723893 },
+      { name: 'Кирово',             lat: 50.80502894486692,  lon: 46.70056913229126 },
+      { name: 'Красный Кут ДПРМ', lat: 50.9330,             lon: 46.9180 }
+    ]
+  }
+};
+
+const ZONES = [
+  { id: 'ПЗ №1', name: 'пр. Орлов',          lat: 51.08667, lon: 47.05500 },
+  { id: 'ПЗ №2', name: 'н.п. Рудня',          lat: 51.01667, lon: 47.07167 },
+  { id: 'ПЗ №3', name: 'ю. ж/д развилка',     lat: 50.90167, lon: 46.98833 },
+  { id: 'ПЗ №4', name: 'н.п. Усатово',        lat: 50.80000, lon: 46.90000 },
+  { id: 'ПЗ №5', name: 'юж. Чкалово',         lat: 50.67050, lon: 47.04000 },
+  { id: 'ПЗ №6', name: 'с.в. Тимофеево',      lat: 50.82500, lon: 47.06667 },
+  { id: 'ПЗ №7', name: 'Журавлевка',          lat: 50.88333, lon: 47.16667 },
+  { id: 'ПЗ №8', name: 'Первое Мая',          lat: 50.86667, lon: 47.33333 },
+  { id: 'ПЗ №9', name: 'с.з. Придорожное',    lat: 51.02000, lon: 47.23333 }
+];
+
+const SECTORS = [
+  { id: 'ЗПП №1', name: 'н.п. Мухино',          lat: 51.05833, lon: 46.90500 },
+  { id: 'ЗПП №2', name: 'н.п. Первомайское',    lat: 50.93333, lon: 46.70000 },
+  { id: 'ЗПП №3', name: 'н.п. Лепехинка',       lat: 50.67500, lon: 46.87333 },
+  { id: 'ЗПП №4', name: 'н.п. Доронкин',        lat: 50.71667, lon: 47.23333 },
+  { id: 'ЗПП №5', name: 'пр. Таловский',        lat: 50.93333, lon: 47.50000 },
+  { id: 'ЗПП №6', name: 'пр. Новый',            lat: 51.09167, lon: 47.40000 }
+];
+
+let routeLayers = { A4: [], A5: [], LOCAL: [] };
+let areaLayers = { zones: [], sectors: [] };
+
+const TRACK_KEY = 'oprs_nav_track_v1';
+const RT_TRACK_KEY = 'oprs_nav_rt_track_v1';
+const MAX_DIST_KM = 300;
+const ANGLE_ERROR_DEG = 10;
+const ANGLE_WARN_DEG = 20;
+const ERROR_LINE_KM = 50;
+const HITBOX_WEIGHT = 25;
+const RT_MIN_STEP_M = 5;
+const RT_MAX_POINTS = 10000;
+
+let oprsMarkers = [null, null, null, null];
+let stationLines = [];
+let errorLines = [];
+let trackSegments = [];
+let trackPointLayers = [];
+let posMarker = null;
+let gpsMarker = null;
+let track = [];
+
+let navTarget = null;
+let navLineStart = null;
+let navTargetMarker = null;
+let navLine = null;
+
+let rtTracking = false;
+let rtWatchId = null;
+let rtCurrentPosition = null;
+let rtTrack = [];
+let rtLineLayer = null;
+let rtStartMarker = null;
+let rtMarker = null;
+
+// ---------- Wake Lock ----------
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch (e) { console.warn('Wake Lock недоступен:', e.message); }
+}
+
+function releaseWakeLock() {
+  if (wakeLock !== null) {
+    try { wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+}
+
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+});
+
+// ---------- Утилиты ----------
+function toRad(d) { return d * Math.PI / 180; }
+function toDeg(r) { return r * 180 / Math.PI; }
+function norm360(d) { return ((d % 360) + 360) % 360; }
+
+function ddToDM(val, isLat) {
+  const hemi = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
+  const abs = Math.abs(val);
+  const deg = Math.floor(abs);
+  const min = (abs - deg) * 60;
+  return deg + '°' + min.toFixed(2) + '′' + hemi;
+}
+
+function distance(a, b) {
+  const R = 6371000;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const x = dLat;
+  const y = dLon * Math.cos(toRad((a.lat + b.lat) / 2));
+  return Math.sqrt(x * x + y * y) * R;
+}
+
+function trueBearing(a, b) {
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return norm360(toDeg(Math.atan2(y, x)));
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function fmtDuration(sec) {
+  sec = Math.round(sec);
+  if (sec < 0) sec = 0;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function getCourseMag() {
+  const v = document.getElementById('course').value.trim();
+  if (v === '') return 0;
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function parseDistance(v) {
+  if (v === '') return null;
+  const n = parseFloat(v.replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
+// makeClickableLine: принимает popupContent — СТРОКУ или ФУНКЦИЮ
+function makeClickableLine(latlngs, options, popupContent) {
+  const visible = L.polyline(latlngs, Object.assign({}, options, { interactive: false })).addTo(map);
+  const hitbox = L.polyline(latlngs, {
+    color: options.color, weight: HITBOX_WEIGHT, opacity: 0, interactive: true
+  }).addTo(map);
+  hitbox.bindPopup(popupContent, { autoPan: true });
+  return [visible, hitbox];
+}
+
+// ============== ЛБУ ==============
+function computeOffset(P, A, B) {
+  const R = 6371000;
+  const lat0 = (A.lat + B.lat + P.lat) / 3;
+  const lon0 = (A.lon + B.lon + P.lon) / 3;
+  const cosLat0 = Math.cos(toRad(lat0));
+  const proj = (pt) => ({
+    x: R * toRad(pt.lon - lon0) * cosLat0,
+    y: R * toRad(pt.lat - lat0)
+  });
+  const pA = proj(A);
+  const pB = proj(B);
+  const pP = proj(P);
+  const dxAB = pB.x - pA.x, dyAB = pB.y - pA.y;
+  const dxAP = pP.x - pA.x, dyAP = pP.y - pA.y;
+  const lenAB2 = dxAB * dxAB + dyAB * dyAB;
+  if (lenAB2 < 1) return null;
+  const t = (dxAP * dxAB + dyAP * dyAB) / lenAB2;
+  const hx = pA.x + t * dxAB;
+  const hy = pA.y + t * dyAB;
+  const lbu = Math.sqrt((pP.x - hx) ** 2 + (pP.y - hy) ** 2);
+  const s_proj = Math.sqrt((hx - pA.x) ** 2 + (hy - pA.y) ** 2);
+  const cross = dxAB * dyAP - dyAB * dxAP;
+  const side = Math.abs(cross) < 1e-6 ? 'on' : (cross > 0 ? 'left' : 'right');
+  return { lbu, s_proj, side, t };
+}
+
+function fmtDist(meters) {
+  if (meters < 1000) return meters.toFixed(0) + ' м';
+  return (meters / 1000).toFixed(2) + ' км';
+}
+
+function fmtOffset(P, A, B) {
+  const off = computeOffset(P, A, B);
+  if (!off) return null;
+  let sideStr = '';
+  if (off.side === 'left') sideStr = ' <span style="color:#c00">влево</span>';
+  else if (off.side === 'right') sideStr = ' <span style="color:#c00">вправо</span>';
+  else sideStr = ' <span style="color:#888">на линии</span>';
+  let html = '<b>ЛБУ:</b> ' + fmtDist(off.lbu) + sideStr;
+  let spNote = '';
+  if (off.t < 0) spNote = ' <span style="color:#888">(до начала)</span>';
+  else if (off.t > 1) spNote = ' <span style="color:#888">(за концом)</span>';
+  html += '<br><b>Пройдено по линии:</b> ' + fmtDist(off.s_proj) + spNote;
+  return html;
+}
+
+// ============== Скорость ==============
+function convertSpeed(mps) {
+  if (mps === null || mps === undefined || isNaN(mps)) return null;
+  return mps * SPEED_UNITS[rtSpeedUnit].factor;
+}
+
+function updateSpeedUnitLabel() {
+  document.getElementById('speedUnitLabel').textContent = SPEED_UNITS[rtSpeedUnit].label;
+  document.getElementById('speedHudUnit').textContent = SPEED_UNITS[rtSpeedUnit].label;
+}
+
+function cycleSpeedUnit() {
+  const idx = SPEED_UNITS_ORDER.indexOf(rtSpeedUnit);
+  rtSpeedUnit = SPEED_UNITS_ORDER[(idx + 1) % SPEED_UNITS_ORDER.length];
+  localStorage.setItem(SPEED_UNIT_KEY, rtSpeedUnit);
+  updateSpeedUnitLabel();
+  updateRTUI();
+}
+
+// ============== Тумблер ==============
+function toggleFollow() {
+  const el = document.getElementById('rtFollowToggle');
+  el.classList.toggle('on');
+  const on = el.classList.contains('on');
+  localStorage.setItem(FOLLOW_KEY, on ? '1' : '0');
+  if (on && rtCurrentPosition) {
+    map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(), { animate: false });
+  }
+}
+
+function isFollowOn() {
+  return document.getElementById('rtFollowToggle').classList.contains('on');
+}
+
+function updateSpeedHudVisibility() {
+  const hud = document.getElementById('speedHud');
+  if (currentTab === 'rtnav' && rtTracking) {
+    hud.classList.remove('hidden');
+  } else {
+    hud.classList.add('hidden');
+  }
+}
+
+// ============== Иконки ==============
+function planeIconSvg(courseDeg, color) {
+  const fill = color || '#2a7';
+  return '<svg viewBox="-12 -12 24 24" width="32" height="32" ' +
+    'style="transform: rotate(' + courseDeg + 'deg); transform-origin: center; filter: drop-shadow(0 0 3px rgba(0,0,0,0.6));">' +
+    '<path d="M0,-11 C1,-9 1.5,-6 1.5,-3 L1.5,2 L6,4 L6,6 L1.5,5 L1.5,9 L3.5,10.5 L3.5,12 L0,11 L-3.5,12 L-3.5,10.5 L-1.5,9 L-1.5,5 L-6,6 L-6,4 L-1.5,2 L-1.5,-3 C-1.5,-6 -1,-9 0,-11 Z" ' +
+    'fill="' + fill + '" stroke="white" stroke-width="0.8" stroke-linejoin="round"/></svg>';
+}
+function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [32, 32], iconAnchor: [16, 16] }); }
+function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [32, 32], iconAnchor: [16, 16] }); }
+function dotIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;">' +
+          '<div style="background:#2a7;border-radius:50%;width:10px;height:10px;border:2px solid white;box-shadow:0 0 3px #000;pointer-events:none;"></div>' +
+          '</div>',
+    iconSize: [44, 44], iconAnchor: [22, 22]
+  });
+}
+function routeDotIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;">' +
+          '<div style="background:' + color + ';border-radius:50%;width:8px;height:8px;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);pointer-events:none;"></div>' +
+          '</div>',
+    iconSize: [44, 44], iconAnchor: [22, 22]
+  });
+}
+function gpsIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="position:relative;width:44px;height:44px;">' +
+          '<div style="position:absolute;left:9px;top:9px;width:26px;height:26px;background:rgba(0,136,204,0.3);border-radius:50%;"></div>' +
+          '<div style="position:absolute;left:16px;top:16px;width:12px;height:12px;background:#08c;border:2px solid white;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>' +
+          '</div>',
+    iconSize: [44, 44], iconAnchor: [22, 22]
+  });
+}
+function rtStartIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:14px;height:14px;background:#08c;border:2px solid white;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>',
+    iconSize: [14, 14], iconAnchor: [7, 7]
+  });
+}
+function targetIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="position:relative;width:32px;height:32px;">' +
+          '<div style="position:absolute;left:0;top:0;width:32px;height:32px;border:2px solid #e67e22;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.4);"></div>' +
+          '<div style="position:absolute;left:11px;top:11px;width:10px;height:10px;background:#e67e22;border-radius:50%;border:2px solid white;"></div>' +
+          '</div>',
+    iconSize: [32, 32], iconAnchor: [16, 16]
+  });
+}
+
+// ============== Текущее положение ==============
+// Приоритет: РВ (живой GPS) > последняя точка трека (ОПРС) > GPS-маркер
+function getCurrentPosition() {
+  if (rtTracking && rtCurrentPosition) {
+    return { lat: rtCurrentPosition.lat, lon: rtCurrentPosition.lon, source: 'GPS (РВ)' };
+  }
+  if (track.length > 0) {
+    const last = track[track.length - 1];
+    return { lat: last.lat, lon: last.lon, source: 'трек (расчёт ОПРС)' };
+  }
+  if (gpsMarker) {
+    const ll = gpsMarker.getLatLng();
+    return { lat: ll.lat, lon: ll.lng, source: 'GPS' };
+  }
+  return null;
+}
+
+// ============== Попап станции ОПРС ==============
+function buildStationPopup(idx) {
+  const p = PRESET[idx];
+  let html = '<b>' + p.name + '</b><br>' + p.freq + '<br>' +
+             ddToDM(p.lat, true) + ' ' + ddToDM(p.lon, false);
+  const cur = getCurrentPosition();
+  if (!cur) {
+    html += '<br><span style="color:#888;font-size:11px">Нет известного местоположения</span>';
+    return html;
+  }
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const brgTrue = trueBearing(cur, p);
+  const mpr = norm360(brgTrue - decl);
+  const mps = norm360(mpr + 180);
+  const dist = distance(cur, p) / 1000;
+
+  html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+  html += '<b>От последнего местоположения:</b><br>';
+  html += 'МПР: <b>' + mpr.toFixed(0) + '°</b><br>';
+  html += 'МПС: <b>' + mps.toFixed(0) + '°</b><br>';
+  html += 'Расстояние: <b>' + dist.toFixed(1) + ' км</b>';
+  return html;
+}
+
+function updateMarker(idx) {
+  const p = PRESET[idx];
+  if (oprsMarkers[idx]) map.removeLayer(oprsMarkers[idx]);
+  oprsMarkers[idx] = L.marker([p.lat, p.lon], { draggable: false })
+    .addTo(map).bindPopup(() => buildStationPopup(idx));
+}
+
+function refreshStationPopups() {
+  // содержимое попапа ОПРС пересчитывается автоматически (передан функцией)
+}
+
+function loadPreset() {
+  PRESET.forEach((p, i) => {
+    document.getElementById('label' + (i + 1)).textContent = '(' + p.name + ')';
+    const fEl = document.getElementById('freq' + (i + 1));
+    fEl.textContent = p.freq;
+    if (p.type === 'VOR') fEl.classList.add('vor');
+    updateMarker(i);
+  });
+  map.fitBounds(PRESET.map(p => [p.lat, p.lon]), { padding: [60, 60] });
+}
+
+// ============== Попап сегмента маршрута ==============
+function buildRouteSegmentPopup(routeKey, idx) {
+  const route = ROUTES[routeKey];
+  const A = route.points[idx];
+  const B = route.points[idx + 1];
+  const segLen = distance(A, B) / 1000;
+
+  let html = '<b>' + route.name + '</b><br>';
+  html += A.name + ' → ' + B.name + '<br>';
+  html += 'Длина участка: <b>' + segLen.toFixed(2) + ' км</b>';
+
+  const cur = getCurrentPosition();
+  if (cur) {
+    const offHtml = fmtOffset(cur, A, B);
+    if (offHtml) {
+      html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+      html += offHtml;
+    }
+  } else {
+    html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
+  }
+  return html;
+}
+
+// ============== Попап ППМ (точки маршрута) ==============
+function buildRoutePointPopup(routeKey, idx) {
+  const route = ROUTES[routeKey];
+  const pt = route.points[idx];
+  let html = '<b>' + route.name + '</b><br>';
+  html += 'Точка ' + (idx + 1) + ': <b>' + pt.name + '</b><br>';
+  html += ddToDM(pt.lat, true) + ' ' + ddToDM(pt.lon, false);
+
+  const cur = getCurrentPosition();
+  if (cur) {
+    const distKm = distance(cur, pt) / 1000;
+    const ipu = trueBearing(cur, pt);
+    const decl = parseFloat(document.getElementById('decl').value) || 0;
+    const mpu = norm360(ipu - decl);
+    html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+    html += '<b>От текущего положения:</b><br>';
+    html += 'Расстояние: <b>' + distKm.toFixed(2) + ' км</b><br>';
+    html += 'ИПУ: <b>' + ipu.toFixed(0) + '°</b><br>';
+    html += 'МПУ: <b>' + mpu.toFixed(0) + '°</b>';
+  } else {
+    html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
+  }
+  return html;
+}
+
+// ============== Рендер маршрутов ==============
+function renderRoutes() {
+  ['A4', 'A5', 'LOCAL'].forEach(key => {
+    routeLayers[key].forEach(l => map.removeLayer(l));
+    routeLayers[key] = [];
+    const cb = document.getElementById('route' + key);
+    if (!cb || !cb.checked) return;
+    const route = ROUTES[key];
+
+    // Каждый сегмент — кликабельная линия с попапом-функцией
+    for (let i = 0; i < route.points.length - 1; i++) {
+      const A = route.points[i];
+      const B = route.points[i + 1];
+      const pair = makeClickableLine(
+        [[A.lat, A.lon], [B.lat, B.lon]],
+        { color: route.color, weight: 3, opacity: 0.75 },
+        () => buildRouteSegmentPopup(key, i)
+      );
+      routeLayers[key].push(pair[0], pair[1]);
+    }
+
+    // Точки маршрута — кликабельные с попапом-функцией
+    route.points.forEach((pt, i) => {
+      const m = L.marker([pt.lat, pt.lon], { icon: routeDotIcon(route.color) })
+        .addTo(map)
+        .bindPopup(() => buildRoutePointPopup(key, i));
+      routeLayers[key].push(m);
+    });
+  });
+}
+
+// ============== Зоны и районы ==============
+function renderAreas() {
+  areaLayers.zones.forEach(l => map.removeLayer(l));
+  areaLayers.zones = [];
+  if (document.getElementById('toggleZones').checked) {
+    ZONES.forEach(z => {
+      const circle = L.circle([z.lat, z.lon], {
+        radius: 2500, color: '#dc3232', weight: 2, opacity: 0.8,
+        fillColor: '#dc3232', fillOpacity: 0.15
+      }).addTo(map).bindPopup('<b>' + z.id + '</b><br>' + z.name + '<br>' +
+                              ddToDM(z.lat, true) + ' ' + ddToDM(z.lon, false) + '<br>Радиус: 2,5 км');
+      areaLayers.zones.push(circle);
+    });
+  }
+  areaLayers.sectors.forEach(l => map.removeLayer(l));
+  areaLayers.sectors = [];
+  if (document.getElementById('toggleSectors').checked) {
+    SECTORS.forEach(s => {
+      const circle = L.circle([s.lat, s.lon], {
+        radius: 5000, color: '#3232dc', weight: 2, opacity: 0.8,
+        fillColor: '#3232dc', fillOpacity: 0.15
+      }).addTo(map).bindPopup('<b>' + s.id + '</b><br>' + s.name + '<br>' +
+                              ddToDM(s.lat, true) + ' ' + ddToDM(s.lon, false) + '<br>Радиус: 5 км');
+      areaLayers.sectors.push(circle);
+    });
+  }
+}
+
+// ============== 50-км линии при ошибке ==============
+function drawErrorLines(sources) {
+  errorLines.forEach(l => map.removeLayer(l));
+  errorLines = [];
+  sources.forEach(s => {
+    const rad = toRad(s.ips);
+    const R = 6371000;
+    const cosLat = Math.cos(toRad(s.data.lat));
+    const dLat = toDeg(Math.cos(rad) * ERROR_LINE_KM * 1000 / R);
+    const dLon = toDeg(Math.sin(rad) * ERROR_LINE_KM * 1000 / (R * cosLat));
+    const lat2 = s.data.lat + dLat;
+    const lon2 = s.data.lon + dLon;
+    const popup = '<b>' + s.name + '</b><br>' + s.inputLabel + ' → ИПС ' + s.ips.toFixed(0) + '°<br>' +
+                  '<span style="color:#888;font-size:11px">Линия при ошибке (50 км)</span>';
+    const pair = makeClickableLine(
+      [[s.data.lat, s.data.lon], [lat2, lon2]],
+      { color: s.color, weight: 2, opacity: 0.7, dashArray: '6,4' }, popup
+    );
+    errorLines.push(pair[0], pair[1]);
+  });
+}
+function clearErrorLines() {
+  errorLines.forEach(l => map.removeLayer(l));
+  errorLines = [];
+}
+
+// ============== Очистка ==============
+function clearFields() {
+  ['brg1','brg2','brg3','vorRadial','vorDist','course'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('decl').value = '11';
+  for (let i = 1; i <= 4; i++) document.getElementById('calc' + i).innerHTML = '';
+  stationLines.forEach(l => map.removeLayer(l));
+  stationLines = [];
+  clearErrorLines();
+  if (posMarker) { map.removeLayer(posMarker); posMarker = null; }
+  renderTrack();
+  document.getElementById('result').textContent = 'Поля очищены. Введите новые данные.';
+  document.getElementById('result').classList.remove('error');
+}
+
+function clearTrack() {
+  track = [];
+  saveTrack();
+  renderTrack();
+  document.getElementById('result').textContent = 'Трек очищен.';
+  document.getElementById('result').classList.remove('error');
+}
+
+function clearGps() {
+  if (gpsMarker) { map.removeLayer(gpsMarker); gpsMarker = null; }
+  document.getElementById('result').textContent = 'GPS-маркер удалён.';
+  document.getElementById('result').classList.remove('error');
+  updateNavUI();
+}
+
+// ============== Предпросмотр ==============
+function preview() {
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  for (let i = 0; i < 3; i++) {
+    const v = document.getElementById('brg' + (i + 1)).value.trim();
+    const el = document.getElementById('calc' + (i + 1));
+    if (v === '') { el.innerHTML = ''; continue; }
+    const mpr = parseFloat(v);
+    if (isNaN(mpr)) { el.innerHTML = ''; continue; }
+    const mps = norm360(mpr + 180);
+    const ips = norm360(mps + decl);
+    el.innerHTML = 'МПР ' + mpr.toFixed(0) + '° → МПС ' + mps.toFixed(0) +
+                   '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
+  }
+  const rv = document.getElementById('vorRadial').value.trim();
+  const el4 = document.getElementById('calc4');
+  if (rv !== '') {
+    const radial = parseFloat(rv);
+    if (!isNaN(radial)) {
+      const ips = norm360(radial + decl);
+      el4.innerHTML = 'Радиал (МПС) ' + radial.toFixed(0) + '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
+    } else el4.innerHTML = '';
+  } else el4.innerHTML = '';
+}
+
+// ============== Привести к GPS ==============
+function alignToGPS() {
+  const resultEl = document.getElementById('result');
+  resultEl.classList.remove('error');
+
+  if (!gpsMarker) {
+    resultEl.classList.add('error');
+    resultEl.textContent = '⚠️ Сначала нажмите «📍 Получить МС», чтобы получить точку GPS.';
+    return;
+  }
+
+  const ll = gpsMarker.getLatLng();
+  const gpsPt = { lat: ll.lat, lon: ll.lng };
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+
+  // ОПРС: МПР от GPS к ОПРС = ИПУ(GPS→ОПРС) − δ
+  for (let i = 0; i < 3; i++) {
+    const s = PRESET[i];
+    const brgTrue = trueBearing(gpsPt, s);
+    const mpr = norm360(brgTrue - decl);
+    document.getElementById('brg' + (i + 1)).value = mpr.toFixed(0);
+  }
+
+  // VOR: радиал = ИПУ(VOR→GPS) − δ, дальность = расстояние
+  const v = PRESET[3];
+  const radial = norm360(trueBearing(v, gpsPt) - decl);
+  const dkm = distance(v, gpsPt) / 1000;
+  document.getElementById('vorRadial').value = radial.toFixed(0);
+  document.getElementById('vorDist').value = dkm.toFixed(1);
+
+  preview();
+  resultEl.textContent = '📍 Поля приведены к GPS: ' +
+    ddToDM(gpsPt.lat, true) + ' ' + ddToDM(gpsPt.lon, false) +
+    '. Нажмите «Рассчитать» — результат должен совпасть с GPS-точкой.';
+}
+
+// ============== Трек (ручной) ==============
+function saveTrack() {
+  try { localStorage.setItem(TRACK_KEY, JSON.stringify(track)); } catch (e) {}
+}
+function loadTrack() {
+  try {
+    const raw = localStorage.getItem(TRACK_KEY);
+    if (raw) track = JSON.parse(raw) || [];
+  } catch (e) { track = []; }
+}
+
+function buildSegmentPopup(fromIdx) {
+  const a = track[fromIdx];
+  const b = track[fromIdx + 1];
+  const distKm = distance(a, b) / 1000;
+  const dtSec = (b.t - a.t) / 1000;
+  const timeStr = fmtDuration(dtSec);
+  const speedKmh = dtSec > 0 ? (distKm * 3600 / dtSec) : 0;
+  return '<b>Участок #' + (fromIdx + 1) + ' → #' + (fromIdx + 2) + '</b><br>' +
+         'Время: <b>' + timeStr + '</b><br>' +
+         'Скорость: <b>' + speedKmh.toFixed(1) + ' км/ч</b><br>' +
+         'Длина: ' + distKm.toFixed(2) + ' км';
+}
+
+function renderTrack() {
+  trackSegments.forEach(l => map.removeLayer(l));
+  trackSegments = [];
+  trackPointLayers.forEach(m => map.removeLayer(m));
+  trackPointLayers = [];
+  if (posMarker) { map.removeLayer(posMarker); posMarker = null; }
+
+  if (track.length === 0) { updateNavUI(); updateRTUI(); return; }
+
+  for (let i = 0; i < track.length - 1; i++) {
+    const a = track[i];
+    const b = track[i + 1];
+    const pair = makeClickableLine(
+      [[a.lat, a.lon], [b.lat, b.lon]],
+      { color: '#2a7', weight: 2, opacity: 0.6, dashArray: '6,4' },
+      buildSegmentPopup(i)
+    );
+    trackSegments.push(pair[0], pair[1]);
+  }
+  for (let i = 0; i < track.length - 1; i++) {
+    const p = track[i];
+    const m = L.marker([p.lat, p.lon], { icon: dotIcon() })
+      .addTo(map)
+      .bindPopup('Измерение #' + (i + 1) + '<br>' + fmtTime(p.t) + '<br>' +
+                 p.lat.toFixed(5) + ', ' + p.lon.toFixed(5));
+    trackPointLayers.push(m);
+  }
+  const last = track[track.length - 1];
+  const courseMag = getCourseMag();
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const courseTrue = norm360(courseMag + decl);
+  posMarker = L.marker([last.lat, last.lon], { icon: planeIcon(courseTrue) })
+    .addTo(map)
+    .bindPopup('Измерение #' + track.length + '<br>' + fmtTime(last.t) + '<br>' +
+               last.lat.toFixed(5) + ', ' + last.lon.toFixed(5));
+  trackPointLayers.push(posMarker);
+
+  updateNavUI();
+  updateRTUI();
+}
+
+// ================================================================
+// ================= МОДУЛЬ НАВИГАЦИИ =============================
+// ================================================================
+
+function getGPSHeadingMag() {
+  if (!rtTracking || !rtCurrentPosition) return null;
+  let heading = rtCurrentPosition.heading;
+  if (heading === null || heading === undefined || isNaN(heading)) {
+    if (rtTrack.length >= 2) {
+      const a = rtTrack[rtTrack.length - 2];
+      const b = rtTrack[rtTrack.length - 1];
+      if (distance(a, b) > 1) heading = trueBearing(a, b);
+    }
+  }
+  if (heading === null || heading === undefined || isNaN(heading)) return null;
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  return norm360(heading - decl);
+}
+
+function getGPSSpeedKmh() {
+  if (!rtTracking || !rtCurrentPosition) return null;
+  if (rtCurrentPosition.speed === null || rtCurrentPosition.speed === undefined || isNaN(rtCurrentPosition.speed)) return null;
+  return rtCurrentPosition.speed * 3.6;
+}
+
+function setNavTarget(lat, lon) {
+  navTarget = { lat, lon };
+  const cur = getCurrentPosition();
+  if (cur) {
+    navLineStart = { lat: cur.lat, lon: cur.lon };
+  } else {
+    navLineStart = null;
+  }
+  updateNavUI();
+  updateRTUI();
+}
+
+function clearNavTarget() {
+  navTarget = null;
+  navLineStart = null;
+  updateNavUI();
+  updateRTUI();
+}
+
+function computeNav() {
+  const cur = getCurrentPosition();
+  if (!cur || !navTarget) return null;
+
+  const distKm = distance(cur, navTarget) / 1000;
+  const ipu = trueBearing(cur, navTarget);
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const mpu = norm360(ipu - decl);
+
+  const wdRaw = document.getElementById('windDir').value.trim();
+  const wsRaw = document.getElementById('windSpd').value.trim();
+  const asRaw = document.getElementById('airspeed').value.trim();
+  const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
+  const ws = wsRaw === '' ? NaN : parseFloat(wsRaw.replace(',', '.'));
+  const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
+
+  let wind = null;
+  if (!isNaN(wd) && !isNaN(ws) && !isNaN(as) && as > 0) {
+    let uv = norm360(mpu - wd);
+    if (uv > 180) uv -= 360;
+    const sinUS = (ws / as) * Math.sin(toRad(uv));
+    const clampedSin = Math.max(-1, Math.min(1, sinUS));
+    const usDeg = toDeg(Math.asin(clampedSin));
+    const mk = norm360(mpu - usDeg);
+    const wGround = as * Math.cos(toRad(usDeg)) + ws * Math.cos(toRad(uv));
+    let etaSec = null;
+    if (wGround > 0.1) etaSec = (distKm / wGround) * 3600;
+    wind = { uv, usDeg, mk, wGround, etaSec };
+  }
+
+  return { cur, distKm, ipu, mpu, wind };
+}
+
+function buildNavPopupHtml() {
+  const n = computeNav();
+  if (!n) return '🎯 Цель';
+
+  const fmpu = getGPSHeadingMag();
+  const gpsSpeedKmh = getGPSSpeedKmh();
+
+  let html = '<b>🎯 Цель</b><br>';
+  html += '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
+  html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
+
+  if (navLineStart) {
+    const cur = getCurrentPosition();
+    if (cur) {
+      const offHtml = fmtOffset(cur, navLineStart, navTarget);
+      if (offHtml) {
+        html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+        html += offHtml;
+      }
+    }
+  }
+
+  if (fmpu !== null) {
+    html += '<br><b>ФМПУ:</b> <span style="color:#08c"><b>' + fmpu.toFixed(0) + '°</b></span>';
+    let delta = norm360(fmpu - n.mpu);
+    if (delta > 180) delta -= 360;
+    if (Math.abs(delta) >= 3) {
+      html += ' <span style="color:#c00">(' + (delta > 0 ? '+' : '') + delta.toFixed(0) + '°)</span>';
+    }
+  }
+
+  if (n.wind) {
+    html += '<br><b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
+  }
+
+  if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
+    const v = convertSpeed(gpsSpeedKmh / 3.6);
+    html += '<br><b>Путевая (GPS):</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
+    const etaSec = (n.distKm / gpsSpeedKmh) * 3600;
+    html += '<br><b>ETA:</b> ' + fmtDuration(etaSec);
+  } else if (n.wind && n.wind.etaSec !== null) {
+    html += '<br><b>ETA:</b> ' + fmtDuration(n.wind.etaSec);
+  }
+
+  return html;
+}
+
+function updateNavUI() {
+  if (navLine) { navLine.forEach(l => map.removeLayer(l)); navLine = null; }
+  if (navTargetMarker) { map.removeLayer(navTargetMarker); navTargetMarker = null; }
+
+  const cur = getCurrentPosition();
+
+  if (navTarget) {
+    const popupFn = () => buildNavPopupHtml();
+    navTargetMarker = L.marker([navTarget.lat, navTarget.lon], { icon: targetIcon() })
+      .addTo(map).bindPopup(popupFn, { autoPan: true });
+
+    if (navLineStart) {
+      navLine = makeClickableLine(
+        [[navLineStart.lat, navLineStart.lon], [navTarget.lat, navTarget.lon]],
+        { color: '#e67e22', weight: 3, opacity: 0.85, dashArray: '8,4' },
+        popupFn
+      );
+    }
+  }
+
+  const posEl = document.getElementById('nav-pos');
+  if (cur) {
+    posEl.innerHTML = '<b>' + cur.source + '</b><br>' +
+                      ddToDM(cur.lat, true) + ' ' + ddToDM(cur.lon, false);
+  } else {
+    posEl.innerHTML = '<span style="color:#c00">Не определено. Включите GPS или посчитайте по ОПРС.</span>';
+  }
+
+  const tgtEl = document.getElementById('nav-target');
+  if (navTarget) {
+    tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
+  } else {
+    tgtEl.innerHTML = '<span style="color:#888">Кликните по карте, чтобы задать цель</span>';
+  }
+
+  const resEl = document.getElementById('nav-result');
+  resEl.classList.remove('error');
+
+  if (!cur) {
+    resEl.innerHTML = 'Сначала определите своё местоположение (GPS или расчёт ОПРС).';
+    return;
+  }
+  if (!navTarget) {
+    resEl.innerHTML = 'Задайте цель кликом по карте.';
+    return;
+  }
+
+  const n = computeNav();
+  if (!n) { resEl.innerHTML = '—'; return; }
+
+  let html = '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
+  html += '<b>ИПУ:</b> ' + n.ipu.toFixed(0) + '°<br>';
+  html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
+
+  if (navLineStart) {
+    const offHtml = fmtOffset(cur, navLineStart, navTarget);
+    if (offHtml) {
+      html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
+      html += offHtml;
+    }
+  }
+
+  if (n.wind) {
+    html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
+    html += '<b>УВ:</b> ' + n.wind.uv.toFixed(0) + '°';
+    html += n.wind.uv > 0 ? ' <span style="color:#888">(справа)</span>' : (n.wind.uv < 0 ? ' <span style="color:#888">(слева)</span>' : '');
+    html += '<br>';
+    html += '<b>УС:</b> ' + n.wind.usDeg.toFixed(1) + '°';
+    if (Math.abs(n.wind.usDeg) > 0.5) {
+      html += n.wind.usDeg > 0 ? ' <span style="color:#c00">вправо</span>' : ' <span style="color:#c00">влево</span>';
+    }
+    html += '<br>';
+    html += '<b style="color:#2a7">МК: ' + n.wind.mk.toFixed(0) + '°</b><br>';
+    html += '<b>Путевая:</b> ' + n.wind.wGround.toFixed(0) + ' км/ч<br>';
+    html += '<b>ETA:</b> ' + (n.wind.etaSec !== null ? fmtDuration(n.wind.etaSec) : '—');
+  } else {
+    html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
+    html += '<span style="color:#888;font-size:11px">Заполните поля ветра и скорости, чтобы рассчитать УС и МК</span>';
+  }
+
+  resEl.innerHTML = html;
+}
+
+map.on('click', e => {
+  if (currentTab === 'nav') {
+    setNavTarget(e.latlng.lat, e.latlng.lng);
+  }
+});
+
+// ================================================================
+// ============== КОНЕЦ МОДУЛЯ НАВИГАЦИИ ==========================
+// ================================================================
+
+
+// ================================================================
+// ============== МОДУЛЬ НАВИГАЦИИ РВ =============================
+// ================================================================
+
+function toggleRT() {
+  if (rtTracking) stopRT();
+  else startRT();
+}
+
+function startRT() {
+  if (!navigator.geolocation) { alert('Геолокация не поддерживается.'); return; }
+  if (rtTracking) return;
+
+  rtTracking = true;
+  document.getElementById('rtToggleBtn').innerHTML = '<b>⏸ Стоп РВ</b>';
+  document.getElementById('rtToggleBtn').classList.remove('gps');
+  document.getElementById('rtToggleBtn').classList.add('stop');
+
+  rtWatchId = navigator.geolocation.watchPosition(
+    onRTPosition, onRTError,
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+
+  document.getElementById('rt-result').innerHTML = 'Определение позиции...';
+  document.getElementById('rt-result').classList.remove('error');
+
+  requestWakeLock();
+
+  updateRTUI();
+  updateSpeedHudVisibility();
+}
+
+function stopRT() {
+  if (rtWatchId !== null) {
+    navigator.geolocation.clearWatch(rtWatchId);
+    rtWatchId = null;
+  }
+  rtTracking = false;
+  document.getElementById('rtToggleBtn').innerHTML = '<b>▶ Старт РВ</b>';
+  document.getElementById('rtToggleBtn').classList.remove('stop');
+  document.getElementById('rtToggleBtn').classList.add('gps');
+
+  releaseWakeLock();
+
+  updateRTUI();
+  updateSpeedHudVisibility();
+}
+
+function onRTPosition(pos) {
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  const acc = pos.coords.accuracy;
+  const speed = (pos.coords.speed !== null && !isNaN(pos.coords.speed)) ? pos.coords.speed : null;
+  const heading = (pos.coords.heading !== null && !isNaN(pos.coords.heading)) ? pos.coords.heading : null;
+
+  const now = Date.now();
+
+  const last = rtTrack[rtTrack.length - 1];
+  let shouldAdd = false;
+  if (!last) shouldAdd = true;
+  else if (distance(last, { lat, lon }) >= RT_MIN_STEP_M) shouldAdd = true;
+  else if (now - last.t > 5000) shouldAdd = true;
+
+  if (shouldAdd) {
+    rtTrack.push({ lat, lon, t: now, speed, heading, acc });
+    if (rtTrack.length > RT_MAX_POINTS) rtTrack.shift();
+  }
+
+  rtCurrentPosition = { lat, lon, t: now, speed, heading, acc };
+
+  saveRTTrack();
+  renderRTTrack();
+  renderRTMarker();
+  updateRTUI();
+
+  // Если попап цели или ЛЗП открыт — обновим содержимое
+  const newPopupHtml = buildNavPopupHtml();
+  if (navTargetMarker && navTargetMarker.isPopupOpen && navTargetMarker.isPopupOpen()) {
+    navTargetMarker.setPopupContent(newPopupHtml);
+  }
+  if (navLine && navLine[1] && navLine[1].isPopupOpen && navLine[1].isPopupOpen()) {
+    navLine[1].setPopupContent(newPopupHtml);
+  }
+
+  if (isFollowOn() && currentTab === 'rtnav') {
+    map.setView([lat, lon], map.getZoom(), { animate: false });
+  }
+}
+
+function onRTError(err) {
+  let msg = '⚠️ Ошибка GPS: ';
+  switch (err.code) {
+    case err.PERMISSION_DENIED: msg += 'доступ к геолокации запрещён.'; break;
+    case err.POSITION_UNAVAILABLE: msg += 'GPS недоступен.'; break;
+    case err.TIMEOUT: msg += 'превышено время ожидания.'; break;
+    default: msg += err.message;
+  }
+  const el = document.getElementById('rt-result');
+  el.classList.add('error');
+  el.textContent = msg;
+}
+
+function saveRTTrack() {
+  try {
+    const toSave = rtTrack.slice(-5000);
+    localStorage.setItem(RT_TRACK_KEY, JSON.stringify(toSave));
+  } catch (e) {}
+}
+
+function loadRTTrack() {
+  try {
+    const raw = localStorage.getItem(RT_TRACK_KEY);
+    if (raw) rtTrack = JSON.parse(raw) || [];
+  } catch (e) { rtTrack = []; }
+}
+
+function clearRTTrack() {
+  rtTrack = [];
+  rtCurrentPosition = null;
+  try { localStorage.removeItem(RT_TRACK_KEY); } catch (e) {}
+  renderRTTrack();
+  renderRTMarker();
+  updateRTUI();
+  document.getElementById('rt-result').textContent = 'Трек РВ очищен.';
+  document.getElementById('rt-result').classList.remove('error');
+}
+
+function renderRTTrack() {
+  const show = currentTab === 'rtnav';
+
+  if (rtLineLayer) { map.removeLayer(rtLineLayer); rtLineLayer = null; }
+  if (rtStartMarker) { map.removeLayer(rtStartMarker); rtStartMarker = null; }
+
+  if (!show || rtTrack.length === 0) return;
+
+  const latlngs = rtTrack.map(p => [p.lat, p.lon]);
+  rtLineLayer = L.polyline(latlngs, {
+    color: '#08c', weight: 3, opacity: 0.85, interactive: false
+  }).addTo(map);
+
+  const start = rtTrack[0];
+  rtStartMarker = L.marker([start.lat, start.lon], { icon: rtStartIcon(), interactive: false })
+    .addTo(map);
+}
+
+function renderRTMarker() {
+  const show = currentTab === 'rtnav';
+  if (!show || !rtCurrentPosition) {
+    if (rtMarker) { map.removeLayer(rtMarker); rtMarker = null; }
+    return;
+  }
+
+  let course = rtCurrentPosition.heading;
+  if (course === null || course === undefined || isNaN(course)) {
+    if (rtTrack.length >= 2) {
+      const a = rtTrack[rtTrack.length - 2];
+      const b = rtTrack[rtTrack.length - 1];
+      if (distance(a, b) > 1) course = trueBearing(a, b);
+      else course = 0;
+    } else course = 0;
+  }
+
+  const lat = rtCurrentPosition.lat;
+  const lon = rtCurrentPosition.lon;
+
+  if (rtMarker) {
+    rtMarker.setLatLng([lat, lon]);
+    rtMarker.setIcon(planeIconBlue(course));
+  } else {
+    rtMarker = L.marker([lat, lon], { icon: planeIconBlue(course), interactive: false }).addTo(map);
+  }
+}
+
+function updateRTUI() {
+  const posEl = document.getElementById('rt-pos');
+  const spEl = document.getElementById('rt-speed');
+  const hdEl = document.getElementById('rt-heading');
+  const acEl = document.getElementById('rt-acc');
+  const agEl = document.getElementById('rt-age');
+  const ptEl = document.getElementById('rt-points');
+  const dsEl = document.getElementById('rt-dist');
+  const tmEl = document.getElementById('rt-time');
+  const avEl = document.getElementById('rt-avg');
+
+  if (!rtCurrentPosition) {
+    posEl.textContent = rtTracking ? 'Ожидание GPS...' : 'GPS не активен';
+    spEl.textContent = '—'; hdEl.textContent = '—'; acEl.textContent = '—'; agEl.textContent = '—';
+  } else {
+    posEl.innerHTML = '<b>' + ddToDM(rtCurrentPosition.lat, true) + '</b><br>' +
+                      '<b>' + ddToDM(rtCurrentPosition.lon, false) + '</b>';
+    if (rtCurrentPosition.speed !== null) {
+      const v = convertSpeed(rtCurrentPosition.speed);
+      spEl.textContent = v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
+    } else spEl.textContent = '—';
+    if (rtCurrentPosition.heading !== null) hdEl.textContent = rtCurrentPosition.heading.toFixed(0) + '°';
+    else hdEl.textContent = '—';
+    acEl.textContent = '±' + rtCurrentPosition.acc.toFixed(0) + ' м';
+    const age = (Date.now() - rtCurrentPosition.t) / 1000;
+    agEl.textContent = age.toFixed(1) + ' с';
+  }
+
+  ptEl.textContent = rtTrack.length;
+  if (rtTrack.length >= 2) {
+    let totalDist = 0;
+    for (let i = 1; i < rtTrack.length; i++) totalDist += distance(rtTrack[i-1], rtTrack[i]);
+    totalDist /= 1000;
+    const durSec = (rtTrack[rtTrack.length-1].t - rtTrack[0].t) / 1000;
+    dsEl.textContent = totalDist.toFixed(2) + ' км';
+    tmEl.textContent = fmtDuration(durSec);
+    if (durSec > 0) avEl.textContent = (totalDist * 3600 / durSec).toFixed(0) + ' км/ч';
+    else avEl.textContent = '—';
+  } else {
+    dsEl.textContent = '0 км'; tmEl.textContent = '0:00'; avEl.textContent = '—';
+  }
+
+  const tgtEl = document.getElementById('rt-target');
+  if (navTarget) {
+    tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
+  } else {
+    tgtEl.innerHTML = '<span style="color:#888">Задайте цель на вкладке Навигация</span>';
+  }
+
+  if (rtCurrentPosition && rtCurrentPosition.speed !== null) {
+    const v = convertSpeed(rtCurrentPosition.speed);
+    document.getElementById('speedHudValue').textContent = v.toFixed(0);
+  } else {
+    document.getElementById('speedHudValue').textContent = '—';
+  }
+
+  const resEl = document.getElementById('rt-result');
+  if (!resEl) return;
+  resEl.classList.remove('error');
+
+  if (!rtTracking && !rtCurrentPosition) {
+    resEl.innerHTML = 'Нажмите «Старт РВ», чтобы начать.';
+    return;
+  }
+  if (!rtCurrentPosition) {
+    resEl.innerHTML = 'Ожидание первой позиции GPS...';
+    return;
+  }
+  if (!navTarget) {
+    resEl.innerHTML = 'Задайте цель на вкладке Навигация.';
+    return;
+  }
+
+  const n = computeNav();
+  if (!n) { resEl.innerHTML = '—'; return; }
+
+  const fmpu = getGPSHeadingMag();
+  const gpsSpeedKmh = getGPSSpeedKmh();
+
+  let html = '<b>До цели:</b> ' + n.distKm.toFixed(2) + ' км<br>';
+  html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
+
+  if (navLineStart) {
+    const offHtml = fmtOffset(rtCurrentPosition, navLineStart, navTarget);
+    if (offHtml) {
+      html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
+      html += offHtml;
+    }
+  }
+
+  if (fmpu !== null) {
+    html += '<br><b>ФМПУ:</b> <span style="color:#08c">' + fmpu.toFixed(0) + '°</span>';
+    let delta = norm360(fmpu - n.mpu);
+    if (delta > 180) delta -= 360;
+    if (Math.abs(delta) >= 3) {
+      html += ' <span style="color:#c00">(' + (delta > 0 ? '+' : '') + delta.toFixed(0) + '°)</span>';
+    }
+  }
+
+  if (n.wind) {
+    html += ' &nbsp; <b>МК:</b> ' + n.wind.mk.toFixed(0) + '°';
+  }
+
+  if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
+    const v = convertSpeed(gpsSpeedKmh / 3.6);
+    const etaSec = (n.distKm / gpsSpeedKmh) * 3600;
+    html += '<br><b>Путевая (GPS):</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
+    html += '<br><b>ETA:</b> ' + fmtDuration(etaSec);
+  }
+
+  resEl.innerHTML = html;
+}
+
+// ================================================================
+// ============== КОНЕЦ МОДУЛЯ РВ =================================
+// ================================================================
+
+
+// ---------- Получить МС ----------
+function getMyPosition() {
+  const resultEl = document.getElementById('result');
+  resultEl.classList.remove('error');
+
+  if (!navigator.geolocation) {
+    resultEl.classList.add('error');
+    resultEl.textContent = '⚠️ Геолокация не поддерживается устройством.';
+    return;
+  }
+
+  const btn = document.getElementById('gpsBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<b>📍 Определение...</b>';
+  resultEl.textContent = 'Определение местоположения по GPS...';
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      btn.disabled = false;
+      btn.innerHTML = '<b>📍 Получить МС</b>';
+
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const acc = pos.coords.accuracy;
+
+      if (gpsMarker) map.removeLayer(gpsMarker);
+      gpsMarker = L.marker([lat, lon], { icon: gpsIcon() }).addTo(map);
+      map.setView([lat, lon], Math.max(map.getZoom(), 12));
+
+      let html = '<b>📍 МС по GPS</b><br>' +
+                 '<b>Широта:</b> ' + ddToDM(lat, true) + '<br>' +
+                 '<b>Долгота:</b> ' + ddToDM(lon, false) + '<br>' +
+                 '<b>Точность:</b> ±' + acc.toFixed(0) + ' м';
+
+      html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ccc">';
+      html += '<b>Пеленги от МС:</b><br>';
+      const decl = parseFloat(document.getElementById('decl').value) || 0;
+      for (let i = 0; i < PRESET.length; i++) {
+        const s = PRESET[i];
+        const dkm = distance({ lat, lon }, s) / 1000;
+        if (s.type === 'VOR') {
+          const rad = norm360(trueBearing(s, { lat, lon }) - decl);
+          html += '<b>' + s.name + '</b>: радиал <b>' + rad.toFixed(0) + '°</b> / ' + dkm.toFixed(1) + ' км<br>';
+        } else {
+          const mpr = norm360(trueBearing({ lat, lon }, s) - decl);
+          html += '<b>' + s.name + '</b>: МПР <b>' + mpr.toFixed(0) + '°</b> / ' + dkm.toFixed(1) + ' км<br>';
+        }
+      }
+      html += '<br><span style="color:#666;font-size:11px">Нажмите «📍 Привести к GPS», чтобы подставить пеленги.</span>';
+
+      gpsMarker.bindPopup(html).openPopup();
+      resultEl.innerHTML = html;
+      updateNavUI();
+      updateRTUI();
+    },
+    (err) => {
+      btn.disabled = false;
+      btn.innerHTML = '<b>📍 Получить МС</b>';
+      resultEl.classList.add('error');
+      let msg = '⚠️ Не удалось получить координаты. ';
+      switch (err.code) {
+        case err.PERMISSION_DENIED: msg += 'Доступ к геолокации запрещён.'; break;
+        case err.POSITION_UNAVAILABLE: msg += 'GPS недоступен.'; break;
+        case err.TIMEOUT: msg += 'Превышено время ожидания.'; break;
+        default: msg += err.message;
+      }
+      resultEl.textContent = msg;
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// ---------- Расчёт по пеленгам ----------
+function calculate() {
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const sources = [];
+
+  for (let i = 0; i < 3; i++) {
+    const v = document.getElementById('brg' + (i + 1)).value.trim();
+    if (v === '') continue;
+    const mpr = parseFloat(v);
+    if (isNaN(mpr)) continue;
+    const ips = norm360(mpr + 180 + decl);
+    sources.push({
+      idx: i, type: 'NDB', name: PRESET[i].name,
+      data: { lat: PRESET[i].lat, lon: PRESET[i].lon },
+      ips: ips, inputLabel: 'МПР ' + mpr.toFixed(0) + '°', color: PRESET[i].color
+    });
+  }
+
+  const rv = document.getElementById('vorRadial').value.trim();
+  const radial = rv === '' ? null : parseFloat(rv);
+  const vorDist = parseDistance(document.getElementById('vorDist').value.trim());
+
+  if (radial !== null && !isNaN(radial)) {
+    sources.push({
+      idx: 3, type: 'VOR', name: PRESET[3].name,
+      data: { lat: PRESET[3].lat, lon: PRESET[3].lon },
+      ips: norm360(radial + decl),
+      inputLabel: 'Радиал ' + radial.toFixed(0) + '°',
+      color: PRESET[3].color, dist: vorDist
+    });
+  }
+
+  const resultEl = document.getElementById('result');
+  resultEl.classList.remove('error');
+
+  stationLines.forEach(l => map.removeLayer(l));
+  stationLines = [];
+  clearErrorLines();
+  if (posMarker) { map.removeLayer(posMarker); posMarker = null; }
+
+  if (sources.length === 0) {
+    resultEl.textContent = 'Введите хотя бы один МПР / радиал.';
+    return;
+  }
+
+  const lat0 = sources.reduce((s, x) => s + x.data.lat, 0) / sources.length;
+  const lon0 = sources.reduce((s, x) => s + x.data.lon, 0) / sources.length;
+  const R = 6371000;
+  const cosLat0 = Math.cos(toRad(lat0));
+
+  const project = (lat, lon) => ({
+    x: R * toRad(lon - lon0) * cosLat0,
+    y: R * toRad(lat - lat0)
+  });
+  const unproject = (x, y) => ({
+    lat: lat0 + toDeg(y / R),
+    lon: lon0 + toDeg(x / (R * cosLat0))
+  });
+
+  let pos = null, resultNote = '', usedForLines = sources, errorMsg = null;
+
+  const vorDirect = sources.find(s => s.type === 'VOR' && s.dist !== null);
+  if (vorDirect) {
+    const rad = toRad(vorDirect.ips);
+    const vp = project(vorDirect.data.lat, vorDirect.data.lon);
+    const dx = Math.sin(rad) * vorDirect.dist * 1000;
+    const dy = Math.cos(rad) * vorDirect.dist * 1000;
+    pos = unproject(vp.x + dx, vp.y + dy);
+    resultNote = 'Точка по VOR (радиал + дальность).';
+    usedForLines = [vorDirect];
+  } else if (sources.length >= 2) {
+    const vecs = sources.map(s => ({
+      p: project(s.data.lat, s.data.lon),
+      v: { x: Math.sin(toRad(s.ips)), y: Math.cos(toRad(s.ips)) }
+    }));
+    let bestScore = -1, bestPos = null, bestPair = null;
+    for (let i = 0; i < vecs.length; i++) {
+      for (let j = i + 1; j < vecs.length; j++) {
+        const a = vecs[i], b = vecs[j];
+        const cross = a.v.x * b.v.y - a.v.y * b.v.x;
+        if (Math.abs(cross) < 1e-9) continue;
+        const dx = b.p.x - a.p.x, dy = b.p.y - a.p.y;
+        const t1 = (dx * b.v.y - dy * b.v.x) / cross;
+        const t2 = (dx * a.v.y - dy * a.v.x) / cross;
+        if (t1 < 0 || t2 < 0) continue;
+        const ix = a.p.x + t1 * a.v.x, iy = a.p.y + t1 * a.v.y;
+        const candPos = unproject(ix, iy);
+        const d1 = distance(sources[i].data, candPos) / 1000;
+        const d2 = distance(sources[j].data, candPos) / 1000;
+        if (d1 > MAX_DIST_KM || d2 > MAX_DIST_KM) continue;
+        let diff = norm360(sources[i].ips - sources[j].ips);
+        if (diff > 180) diff = 360 - diff;
+        const ang = Math.min(diff, 180 - diff);
+        if (ang < ANGLE_ERROR_DEG) continue;
+        const score = 90 - Math.abs(90 - ang);
+        if (score > bestScore) {
+          bestScore = score; bestPos = candPos; bestPair = [i, j, ang];
+        }
+      }
+    }
+    if (!bestPos) {
+      errorMsg = 'Линии пеленгов не пересекаются в правдоподобной точке:<br>' +
+        '— параллельны, или<br>' +
+        '— угол между ними < ' + ANGLE_ERROR_DEG + '°, или<br>' +
+        '— пересечение позади одной из станций, или<br>' +
+        '— точка дальше ' + MAX_DIST_KM + ' км от станции.';
+    } else {
+      pos = bestPos;
+      resultNote = 'Пересечение: ' + sources[bestPair[0]].name + ' + ' + sources[bestPair[1]].name +
+                   ' (угол ' + bestPair[2].toFixed(1) + '°).';
+      usedForLines = [sources[bestPair[0]], sources[bestPair[1]]];
+    }
+  } else {
+    errorMsg = 'Для расчёта нужно: либо VOR с дальностью, либо минимум два МПР/радиала.';
+  }
+
+  if (pos) {
+    usedForLines.forEach(s => {
+      const popup = '<b>' + s.name + '</b><br>' + s.inputLabel + ' → ИПС ' + s.ips.toFixed(0) + '°<br>' +
+                    'Расстояние: <b>' + (distance(s.data, pos) / 1000).toFixed(1) + ' км</b>';
+      const pair = makeClickableLine(
+        [[s.data.lat, s.data.lon], [pos.lat, pos.lon]],
+        { color: s.color, weight: 2, opacity: 0.85 }, popup
+      );
+      stationLines.push(pair[0], pair[1]);
+    });
+
+    track.push({ lat: pos.lat, lon: pos.lon, t: Date.now() });
+    saveTrack();
+    renderTrack();
+
+    let geomWarning = '';
+    if (usedForLines.length === 2) {
+      let diff = norm360(usedForLines[0].ips - usedForLines[1].ips);
+      if (diff > 180) diff = 360 - diff;
+      const ang = Math.min(diff, 180 - diff);
+      if (ang >= ANGLE_ERROR_DEG && ang < ANGLE_WARN_DEG) {
+        geomWarning = '<br><span class="warn">⚠️ Средняя геометрия (' + ang.toFixed(1) + '°). Возможна погрешность.</span>';
+      }
+    }
+
+    const courseMag = getCourseMag();
+    let html = '<b>' + resultNote + '</b><br>' +
+               '<b>Широта:</b> ' + pos.lat.toFixed(5) + ' (' + ddToDM(pos.lat, true) + ')<br>' +
+               '<b>Долгота:</b> ' + pos.lon.toFixed(5) + ' (' + ddToDM(pos.lon, false) + ')<br>' +
+               '<b>Курс МК:</b> ' + courseMag.toFixed(0) + '°';
+    usedForLines.forEach(s => {
+      const dkm = distance(s.data, pos) / 1000;
+      html += '<br>«' + s.name + '» (' + s.inputLabel + ') → <b>' + dkm.toFixed(1) + ' км</b>';
+    });
+    html += geomWarning;
+    html += '<br><span style="color:#666;font-size:11px">Точек в треке: ' + track.length + '</span>';
+    resultEl.innerHTML = html;
+    resultEl.classList.remove('error');
+  } else {
+    drawErrorLines(sources);
+    resultEl.classList.add('error');
+    resultEl.innerHTML = '⚠️ <b>Данные недостоверны.</b><br>' + errorMsg +
+      '<br>Проверьте пеленги. Линии показаны на карте (50 км).';
+  }
+
+  updateNavUI();
+  updateRTUI();
+
+  if (window.innerWidth <= 600) {
+    document.getElementById('panel').classList.add('hidden');
+    document.getElementById('toggleBtn').textContent = '☰';
+  }
+}
+
+function onCourseChange() {
+  if (track.length > 0) renderTrack();
+}
+
+setInterval(() => {
+  if (rtTracking && rtCurrentPosition && currentTab === 'rtnav') {
+    updateRTUI();
+  }
+}, 1000);
+
+// ---------- Инициализация ----------
+loadPreset();
+loadTrack();
+loadRTTrack();
+
+(function restoreFollowToggle() {
+  const saved = localStorage.getItem(FOLLOW_KEY);
+  if (saved === '0') {
+    document.getElementById('rtFollowToggle').classList.remove('on');
+  }
+})();
+
+updateSpeedUnitLabel();
+
+renderTrack();
+renderRoutes();
+renderAreas();
+updateNavUI();
+updateRTUI();
+</script>
+</body>
+</html>
