@@ -1026,9 +1026,12 @@ function loadPreset() {
     if (p.type === 'VOR') fEl.classList.add('vor');
     updateMarker(i);
   });
-  map.fitBounds(PRESET.map(p => [p.lat, p.lon]), { padding: [60, 60] });
+  // При старте в кадр вписываются только первые три ОПРС
+  // (Красный Кут, Ямское, Комсомольское). Саратов VOR остаётся за кадром,
+  // но всё равно отрисовывается как маркер и работает во всех расчётах.
+  map.fitBounds(PRESET.slice(0, 3).map(p => [p.lat, p.lon]), { padding: [60, 60] });
 }
-<!-- === КОНЕЦ БЛОКА 26 === -->
+<!-- === КОНЕЦ БЛОКА 26: STATION POPUPS === -->
 
 <!-- === БЛОК 27: ROUTES RENDER === -->
 function buildRouteSegmentPopup(routeKey, idx) {
