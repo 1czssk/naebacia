@@ -343,7 +343,7 @@
       <b>Параметры движения</b>
       <div class="rt-stats">
         <div>Скорость: <b id="rt-speed">—</b></div>
-        <div>Курс: <b id="rt-heading">—</b></div>
+        <div>ФМПУ: <b id="rt-heading">—</b></div>
         <div>Точность: <b id="rt-acc">—</b></div>
         <div>Обновлено: <b id="rt-age">—</b></div>
       </div>
@@ -357,7 +357,6 @@
       <div class="row">
         <label>МК:</label> <input id="courseRT" placeholder="0" inputmode="numeric" oninput="onCourseRTInput()"> °
       </div>
-      <div class="hint">Синхронизируется с полем МК на вкладке Место.</div>
     </div>
 
     <div class="oprs rt-box">
@@ -1819,8 +1818,12 @@ function updateRTUI() {
       const v = convertSpeed(rtCurrentPosition.speed);
       spEl.textContent = v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
     } else spEl.textContent = '—';
-    if (rtCurrentPosition.heading !== null) hdEl.textContent = rtCurrentPosition.heading.toFixed(0) + '°';
+
+    // ФМПУ — магнитный курс от GPS (heading минус склонение)
+    const fmpu = getGPSHeadingMag();
+    if (fmpu !== null) hdEl.textContent = fmpu.toFixed(0) + '°';
     else hdEl.textContent = '—';
+
     acEl.textContent = '±' + rtCurrentPosition.acc.toFixed(0) + ' м';
     const age = (Date.now() - rtCurrentPosition.t) / 1000;
     agEl.textContent = age.toFixed(1) + ' с';
@@ -2060,7 +2063,7 @@ function stopWindMeasure() {
   }
   doWindCalc(data);
 }
-<!-- === КОНЕЦ БЛОКА 35 === -->
+<!-- === КОНЕЦ БЛОКА 35: RTNAV === -->
 
 <!-- === БЛОК 36: GPS ONCE === -->
 function getMyPosition() {
