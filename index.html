@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ</title>
+<title>НАЕБАЦИЯ v1.49</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -12,6 +12,7 @@
 <style>
   html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
   #map { height:100%; width:100%; }
+
   #map.nav-mode .leaflet-overlay-pane,
   #map.nav-mode .leaflet-marker-pane,
   #map.nav-mode .leaflet-shadow-pane,
@@ -35,8 +36,10 @@
     background:white; padding:12px; border-radius:8px;
     box-shadow:0 0 10px rgba(0,0,0,0.3); width:340px; font-size:13px;
     max-height: calc(100% - 20px); overflow-y: auto;
+    box-sizing: border-box;
+    padding-top: 52px;
+    padding-bottom: 50px;
     transition: transform 0.25s ease, opacity 0.2s ease;
-    padding-top:52px;
   }
   #panel.hidden { transform: translateX(-380px); opacity: 0; pointer-events: none; }
 
@@ -59,7 +62,7 @@
   .tab-content.active { display: block; }
   .subhint { color:#666; font-size:11px; margin:0 0 6px 0; }
 </style>
-<!-- === КОНЕЦ БЛОКА 2 === -->
+<!-- === КОНЕЦ БЛОКА 2: STYLE: БАЗА === -->
 
 <!-- === БЛОК 3: STYLE: HUD === -->
 <style>
@@ -101,7 +104,7 @@
   #hudContainer #followBtn.inactive { opacity: 0.6; }
   #hudContainer #followBtn:active { transform: scale(0.95); }
 </style>
-<!-- === КОНЕЦ БЛОКА 3 === -->
+<!-- === КОНЕЦ БЛОКА 3: STYLE: HUD === -->
 
 <!-- === БЛОК 4: STYLE: ЭЛЕМЕНТЫ === -->
 <style>
@@ -152,6 +155,7 @@
   #result.error, #nav-result.error, #rt-result.error { background:#ffeaea; color:#a00; font-weight:bold; }
   #nav-result { background:#fff5ec; }
   #rt-result { background:#f0f8ff; }
+  #windResult { margin-top:8px; padding:6px; background:#f0fff5; border-radius:4px; min-height:20px; font-size:12px; }
 
   .hint { color:#666; font-size:11px; margin:4px 0; }
   .warn { color:#c00; font-weight:bold; }
@@ -168,12 +172,15 @@
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
 </style>
-<!-- === КОНЕЦ БЛОКА 4 === -->
+<!-- === КОНЕЦ БЛОКА 4: STYLE: ЭЛЕМЕНТЫ === -->
 
 <!-- === БЛОК 5: STYLE: МОБИЛЬНАЯ === -->
 <style>
   @media (max-width: 600px) {
-    #panel { width: calc(100% - 20px); max-width: 400px; font-size:14px; }
+    #panel {
+      width: calc(100% - 20px); max-width: 400px; font-size:14px;
+      padding-bottom: 80px;
+    }
     #panel.hidden { transform: translateX(-110%); }
     .oprs input { width:80px; font-size:14px; padding:4px; }
     button { padding:8px 12px; font-size:13px; }
@@ -188,7 +195,7 @@
     #hudContainer #followBtn { width: 40px; height: 40px; font-size: 18px; }
   }
 </style>
-<!-- === КОНЕЦ БЛОКА 5 === -->
+<!-- === КОНЕЦ БЛОКА 5: STYLE: МОБИЛЬНАЯ === -->
 </head>
 
 <body>
@@ -345,6 +352,36 @@
       </div>
     </div>
 
+    <div class="oprs course-box">
+      <b>Курс полёта</b>
+      <div class="row">
+        <label>МК:</label> <input id="courseRT" placeholder="0" inputmode="numeric" oninput="onCourseRTInput()"> °
+      </div>
+      <div class="hint">Синхронизируется с полем МК на вкладке Место.</div>
+    </div>
+
+    <div class="oprs rt-box">
+      <b>Расчёт ветра</b>
+      <div class="row" style="display:flex; gap:6px;">
+        <button id="windInstantBtn" onclick="calcWindInstant()" style="flex:1;">⚡ Сразу</button>
+        <button id="windMeasureBtn" onclick="startWindMeasure()" style="flex:1;">⏱ Измерить</button>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <label>Длит. изм.:</label>
+        <input type="range" id="measureDuration" min="10" max="60" value="30" step="5" oninput="updateMeasureLabel()" style="width:120px;vertical-align:middle;">
+        <span id="measureDurationLabel" style="margin-left:4px;">30 с</span>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <label>V (истинная):</label>
+        <input id="windTAS" placeholder="92" inputmode="decimal" style="width:60px;">
+        <select id="tasUnit" style="width:auto;display:inline-block;">
+          <option value="kt" selected>узлы</option>
+          <option value="kmh">км/ч</option>
+        </select>
+      </div>
+      <div id="windResult"></div>
+    </div>
+
     <div class="oprs rt-box">
       <b>Статистика трека РВ</b>
       <div class="rt-stats">
@@ -439,7 +476,6 @@
 <!-- === КОНЕЦ БЛОКА 10 === -->
 
 <!-- === БЛОК 11: CONFIG === -->
-// ================ КОНФИГУРАЦИЯ ================
 const FOLLOW_KEY = 'oprs_rt_follow';
 const SPEED_UNIT_KEY = 'oprs_speed_unit';
 
@@ -464,7 +500,6 @@ const RT_MAX_POINTS = 10000;
 <!-- === КОНЕЦ БЛОКА 11 === -->
 
 <!-- === БЛОК 12: TABS === -->
-// ================ ВКЛАДКИ И ПАНЕЛЬ ================
 let currentTab = 'place';
 
 function updateMapInteractivity() {
@@ -512,7 +547,6 @@ if (window.innerWidth <= 600) {
 <!-- === КОНЕЦ БЛОКА 12 === -->
 
 <!-- === БЛОК 13: MAP === -->
-// ================ КАРТА ================
 const map = L.map('map').setView([51.1, 46.7], 10);
 let currentLayer = null;
 
@@ -531,7 +565,6 @@ switchMap();
 <!-- === КОНЕЦ БЛОКА 13 === -->
 
 <!-- === БЛОК 14: DATA: ОПРС === -->
-// ================ ДАННЫЕ: ОПРС ================
 const PRESET = [
   { name: 'Красный Кут',   lat: 50.9330, lon: 46.9180, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
   { name: 'Ямское',         lat: 50.9675, lon: 47.2190, freq: '1245 кГц',  type: 'NDB', color: 'red' },
@@ -541,7 +574,6 @@ const PRESET = [
 <!-- === КОНЕЦ БЛОКА 14 === -->
 
 <!-- === БЛОК 15: DATA: ROUTES === -->
-// ================ ДАННЫЕ: МАРШРУТЫ ================
 const ROUTES = {
   A4: {
     name: 'А4', color: '#c80',
@@ -606,7 +638,6 @@ let routeLayers = { A4: [], A5: [], LOCAL: [], GAGARIN_FWD: [], GAGARIN_BACK: []
 <!-- === КОНЕЦ БЛОКА 15 === -->
 
 <!-- === БЛОК 16: DATA: ZONES === -->
-// ================ ДАННЫЕ: ЗОНЫ И РАЙОНЫ ================
 const ZONES = [
   { id: 'ПЗ №1', name: 'пр. Орлов',          lat: 51.08667, lon: 47.05500 },
   { id: 'ПЗ №2', name: 'н.п. Рудня',          lat: 51.01667, lon: 47.07167 },
@@ -632,7 +663,6 @@ let areaLayers = { zones: [], sectors: [] };
 <!-- === КОНЕЦ БЛОКА 16 === -->
 
 <!-- === БЛОК 17: STATE === -->
-// ================ ПЕРЕМЕННЫЕ СОСТОЯНИЯ ================
 let oprsMarkers = [null, null, null, null];
 let stationLines = [];
 let errorLines = [];
@@ -657,10 +687,16 @@ let rtTrack = [];
 let rtLineLayer = null;
 let rtStartMarker = null;
 let rtMarker = null;
+
+// Расчёт ветра в РВ
+let windMeasuring = false;
+let windMeasureStart = 0;
+let windMeasureDuration = 30;
+let windMeasureData = [];
+let windMeasureTick = null;
 <!-- === КОНЕЦ БЛОКА 17 === -->
 
 <!-- === БЛОК 18: WAKELOCK === -->
-// ================ WAKE LOCK ================
 let wakeLock = null;
 
 async function requestWakeLock() {
@@ -687,7 +723,6 @@ document.addEventListener('visibilitychange', async () => {
 <!-- === КОНЕЦ БЛОКА 18 === -->
 
 <!-- === БЛОК 19: MATH === -->
-// ================ МАТЕМАТИКА И УТИЛИТЫ ================
 function toRad(d) { return d * Math.PI / 180; }
 function toDeg(r) { return r * 180 / Math.PI; }
 function norm360(d) { return ((d % 360) + 360) % 360; }
@@ -757,7 +792,6 @@ function makeClickableLine(latlngs, options, popupContent) {
 <!-- === КОНЕЦ БЛОКА 19 === -->
 
 <!-- === БЛОК 20: OFFSET === -->
-// ================ ЛБУ ================
 function computeOffset(P, A, B) {
   const R = 6371000;
   const lat0 = (A.lat + B.lat + P.lat) / 3;
@@ -806,7 +840,6 @@ function fmtOffset(P, A, B) {
 <!-- === КОНЕЦ БЛОКА 20 === -->
 
 <!-- === БЛОК 21: SPEED === -->
-// ================ ЕДИНИЦЫ СКОРОСТИ ================
 function convertSpeed(mps) {
   if (mps === null || mps === undefined || isNaN(mps)) return null;
   return mps * SPEED_UNITS[rtSpeedUnit].factor;
@@ -827,7 +860,6 @@ function cycleSpeedUnit() {
 <!-- === КОНЕЦ БЛОКА 21 === -->
 
 <!-- === БЛОК 22: FOLLOW === -->
-// ================ РЕЖИМ СЛЕЖЕНИЯ ================
 let followMode = localStorage.getItem(FOLLOW_KEY) !== '0';
 
 function isFollowOn() { return followMode; }
@@ -861,7 +893,6 @@ function updateFollowBtn() {
 <!-- === КОНЕЦ БЛОКА 22 === -->
 
 <!-- === БЛОК 23: HUD === -->
-// ================ HUD СКОРОСТИ ================
 function updateSpeedHudVisibility() {
   const hud = document.getElementById('hudContainer');
   if (currentTab === 'rtnav' && rtTracking) {
@@ -882,7 +913,6 @@ map.on('dragstart', () => {
 <!-- === КОНЕЦ БЛОКА 23 === -->
 
 <!-- === БЛОК 24: ICONS === -->
-// ================ ИКОНКИ ================
 function planeIconSvg(courseDeg, color) {
   const fill = color || '#2a7';
   return '<svg viewBox="-12 -12 24 24" width="32" height="32" ' +
@@ -942,7 +972,6 @@ function targetIcon() {
 <!-- === КОНЕЦ БЛОКА 24 === -->
 
 <!-- === БЛОК 25: POSITION === -->
-// ================ ТЕКУЩЕЕ ПОЛОЖЕНИЕ ================
 function getCurrentPosition() {
   if (rtTracking && rtCurrentPosition) {
     return { lat: rtCurrentPosition.lat, lon: rtCurrentPosition.lon, source: 'GPS (РВ)' };
@@ -965,7 +994,6 @@ function getCurrentPosition() {
 <!-- === КОНЕЦ БЛОКА 25 === -->
 
 <!-- === БЛОК 26: STATION POPUPS === -->
-// ================ ПОПАПЫ ОПРС ================
 function buildStationPopup(idx) {
   const p = PRESET[idx];
   let html = '<b>' + p.name + '</b><br>' + p.freq + '<br>' +
@@ -1008,7 +1036,6 @@ function loadPreset() {
 <!-- === КОНЕЦ БЛОКА 26 === -->
 
 <!-- === БЛОК 27: ROUTES RENDER === -->
-// ================ РЕНДЕР МАРШРУТОВ ================
 function buildRouteSegmentPopup(routeKey, idx) {
   const route = ROUTES[routeKey];
   const A = route.points[idx];
@@ -1119,7 +1146,6 @@ function renderRoutes() {
 <!-- === КОНЕЦ БЛОКА 27 === -->
 
 <!-- === БЛОК 28: AREAS RENDER === -->
-// ================ РЕНДЕР ЗОН И РАЙОНОВ ================
 function renderAreas() {
   areaLayers.zones.forEach(l => map.removeLayer(l));
   areaLayers.zones = [];
@@ -1149,7 +1175,6 @@ function renderAreas() {
 <!-- === КОНЕЦ БЛОКА 28 === -->
 
 <!-- === БЛОК 29: ERROR LINES === -->
-// ================ 50-КМ ЛИНИИ ПРИ ОШИБКЕ ================
 function drawErrorLines(sources) {
   errorLines.forEach(l => map.removeLayer(l));
   errorLines = [];
@@ -1178,10 +1203,10 @@ function clearErrorLines() {
 <!-- === КОНЕЦ БЛОКА 29 === -->
 
 <!-- === БЛОК 30: CLEAR === -->
-// ================ ОЧИСТКА ================
 function clearFields() {
-  ['brg1','brg2','brg3','vorRadial','vorDist','course'].forEach(id => {
-    document.getElementById(id).value = '';
+  ['brg1','brg2','brg3','vorRadial','vorDist','course','courseRT'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
   document.getElementById('decl').value = '11';
   for (let i = 1; i <= 4; i++) document.getElementById('calc' + i).innerHTML = '';
@@ -1214,7 +1239,6 @@ function clearGps() {
 <!-- === КОНЕЦ БЛОКА 30 === -->
 
 <!-- === БЛОК 31: PREVIEW === -->
-// ================ ПРЕДПРОСМОТР ПЕЛЕНГОВ ================
 function preview() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   for (let i = 0; i < 3; i++) {
@@ -1241,7 +1265,6 @@ function preview() {
 <!-- === КОНЕЦ БЛОКА 31 === -->
 
 <!-- === БЛОК 32: ALIGN GPS === -->
-// ================ ПРИВЕСТИ К GPS ================
 function alignToGPS() {
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -1254,7 +1277,6 @@ function alignToGPS() {
   const gpsPt = { lat: ll.lat, lon: ll.lng };
   const decl = parseFloat(document.getElementById('decl').value) || 0;
 
-  // Только NDB — VOR вспомогательный, в приведении не участвует
   for (let i = 0; i < 3; i++) {
     const s = PRESET[i];
     const brgTrue = trueBearing(gpsPt, s);
@@ -1269,7 +1291,6 @@ function alignToGPS() {
 <!-- === КОНЕЦ БЛОКА 32 === -->
 
 <!-- === БЛОК 33: TRACK === -->
-// ================ ТРЕКИ (ОПРС + GPS) ================
 function saveTrack() {
   try { localStorage.setItem(TRACK_KEY, JSON.stringify(track)); } catch (e) {}
 }
@@ -1357,7 +1378,6 @@ function renderTrack() {
 <!-- === КОНЕЦ БЛОКА 33 === -->
 
 <!-- === БЛОК 34: NAV === -->
-// ================ МОДУЛЬ НАВИГАЦИИ ================
 function getGPSHeadingMag() {
   if (!rtTracking || !rtCurrentPosition) return null;
   let heading = rtCurrentPosition.heading;
@@ -1630,7 +1650,6 @@ map.on('click', e => {
 <!-- === КОНЕЦ БЛОКА 34 === -->
 
 <!-- === БЛОК 35: RTNAV === -->
-// ================ МОДУЛЬ НАВИГАЦИИ РВ ================
 function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
 function startRT() {
@@ -1683,6 +1702,11 @@ function onRTPosition(pos) {
     if (rtTrack.length > RT_MAX_POINTS) rtTrack.shift();
   }
   rtCurrentPosition = { lat, lon, t: now, speed, heading, acc };
+
+  if (windMeasuring) {
+    windMeasureData.push({ lat, lon, t: now });
+  }
+
   saveRTTrack();
   renderRTTrack();
   renderRTMarker();
@@ -1867,10 +1891,178 @@ function updateRTUI() {
   }
   resEl.innerHTML = html;
 }
+
+// ================================================================
+// ============== РАСЧЁТ ВЕТРА ПО ФАКТУ ПОЛЁТА ====================
+// ================================================================
+
+// TAS → км/ч (внутренние расчёты всегда в км/ч)
+function getTASKmh() {
+  const v = parseFloat(document.getElementById('windTAS').value);
+  if (isNaN(v) || v <= 0) return null;
+  const unit = document.getElementById('tasUnit').value;
+  return unit === 'kt' ? v * 1.852 : v;
+}
+
+function updateMeasureLabel() {
+  const s = document.getElementById('measureDuration').value;
+  document.getElementById('measureDurationLabel').textContent = s + ' с';
+}
+
+// Проверка прямолинейности: максимальное отклонение курса сегмента от среднего
+function checkStraight(pts) {
+  if (pts.length < 3) return { ok: false, spread: 0 };
+  const bearings = [];
+  for (let i = 1; i < pts.length; i++) {
+    const d = distance(pts[i-1], pts[i]);
+    if (d < 3) continue;
+    bearings.push(trueBearing(pts[i-1], pts[i]));
+  }
+  if (bearings.length < 2) return { ok: false, spread: 0 };
+  let sx = 0, sy = 0;
+  for (const b of bearings) { sx += Math.cos(toRad(b)); sy += Math.sin(toRad(b)); }
+  const avgB = toDeg(Math.atan2(sy, sx));
+  let maxDev = 0;
+  for (const b of bearings) {
+    let d = Math.abs(norm360(b - avgB + 180) - 180);
+    if (d > maxDev) maxDev = d;
+  }
+  return { ok: maxDev < 15, spread: maxDev };
+}
+
+// Основной расчёт
+function doWindCalc(pts) {
+  const resultEl = document.getElementById('windResult');
+  const V = getTASKmh();
+  if (V === null) {
+    resultEl.innerHTML = '<span class="warn">Укажите истинную скорость V.</span>';
+    return;
+  }
+  const MK = getCourseMag();
+  const decl = parseFloat(document.getElementById('decl').value) || 0;
+
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  const dt = (last.t - first.t) / 1000;
+  if (dt < 3) {
+    resultEl.innerHTML = '<span class="warn">Слишком короткий интервал.</span>';
+    return;
+  }
+  const distKm = distance(first, last) / 1000;
+  const W = distKm * 3600 / dt;               // путевая, км/ч
+  const FMPU_true = trueBearing(first, last);
+  const FMPU = norm360(FMPU_true - decl);      // магнитный
+
+  let US = norm360(FMPU - MK);
+  if (US > 180) US -= 360;
+
+  // Ветровой треугольник
+  const Ux = V * Math.sin(toRad(MK)) - W * Math.sin(toRad(FMPU));
+  const Uy = V * Math.cos(toRad(MK)) - W * Math.cos(toRad(FMPU));
+  const U = Math.sqrt(Ux*Ux + Uy*Uy);
+  const delta = norm360(toDeg(Math.atan2(Ux, Uy)));
+
+  const tasUnitVal = document.getElementById('tasUnit').value;
+  const uDisplay = tasUnitVal === 'kt' ? (U / 1.852) : U;
+  const uLabel = tasUnitVal === 'kt' ? 'узлов' : 'км/ч';
+
+  resultEl.innerHTML =
+    '<b>Результат:</b><br>' +
+    '<b>ФМПУ:</b> ' + FMPU.toFixed(0) + '°<br>' +
+    '<b>W (путевая):</b> ' + W.toFixed(0) + ' км/ч<br>' +
+    '<b>УС:</b> ' + US.toFixed(1) + '°' +
+      (Math.abs(US) > 0.3 ? (US > 0 ? ' <span style="color:#c00">вправо</span>' : ' <span style="color:#c00">влево</span>') : '') + '<br>' +
+    '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">' +
+    '<b>δ (ветер от):</b> <span style="color:#2a7"><b>' + delta.toFixed(0) + '°</b></span><br>' +
+    '<b>U (скорость):</b> <span style="color:#2a7"><b>' + uDisplay.toFixed(1) + ' ' + uLabel + '</b></span>' +
+    '<button class="primary" onclick="applyWindToFields(' + delta.toFixed(1) + ',' + U.toFixed(1) + ')" style="width:100%;margin-top:6px;">Применить к полям ветра</button>';
+}
+
+function applyWindToFields(delta, uKmh) {
+  document.getElementById('windDir').value = delta.toFixed(0);
+  document.getElementById('windSpd').value = uKmh.toFixed(0);
+  updateNavUI();
+  document.getElementById('windResult').innerHTML += '<br><span style="color:#2a7">✓ Применено к полям ветра на вкладке Навигация</span>';
+}
+
+// Режим «Сразу» — последние 60 секунд
+function calcWindInstant() {
+  const resultEl = document.getElementById('windResult');
+  if (!rtTracking) {
+    resultEl.innerHTML = '<span class="warn">Сначала запустите РВ.</span>';
+    return;
+  }
+  const cutoff = Date.now() - 60000;
+  const seg = rtTrack.filter(p => p.t >= cutoff);
+  if (seg.length < 5) {
+    resultEl.innerHTML = '<span class="warn">Мало данных за последнюю минуту. Полетайте ещё.</span>';
+    return;
+  }
+  const straight = checkStraight(seg);
+  if (!straight.ok) {
+    resultEl.innerHTML = '<span class="warn">Трек не прямолинейный (разброс ' + straight.spread.toFixed(1) + '°). Летите ровнее или используйте «Измерить».</span>';
+    return;
+  }
+  doWindCalc(seg);
+}
+
+// Режим «Измерить» — сбор данных за указанное время
+function startWindMeasure() {
+  const resultEl = document.getElementById('windResult');
+  if (!rtTracking) {
+    resultEl.innerHTML = '<span class="warn">Сначала запустите РВ.</span>';
+    return;
+  }
+  if (windMeasuring) return;
+
+  windMeasureDuration = parseInt(document.getElementById('measureDuration').value) || 30;
+  windMeasureStart = Date.now();
+  windMeasureData = [];
+  windMeasuring = true;
+
+  const btn = document.getElementById('windMeasureBtn');
+  btn.disabled = true;
+
+  windMeasureTick = setInterval(() => {
+    const left = Math.ceil((windMeasureStart + windMeasureDuration * 1000 - Date.now()) / 1000);
+    if (left <= 0) {
+      stopWindMeasure();
+    } else {
+      btn.innerHTML = '⏱ ' + left + ' с';
+    }
+  }, 200);
+
+  resultEl.innerHTML = 'Измерение... ' + windMeasureDuration + ' с. Летите прямо с постоянным курсом.';
+}
+
+function stopWindMeasure() {
+  if (windMeasureTick) {
+    clearInterval(windMeasureTick);
+    windMeasureTick = null;
+  }
+  windMeasuring = false;
+  const btn = document.getElementById('windMeasureBtn');
+  btn.disabled = false;
+  btn.innerHTML = '⏱ Измерить';
+
+  const data = windMeasureData;
+  windMeasureData = [];
+
+  const resultEl = document.getElementById('windResult');
+  if (data.length < 5) {
+    resultEl.innerHTML = '<span class="warn">Мало данных за интервал измерения.</span>';
+    return;
+  }
+  const straight = checkStraight(data);
+  if (!straight.ok) {
+    resultEl.innerHTML = '<span class="warn">Трек не прямолинейный (разброс ' + straight.spread.toFixed(1) + '°). Летите ровнее и повторите.</span>';
+    return;
+  }
+  doWindCalc(data);
+}
 <!-- === КОНЕЦ БЛОКА 35 === -->
 
 <!-- === БЛОК 36: GPS ONCE === -->
-// ================ ПОЛУЧИТЬ МС ================
 function getMyPosition() {
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -1944,7 +2136,6 @@ function getMyPosition() {
 <!-- === КОНЕЦ БЛОКА 36 === -->
 
 <!-- === БЛОК 37: CALC === -->
-// ================ РАСЧЁТ ПО ПЕЛЕНГАМ ================
 function calculate() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const sources = [];
@@ -2100,13 +2291,24 @@ function calculate() {
   }
 }
 
+// Синхронизация МК: Место → РВ
 function onCourseChange() {
+  const a = document.getElementById('course');
+  const b = document.getElementById('courseRT');
+  if (a && b && a.value !== b.value) b.value = a.value;
   if (track.length > 0 || trackGps.length > 0) renderTrack();
+}
+
+// Синхронизация МК: РВ → Место
+function onCourseRTInput() {
+  const a = document.getElementById('course');
+  const b = document.getElementById('courseRT');
+  if (a && b) a.value = b.value;
+  onCourseChange();
 }
 <!-- === КОНЕЦ БЛОКА 37 === -->
 
 <!-- === БЛОК 38: INIT === -->
-// ================ ИНИЦИАЛИЗАЦИЯ ================
 setInterval(() => {
   if (rtTracking && rtCurrentPosition && currentTab === 'rtnav') {
     updateRTUI();
