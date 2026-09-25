@@ -352,16 +352,20 @@
       </div>
     </div>
 
-    <div class="oprs course-box">
-      <b>Курс полёта</b>
+    <div class="oprs rt-box">
+      <b>Расчёт ветра</b>
       <div class="row">
         <label>МК:</label> <input id="courseRT" placeholder="0" inputmode="numeric" oninput="onCourseRTInput()"> °
       </div>
-    </div>
-
-    <div class="oprs rt-box">
-      <b>Расчёт ветра</b>
-      <div class="row" style="display:flex; gap:6px;">
+      <div class="row">
+        <label>V (истинная):</label>
+        <input id="windTAS" placeholder="92" inputmode="decimal" style="width:60px;">
+        <select id="tasUnit" style="width:auto;display:inline-block;">
+          <option value="kt" selected>узлы</option>
+          <option value="kmh">км/ч</option>
+        </select>
+      </div>
+      <div class="row" style="display:flex; gap:6px; margin-top:6px;">
         <button id="windInstantBtn" onclick="calcWindInstant()" style="flex:1;">⚡ Сразу</button>
         <button id="windMeasureBtn" onclick="startWindMeasure()" style="flex:1;">⏱ Измерить</button>
       </div>
@@ -369,14 +373,6 @@
         <label>Длит. изм.:</label>
         <input type="range" id="measureDuration" min="10" max="60" value="30" step="5" oninput="updateMeasureLabel()" style="width:120px;vertical-align:middle;">
         <span id="measureDurationLabel" style="margin-left:4px;">30 с</span>
-      </div>
-      <div class="row" style="margin-top:6px;">
-        <label>V (истинная):</label>
-        <input id="windTAS" placeholder="92" inputmode="decimal" style="width:60px;">
-        <select id="tasUnit" style="width:auto;display:inline-block;">
-          <option value="kt" selected>узлы</option>
-          <option value="kmh">км/ч</option>
-        </select>
       </div>
       <div id="windResult"></div>
     </div>
