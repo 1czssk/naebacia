@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.49</title>
+<title>НАЕБАЦИЯ v1.51</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -367,7 +367,7 @@
       </div>
       <div class="row" style="display:flex; gap:6px; margin-top:6px;">
         <button id="windInstantBtn" onclick="calcWindInstant()" style="flex:1;">⚡ Сразу</button>
-        <button id="windMeasureBtn" onclick="startWindMeasure()" style="flex:1;">⏱ Измерить</button>
+        <button id="windMeasureBtn" onclick="windMeasureBtnClick()" style="flex:1;">⏱ Измерить</button>
       </div>
       <div class="row" style="margin-top:6px;">
         <label>Длит. изм.:</label>
@@ -910,13 +910,43 @@ map.on('dragstart', () => {
 <!-- === БЛОК 24: ICONS === -->
 function planeIconSvg(courseDeg, color) {
   const fill = color || '#2a7';
-  return '<svg viewBox="-12 -12 24 24" width="32" height="32" ' +
-    'style="transform: rotate(' + courseDeg + 'deg); transform-origin: center; filter: drop-shadow(0 0 3px rgba(0,0,0,0.6));">' +
-    '<path d="M0,-11 C1,-9 1.5,-6 1.5,-3 L1.5,2 L6,4 L6,6 L1.5,5 L1.5,9 L3.5,10.5 L3.5,12 L0,11 L-3.5,12 L-3.5,10.5 L-1.5,9 L-1.5,5 L-6,6 L-6,4 L-1.5,2 L-1.5,-3 C-1.5,-6 -1,-9 0,-11 Z" ' +
-    'fill="' + fill + '" stroke="white" stroke-width="0.8" stroke-linejoin="round"/></svg>';
+  // Силуэт Cessna 172 (вид сверху): высокоплан с прямым длинным крылом,
+  // узкий фюзеляж, прямой хвост с горизонтальным стабилизатором и килем.
+  // Нос смотрит вверх (север), viewBox —15×24, нос в точке (0,-11).
+  return '<svg viewBox="-15 -12 30 24" width="40" height="32" ' +
+    'style="transform: rotate(' + courseDeg + 'deg); transform-origin: center; filter: drop-shadow(0 0 3px rgba(0,0,0,0.65));">' +
+    '<path d="M 0,-11 ' +
+      'C 0.35,-10.8 0.5,-10.2 0.55,-9.5 ' +
+      'L 0.7,-4 ' +
+      'L 14.5,-4 ' +
+      'L 14.5,-1 ' +
+      'L 1.2,-1 ' +
+      'L 1.2,2 ' +
+      'L 0.6,7.5 ' +
+      'L 5,8.5 ' +
+      'L 5,10.2 ' +
+      'L 0.55,10 ' +
+      'L 0.35,11 ' +
+      'L -0.35,11 ' +
+      'L -0.55,10 ' +
+      'L -5,10.2 ' +
+      'L -5,8.5 ' +
+      'L -0.6,7.5 ' +
+      'L -1.2,2 ' +
+      'L -1.2,-1 ' +
+      'L -14.5,-1 ' +
+      'L -14.5,-4 ' +
+      'L -0.7,-4 ' +
+      'L -0.55,-9.5 ' +
+      'C -0.5,-10.2 -0.35,-10.8 0,-11 ' +
+      'Z" ' +
+      'fill="' + fill + '" stroke="white" stroke-width="0.7" stroke-linejoin="round"/>' +
+    // Кок винта
+    '<circle cx="0" cy="-10.3" r="0.55" fill="white" fill-opacity="0.75"/>' +
+    '</svg>';
 }
-function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [32, 32], iconAnchor: [16, 16] }); }
-function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [32, 32], iconAnchor: [16, 16] }); }
+function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [40, 32], iconAnchor: [20, 16] }); }
+function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [40, 32], iconAnchor: [20, 16] }); }
 
 function dotIcon(color) {
   const c = color || '#2a7';
@@ -1144,7 +1174,51 @@ function renderRoutes() {
 <!-- === КОНЕЦ БЛОКА 27 === -->
 
 <!-- === БЛОК 28: AREAS RENDER === -->
+
+// Метры на пиксель на данной широте и зуме
+function metersPerPixel(lat, zoom) {
+  return 156543.03392 * Math.cos(toRad(lat)) / Math.pow(2, zoom);
+}
+
+// Иконка с номером, размер подгоняется под диаметр круга в пикселях
+function makeAreaLabel(lat, radiusM, color, num) {
+  const mpp = metersPerPixel(lat, map.getZoom());
+  const diamPx = (2 * radiusM) / mpp;
+  // Ограничиваем разумными рамками: очень мелко/крупно — нечитаемо
+  const fontSize = Math.min(240, Math.max(14, Math.round(diamPx * 0.85)));
+  const sizePx = Math.round(fontSize * 1.3);
+  return L.divIcon({
+    className: '',
+    html: '<div style="' +
+      'width:' + sizePx + 'px;height:' + sizePx + 'px;' +
+      'display:flex;align-items:center;justify-content:center;' +
+      'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;' +
+      'font-size:' + fontSize + 'px;font-weight:800;line-height:1;' +
+      'color:' + color + ';opacity:0.65;' +
+      'pointer-events:none;user-select:none;' +
+      'text-shadow:0 0 8px rgba(255,255,255,0.55);' +
+    '">' + num + '</div>',
+    iconSize: [sizePx, sizePx],
+    iconAnchor: [sizePx / 2, sizePx / 2]
+  });
+}
+
+// Красная точка центра
+function makeAreaDot() {
+  return L.circleMarker([0, 0], {
+    radius: 4, color: '#ffffff', weight: 1.5,
+    fillColor: '#e01010', fillOpacity: 1, interactive: false
+  });
+}
+
+// Из «ПЗ №1» / «ЗПП №3» достаём только цифру
+function extractNum(id) {
+  const m = id.match(/\d+/);
+  return m ? m[0] : id;
+}
+
 function renderAreas() {
+  // --- Зоны (ПЗ), R = 2,5 км ---
   areaLayers.zones.forEach(l => map.removeLayer(l));
   areaLayers.zones = [];
   if (document.getElementById('toggleZones').checked) {
@@ -1155,8 +1229,22 @@ function renderAreas() {
       }).addTo(map).bindPopup('<b>' + z.id + '</b><br>' + z.name + '<br>' +
                               ddToDM(z.lat, true) + ' ' + ddToDM(z.lon, false) + '<br>Радиус: 2,5 км');
       areaLayers.zones.push(circle);
+
+      // Красная точка в центре
+      const dot = makeAreaDot();
+      dot.setLatLng([z.lat, z.lon]).addTo(map);
+      areaLayers.zones.push(dot);
+
+      // Номер зоны
+      const label = L.marker([z.lat, z.lon], {
+        icon: makeAreaLabel(z.lat, 2500, '#ffc8c8', extractNum(z.id)),
+        interactive: false, keyboard: false
+      }).addTo(map);
+      areaLayers.zones.push(label);
     });
   }
+
+  // --- Сектора (ЗПП), R = 5 км ---
   areaLayers.sectors.forEach(l => map.removeLayer(l));
   areaLayers.sectors = [];
   if (document.getElementById('toggleSectors').checked) {
@@ -1167,9 +1255,29 @@ function renderAreas() {
       }).addTo(map).bindPopup('<b>' + s.id + '</b><br>' + s.name + '<br>' +
                               ddToDM(s.lat, true) + ' ' + ddToDM(s.lon, false) + '<br>Радиус: 5 км');
       areaLayers.sectors.push(circle);
+
+      // Красная точка в центре
+      const dot = makeAreaDot();
+      dot.setLatLng([s.lat, s.lon]).addTo(map);
+      areaLayers.sectors.push(dot);
+
+      // Номер сектора
+      const label = L.marker([s.lat, s.lon], {
+        icon: makeAreaLabel(s.lat, 5000, '#c8c8ff', extractNum(s.id)),
+        interactive: false, keyboard: false
+      }).addTo(map);
+      areaLayers.sectors.push(label);
     });
   }
 }
+
+// При смене зума пересчитываем размер цифр, чтобы они держали круг
+map.on('zoomend', () => {
+  if (document.getElementById('toggleZones').checked ||
+      document.getElementById('toggleSectors').checked) {
+    renderAreas();
+  }
+});
 <!-- === КОНЕЦ БЛОКА 28 === -->
 
 <!-- === БЛОК 29: ERROR LINES === -->
@@ -1911,6 +2019,12 @@ function updateMeasureLabel() {
   document.getElementById('measureDurationLabel').textContent = s + ' с';
 }
 
+// Обёртка для кнопки: если измерение идёт — отменяем, иначе — начинаем.
+function windMeasureBtnClick() {
+  if (windMeasuring) cancelWindMeasure();
+  else startWindMeasure();
+}
+
 // Проверка прямолинейности: максимальное отклонение курса сегмента от среднего
 function checkStraight(pts) {
   if (pts.length < 3) return { ok: false, spread: 0 };
@@ -1964,9 +2078,10 @@ function doWindCalc(pts) {
   const U = Math.sqrt(Ux*Ux + Uy*Uy);
   const delta = norm360(toDeg(Math.atan2(Ux, Uy)));
 
-  const tasUnitVal = document.getElementById('tasUnit').value;
-  const uDisplay = tasUnitVal === 'kt' ? (U / 1.852) : U;
-  const uLabel = tasUnitVal === 'kt' ? 'узлов' : 'км/ч';
+  // U в трёх единицах сразу
+  const uKmh = U;
+  const uMs = U / 3.6;
+  const uKt = U / 1.852;
 
   resultEl.innerHTML =
     '<b>Результат:</b><br>' +
@@ -1976,7 +2091,8 @@ function doWindCalc(pts) {
       (Math.abs(US) > 0.3 ? (US > 0 ? ' <span style="color:#c00">вправо</span>' : ' <span style="color:#c00">влево</span>') : '') + '<br>' +
     '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">' +
     '<b>δ (ветер от):</b> <span style="color:#2a7"><b>' + delta.toFixed(0) + '°</b></span><br>' +
-    '<b>U (скорость):</b> <span style="color:#2a7"><b>' + uDisplay.toFixed(1) + ' ' + uLabel + '</b></span>' +
+    '<b>U:</b> <span style="color:#2a7"><b>' + uKmh.toFixed(1) + ' км/ч / ' +
+      uMs.toFixed(1) + ' м/с / ' + uKt.toFixed(1) + ' уз</b></span>' +
     '<button class="primary" onclick="applyWindToFields(' + delta.toFixed(1) + ',' + U.toFixed(1) + ')" style="width:100%;margin-top:6px;">Применить к полям ветра</button>';
 }
 
@@ -2023,29 +2139,30 @@ function startWindMeasure() {
   windMeasuring = true;
 
   const btn = document.getElementById('windMeasureBtn');
-  btn.disabled = true;
+  btn.disabled = false;
+  btn.classList.add('stop');
+  btn.innerHTML = '✕ Отмена';
 
   windMeasureTick = setInterval(() => {
     const left = Math.ceil((windMeasureStart + windMeasureDuration * 1000 - Date.now()) / 1000);
     if (left <= 0) {
       stopWindMeasure();
     } else {
-      btn.innerHTML = '⏱ ' + left + ' с';
+      btn.innerHTML = '✕ Отмена (' + left + ' с)';
     }
   }, 200);
 
   resultEl.innerHTML = 'Измерение... ' + windMeasureDuration + ' с. Летите прямо с постоянным курсом.';
 }
 
+// Естественное завершение измерения (по таймеру)
 function stopWindMeasure() {
   if (windMeasureTick) {
     clearInterval(windMeasureTick);
     windMeasureTick = null;
   }
   windMeasuring = false;
-  const btn = document.getElementById('windMeasureBtn');
-  btn.disabled = false;
-  btn.innerHTML = '⏱ Измерить';
+  restoreWindMeasureButton();
 
   const data = windMeasureData;
   windMeasureData = [];
@@ -2061,6 +2178,26 @@ function stopWindMeasure() {
     return;
   }
   doWindCalc(data);
+}
+
+// Отмена измерения пользователем
+function cancelWindMeasure() {
+  if (windMeasureTick) {
+    clearInterval(windMeasureTick);
+    windMeasureTick = null;
+  }
+  windMeasuring = false;
+  windMeasureData = [];
+  restoreWindMeasureButton();
+  document.getElementById('windResult').innerHTML = '<span style="color:#888">Измерение отменено.</span>';
+}
+
+// Восстановление внешнего вида кнопки «Измерить»
+function restoreWindMeasureButton() {
+  const btn = document.getElementById('windMeasureBtn');
+  btn.classList.remove('stop');
+  btn.disabled = false;
+  btn.innerHTML = '⏱ Измерить';
 }
 <!-- === КОНЕЦ БЛОКА 35: RTNAV === -->
 
