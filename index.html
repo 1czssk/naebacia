@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.51</title>
+<title>НАЕБАЦИЯ v1.52</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -12,6 +12,9 @@
 <style>
   html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
   #map { height:100%; width:100%; }
+
+  /* Скрываем флажок Украины в атрибуции Leaflet */
+  .leaflet-attribution-flag { display: none !important; }
 
   #map.nav-mode .leaflet-overlay-pane,
   #map.nav-mode .leaflet-marker-pane,
@@ -171,6 +174,13 @@
 
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
+
+  .popup-goal-btn {
+    width:100%; margin-top:6px; padding:8px;
+    background:#e67e22; color:white; border:none; border-radius:4px;
+    font-size:13px; cursor:pointer; font-family:inherit;
+  }
+  .popup-goal-btn:active { background:#c4621a; }
 </style>
 <!-- === КОНЕЦ БЛОКА 4: STYLE: ЭЛЕМЕНТЫ === -->
 
@@ -492,6 +502,9 @@ const ERROR_LINE_KM = 50;
 const HITBOX_WEIGHT = 25;
 const RT_MIN_STEP_M = 5;
 const RT_MAX_POINTS = 10000;
+
+// Свежесть позиции: старше этого порога — показываем предупреждение
+const GPS_STALE_SEC = 60;
 <!-- === КОНЕЦ БЛОКА 11 === -->
 
 <!-- === БЛОК 12: TABS === -->
@@ -689,6 +702,11 @@ let windMeasureStart = 0;
 let windMeasureDuration = 30;
 let windMeasureData = [];
 let windMeasureTick = null;
+
+// Активный попап: позволяет обновлять содержимое при новых GPS-точках
+let openPopupLayer = null;
+// Карта «слой → функция-генератор содержимого попапа»
+const popupContentFns = new WeakMap();
 <!-- === КОНЕЦ БЛОКА 17 === -->
 
 <!-- === БЛОК 18: WAKELOCK === -->
@@ -763,6 +781,13 @@ function fmtDuration(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
+// Абсолютное время прибытия как «ЧЧ:ММ» от «сейчас + etaSec»
+function fmtEtaAbs(etaSec) {
+  const d = new Date(Date.now() + etaSec * 1000);
+  return String(d.getHours()).padStart(2, '0') + ':' +
+         String(d.getMinutes()).padStart(2, '0');
+}
+
 function getCourseMag() {
   const v = document.getElementById('course').value.trim();
   if (v === '') return 0;
@@ -776,14 +801,57 @@ function parseDistance(v) {
   return isNaN(n) ? null : n;
 }
 
+// Регистрирует попап и запоминает функцию-генератор, чтобы потом обновлять содержимое
+function bindLivePopup(layer, content, options) {
+  if (typeof content === 'function') {
+    popupContentFns.set(layer, content);
+  }
+  layer.bindPopup(content, options || { autoPan: true });
+  return layer;
+}
+
+// Пересобирает контент активного попапа (если его генератор зарегистрирован)
+function refreshOpenPopup() {
+  if (!openPopupLayer) return;
+  const fn = popupContentFns.get(openPopupLayer);
+  if (!fn) return;
+  try {
+    openPopupLayer.setPopupContent(fn());
+  } catch (e) { /* слой мог быть удалён */ }
+}
+
+// Единая плашка «данные устарели», если возраст позиции превышает порог
+function freshnessWarning(cur) {
+  if (!cur || !cur.t) return '';
+  const age = (Date.now() - cur.t) / 1000;
+  if (age < GPS_STALE_SEC) return '';
+  const m = Math.floor(age / 60);
+  return '<br><span style="color:#c00;font-size:11px">⚠ данные устарели (' + m + ' мин)</span>';
+}
+
 function makeClickableLine(latlngs, options, popupContent) {
   const visible = L.polyline(latlngs, Object.assign({}, options, { interactive: false })).addTo(map);
   const hitbox = L.polyline(latlngs, {
     color: options.color, weight: HITBOX_WEIGHT, opacity: 0, interactive: true
   }).addTo(map);
-  hitbox.bindPopup(popupContent, { autoPan: true });
+  bindLivePopup(hitbox, popupContent, { autoPan: true });
   return [visible, hitbox];
 }
+
+// События Leaflet: запоминаем активный попап
+map.on('popupopen', (e) => {
+  openPopupLayer = e.popup._source || null;
+  // В follow-режиме попап мешает автопозиционированию — выключаем follow
+  if (followMode) {
+    followMode = false;
+    localStorage.setItem(FOLLOW_KEY, '0');
+    updateFollowBtn();
+  }
+});
+
+map.on('popupclose', () => {
+  openPopupLayer = null;
+});
 <!-- === КОНЕЦ БЛОКА 19 === -->
 
 <!-- === БЛОК 20: OFFSET === -->
@@ -911,13 +979,15 @@ map.on('dragstart', () => {
 function planeIconSvg(courseDeg, color) {
   const fill = color || '#2a7';
   // Силуэт Cessna 172 (вид сверху): высокоплан с прямым длинным крылом,
-  // узкий фюзеляж, прямой хвост с горизонтальным стабилизатором и килем.
-  // Нос смотрит вверх (север), viewBox —15×24, нос в точке (0,-11).
+  // узкий фюзеляж, скруглённый тупой нос, прямой хвост со стабилизатором и килем.
+  // Нос смотрит вверх (север), viewBox —15×24, вершина носа в точке (0,-11.3).
   return '<svg viewBox="-15 -12 30 24" width="40" height="32" ' +
     'style="transform: rotate(' + courseDeg + 'deg); transform-origin: center; filter: drop-shadow(0 0 3px rgba(0,0,0,0.65));">' +
-    '<path d="M 0,-11 ' +
-      'C 0.35,-10.8 0.5,-10.2 0.55,-9.5 ' +
-      'L 0.7,-4 ' +
+    '<path d="M -0.7,-10.6 ' +
+      'C -0.55,-11.1 -0.3,-11.3 0,-11.3 ' +
+      'C 0.3,-11.3 0.55,-11.1 0.7,-10.6 ' +
+      'L 0.85,-8.5 ' +
+      'L 0.95,-4 ' +
       'L 14.5,-4 ' +
       'L 14.5,-1 ' +
       'L 1.2,-1 ' +
@@ -936,13 +1006,13 @@ function planeIconSvg(courseDeg, color) {
       'L -1.2,-1 ' +
       'L -14.5,-1 ' +
       'L -14.5,-4 ' +
-      'L -0.7,-4 ' +
-      'L -0.55,-9.5 ' +
-      'C -0.5,-10.2 -0.35,-10.8 0,-11 ' +
+      'L -0.95,-4 ' +
+      'L -0.85,-8.5 ' +
+      'L -0.7,-10.6 ' +
       'Z" ' +
       'fill="' + fill + '" stroke="white" stroke-width="0.7" stroke-linejoin="round"/>' +
     // Кок винта
-    '<circle cx="0" cy="-10.3" r="0.55" fill="white" fill-opacity="0.75"/>' +
+    '<circle cx="0" cy="-10.9" r="0.5" fill="white" fill-opacity="0.75"/>' +
     '</svg>';
 }
 function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [40, 32], iconAnchor: [20, 16] }); }
@@ -999,7 +1069,12 @@ function targetIcon() {
 <!-- === БЛОК 25: POSITION === -->
 function getCurrentPosition() {
   if (rtTracking && rtCurrentPosition) {
-    return { lat: rtCurrentPosition.lat, lon: rtCurrentPosition.lon, source: 'GPS (РВ)' };
+    return {
+      lat: rtCurrentPosition.lat,
+      lon: rtCurrentPosition.lon,
+      t: rtCurrentPosition.t,
+      source: 'GPS (РВ)'
+    };
   }
   const lastOprs = track.length > 0 ? track[track.length - 1] : null;
   const lastGps = trackGps.length > 0 ? trackGps[trackGps.length - 1] : null;
@@ -1009,10 +1084,10 @@ function getCurrentPosition() {
     else { last = lastOprs; src = 'трек (расчёт ОПРС)'; }
   } else if (lastOprs) { last = lastOprs; src = 'трек (расчёт ОПРС)'; }
   else if (lastGps) { last = lastGps; src = 'GPS (Получить МС)'; }
-  if (last) return { lat: last.lat, lon: last.lon, source: src };
+  if (last) return { lat: last.lat, lon: last.lon, t: last.t, source: src };
   if (gpsMarker) {
     const ll = gpsMarker.getLatLng();
-    return { lat: ll.lat, lon: ll.lng, source: 'GPS' };
+    return { lat: ll.lat, lon: ll.lng, t: null, source: 'GPS' };
   }
   return null;
 }
@@ -1038,14 +1113,15 @@ function buildStationPopup(idx) {
   html += 'МПР: <b>' + mpr.toFixed(0) + '°</b><br>';
   html += 'МПС: <b>' + mps.toFixed(0) + '°</b><br>';
   html += 'Расстояние: <b>' + dist.toFixed(1) + ' км</b>';
+  html += freshnessWarning(cur);
   return html;
 }
 
 function updateMarker(idx) {
   const p = PRESET[idx];
   if (oprsMarkers[idx]) map.removeLayer(oprsMarkers[idx]);
-  oprsMarkers[idx] = L.marker([p.lat, p.lon], { draggable: false })
-    .addTo(map).bindPopup(() => buildStationPopup(idx));
+  oprsMarkers[idx] = L.marker([p.lat, p.lon], { draggable: false }).addTo(map);
+  bindLivePopup(oprsMarkers[idx], () => buildStationPopup(idx), { autoPan: true });
 }
 
 function loadPreset() {
@@ -1056,14 +1132,29 @@ function loadPreset() {
     if (p.type === 'VOR') fEl.classList.add('vor');
     updateMarker(i);
   });
-  // При старте в кадр вписываются только первые три ОПРС
-  // (Красный Кут, Ямское, Комсомольское). Саратов VOR остаётся за кадром,
-  // но всё равно отрисовывается как маркер и работает во всех расчётах.
   map.fitBounds(PRESET.slice(0, 3).map(p => [p.lat, p.lon]), { padding: [60, 60] });
 }
 <!-- === КОНЕЦ БЛОКА 26: STATION POPUPS === -->
 
 <!-- === БЛОК 27: ROUTES RENDER === -->
+function dedupeRoutePoints(points, threshold = 20) {
+  // Возвращает [{ pt, indices }] — первая по порядку точка + список всех исходных индексов,
+  // попавших в этот географический пункт (в пределах threshold метров).
+  const unique = [];
+  points.forEach((pt, idx) => {
+    const hit = unique.find(u => distance(u.pt, pt) < threshold);
+    if (hit) hit.indices.push(idx);
+    else unique.push({ pt, indices: [idx] });
+  });
+  return unique;
+}
+
+function setNavTargetFromRoute(lat, lon) {
+  setNavTarget(lat, lon);
+  map.closePopup();
+  switchTab('nav');
+}
+
 function buildRouteSegmentPopup(routeKey, idx) {
   const route = ROUTES[routeKey];
   const A = route.points[idx];
@@ -1107,6 +1198,7 @@ function buildRouteSegmentPopup(routeKey, idx) {
       html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
       html += offHtml;
     }
+    html += freshnessWarning(cur);
   } else {
     html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
     html += '<span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
@@ -1114,12 +1206,18 @@ function buildRouteSegmentPopup(routeKey, idx) {
   return html;
 }
 
-function buildRoutePointPopup(routeKey, idx) {
+function buildRoutePointPopup(routeKey, idx, allIndices) {
   const route = ROUTES[routeKey];
   const pt = route.points[idx];
+
   let html = '<b>' + route.name + '</b><br>';
-  html += 'Точка ' + (idx + 1) + ': <b>' + pt.name + '</b><br>';
-  html += ddToDM(pt.lat, true) + ' ' + ddToDM(pt.lon, false);
+  html += 'Точка ' + (idx + 1) + ': <b>' + pt.name + '</b>';
+
+  if (allIndices && allIndices.length > 1) {
+    const others = allIndices.slice(1).map(i => 'ППМ ' + (i + 1)).join(', ');
+    html += '<br><span style="color:#888;font-size:11px">(также ' + others + ')</span>';
+  }
+  html += '<br>' + ddToDM(pt.lat, true) + ' ' + ddToDM(pt.lon, false);
 
   const cur = getCurrentPosition();
   if (cur) {
@@ -1130,17 +1228,23 @@ function buildRoutePointPopup(routeKey, idx) {
     html += '<b>От текущего положения:</b><br>';
     html += 'Расстояние: <b>' + distKm.toFixed(2) + ' км</b><br>';
     html += 'МПУ: <b>' + mpu.toFixed(0) + '°</b>';
+
     const spdKmh = getCurrentSpeedKmh(pt);
     if (spdKmh !== null && spdKmh > 1) {
       const etaSec = (distKm / spdKmh) * 3600;
       const v = convertSpeed(spdKmh / 3.6);
       html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
       html += '<b>Скорость:</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
-      html += '<br><b>ETA:</b> <span style="color:#2a7"><b>' + fmtDuration(etaSec) + '</b></span>';
+      html += '<br><b>ETE:</b> ' + fmtDuration(etaSec);
+      html += '<br><b>ETA:</b> <span style="color:#2a7"><b>' + fmtEtaAbs(etaSec) + '</b></span>';
     }
+    html += freshnessWarning(cur);
   } else {
     html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
   }
+
+  html += '<button class="popup-goal-btn" onclick="setNavTargetFromRoute(' +
+          pt.lat + ',' + pt.lon + ')">🎯 Сделать целью</button>';
   return html;
 }
 
@@ -1163,10 +1267,12 @@ function renderRoutes() {
       routeLayers[key].push(pair[0], pair[1]);
     }
 
-    route.points.forEach((pt, i) => {
-      const m = L.marker([pt.lat, pt.lon], { icon: routeDotIcon(route.color) })
-        .addTo(map)
-        .bindPopup(() => buildRoutePointPopup(key, i));
+    // Один маркер на каждую географическую точку, попап ссылается на первый индекс
+    const uniquePoints = dedupeRoutePoints(route.points);
+    uniquePoints.forEach(({ pt, indices }) => {
+      const primaryIdx = indices[0];
+      const m = L.marker([pt.lat, pt.lon], { icon: routeDotIcon(route.color) }).addTo(map);
+      bindLivePopup(m, () => buildRoutePointPopup(key, primaryIdx, indices), { autoPan: true });
       routeLayers[key].push(m);
     });
   });
@@ -1184,7 +1290,6 @@ function metersPerPixel(lat, zoom) {
 function makeAreaLabel(lat, radiusM, color, num) {
   const mpp = metersPerPixel(lat, map.getZoom());
   const diamPx = (2 * radiusM) / mpp;
-  // Ограничиваем разумными рамками: очень мелко/крупно — нечитаемо
   const fontSize = Math.min(240, Math.max(14, Math.round(diamPx * 0.85)));
   const sizePx = Math.round(fontSize * 1.3);
   return L.divIcon({
@@ -1230,12 +1335,10 @@ function renderAreas() {
                               ddToDM(z.lat, true) + ' ' + ddToDM(z.lon, false) + '<br>Радиус: 2,5 км');
       areaLayers.zones.push(circle);
 
-      // Красная точка в центре
       const dot = makeAreaDot();
       dot.setLatLng([z.lat, z.lon]).addTo(map);
       areaLayers.zones.push(dot);
 
-      // Номер зоны
       const label = L.marker([z.lat, z.lon], {
         icon: makeAreaLabel(z.lat, 2500, '#ffc8c8', extractNum(z.id)),
         interactive: false, keyboard: false
@@ -1256,12 +1359,10 @@ function renderAreas() {
                               ddToDM(s.lat, true) + ' ' + ddToDM(s.lon, false) + '<br>Радиус: 5 км');
       areaLayers.sectors.push(circle);
 
-      // Красная точка в центре
       const dot = makeAreaDot();
       dot.setLatLng([s.lat, s.lon]).addTo(map);
       areaLayers.sectors.push(dot);
 
-      // Номер сектора
       const label = L.marker([s.lat, s.lon], {
         icon: makeAreaLabel(s.lat, 5000, '#c8c8ff', extractNum(s.id)),
         interactive: false, keyboard: false
@@ -1271,7 +1372,6 @@ function renderAreas() {
   }
 }
 
-// При смене зума пересчитываем размер цифр, чтобы они держали круг
 map.on('zoomend', () => {
   if (document.getElementById('toggleZones').checked ||
       document.getElementById('toggleSectors').checked) {
@@ -1636,18 +1736,15 @@ function buildNavPopupHtml() {
       html += '<br><b>МК:</b> <span style="color:#2a7"><b>' + n.wind.mk.toFixed(0) + '°</b></span>';
     }
     if (hasEta) {
-      const etaDate = new Date(Date.now() + etaSec * 1000);
-      const etaAbs = String(etaDate.getHours()).padStart(2, '0') + ':' +
-                     String(etaDate.getMinutes()).padStart(2, '0');
       if (hasWind) html += '<br>';
       html += '<b>ETE:</b> ' + fmtDuration(etaSec);
-      html += '<br><b>ETA:</b> ' + etaAbs;
+      html += '<br><b>ETA:</b> ' + fmtEtaAbs(etaSec);
     }
   } else {
     html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
     html += '<span style="color:#888;font-size:11px">Заполните ветер и скорость или включите GPS</span>';
   }
-  return html;
+  return html + freshnessWarning(n.cur);
 }
 
 function updateNavUI() {
@@ -1657,8 +1754,8 @@ function updateNavUI() {
 
   if (navTarget) {
     const popupFn = () => buildNavPopupHtml();
-    navTargetMarker = L.marker([navTarget.lat, navTarget.lon], { icon: targetIcon() })
-      .addTo(map).bindPopup(popupFn, { autoPan: true });
+    navTargetMarker = L.marker([navTarget.lat, navTarget.lon], { icon: targetIcon() }).addTo(map);
+    bindLivePopup(navTargetMarker, popupFn, { autoPan: true });
     if (navLineStart) {
       navLine = makeClickableLine(
         [[navLineStart.lat, navLineStart.lon], [navTarget.lat, navTarget.lon]],
@@ -1671,7 +1768,8 @@ function updateNavUI() {
   const posEl = document.getElementById('nav-pos');
   if (cur) {
     posEl.innerHTML = '<b>' + cur.source + '</b><br>' +
-                      ddToDM(cur.lat, true) + ' ' + ddToDM(cur.lon, false);
+                      ddToDM(cur.lat, true) + ' ' + ddToDM(cur.lon, false) +
+                      freshnessWarning(cur);
   } else {
     posEl.innerHTML = '<span style="color:#c00">Не определено. Включите GPS или посчитайте по ОПРС.</span>';
   }
@@ -1735,11 +1833,8 @@ function updateNavUI() {
       html += '<b>Путевая:</b> ' + n.wind.wGround.toFixed(0) + ' км/ч<br>';
     }
     if (etaSec !== null) {
-      const etaDate = new Date(Date.now() + etaSec * 1000);
-      const etaAbs = String(etaDate.getHours()).padStart(2, '0') + ':' +
-                     String(etaDate.getMinutes()).padStart(2, '0');
       html += '<b>ETE:</b> ' + fmtDuration(etaSec) + '<br>';
-      html += '<b>ETA:</b> ' + etaAbs;
+      html += '<b>ETA:</b> ' + fmtEtaAbs(etaSec);
     }
   } else {
     html += '<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">';
@@ -1817,14 +1912,8 @@ function onRTPosition(pos) {
   renderRTTrack();
   renderRTMarker();
   updateRTUI();
+  refreshOpenPopup();
 
-  const newPopupHtml = buildNavPopupHtml();
-  if (navTargetMarker && navTargetMarker.isPopupOpen && navTargetMarker.isPopupOpen()) {
-    navTargetMarker.setPopupContent(newPopupHtml);
-  }
-  if (navLine && navLine[1] && navLine[1].isPopupOpen && navLine[1].isPopupOpen()) {
-    navLine[1].setPopupContent(newPopupHtml);
-  }
   if (isFollowOn() && currentTab === 'rtnav') {
     map.setView([lat, lon], map.getZoom(), { animate: false });
   }
@@ -1926,7 +2015,6 @@ function updateRTUI() {
       spEl.textContent = v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
     } else spEl.textContent = '—';
 
-    // ФМПУ — магнитный курс от GPS (heading минус склонение)
     const fmpu = getGPSHeadingMag();
     if (fmpu !== null) hdEl.textContent = fmpu.toFixed(0) + '°';
     else hdEl.textContent = '—';
@@ -1997,7 +2085,8 @@ function updateRTUI() {
     const v = convertSpeed(gpsSpeedKmh / 3.6);
     const etaSec = (n.distKm / gpsSpeedKmh) * 3600;
     html += '<br><b>Путевая (GPS):</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
-    html += '<br><b>ETA:</b> ' + fmtDuration(etaSec);
+    html += '<br><b>ETE:</b> ' + fmtDuration(etaSec);
+    html += '<br><b>ETA:</b> ' + fmtEtaAbs(etaSec);
   }
   resEl.innerHTML = html;
 }
@@ -2006,7 +2095,6 @@ function updateRTUI() {
 // ============== РАСЧЁТ ВЕТРА ПО ФАКТУ ПОЛЁТА ====================
 // ================================================================
 
-// TAS → км/ч (внутренние расчёты всегда в км/ч)
 function getTASKmh() {
   const v = parseFloat(document.getElementById('windTAS').value);
   if (isNaN(v) || v <= 0) return null;
@@ -2019,13 +2107,11 @@ function updateMeasureLabel() {
   document.getElementById('measureDurationLabel').textContent = s + ' с';
 }
 
-// Обёртка для кнопки: если измерение идёт — отменяем, иначе — начинаем.
 function windMeasureBtnClick() {
   if (windMeasuring) cancelWindMeasure();
   else startWindMeasure();
 }
 
-// Проверка прямолинейности: максимальное отклонение курса сегмента от среднего
 function checkStraight(pts) {
   if (pts.length < 3) return { ok: false, spread: 0 };
   const bearings = [];
@@ -2046,7 +2132,6 @@ function checkStraight(pts) {
   return { ok: maxDev < 15, spread: maxDev };
 }
 
-// Основной расчёт
 function doWindCalc(pts) {
   const resultEl = document.getElementById('windResult');
   const V = getTASKmh();
@@ -2065,20 +2150,18 @@ function doWindCalc(pts) {
     return;
   }
   const distKm = distance(first, last) / 1000;
-  const W = distKm * 3600 / dt;               // путевая, км/ч
+  const W = distKm * 3600 / dt;
   const FMPU_true = trueBearing(first, last);
-  const FMPU = norm360(FMPU_true - decl);      // магнитный
+  const FMPU = norm360(FMPU_true - decl);
 
   let US = norm360(FMPU - MK);
   if (US > 180) US -= 360;
 
-  // Ветровой треугольник
   const Ux = V * Math.sin(toRad(MK)) - W * Math.sin(toRad(FMPU));
   const Uy = V * Math.cos(toRad(MK)) - W * Math.cos(toRad(FMPU));
   const U = Math.sqrt(Ux*Ux + Uy*Uy);
   const delta = norm360(toDeg(Math.atan2(Ux, Uy)));
 
-  // U в трёх единицах сразу
   const uKmh = U;
   const uMs = U / 3.6;
   const uKt = U / 1.852;
@@ -2103,7 +2186,6 @@ function applyWindToFields(delta, uKmh) {
   document.getElementById('windResult').innerHTML += '<br><span style="color:#2a7">✓ Применено к полям ветра на вкладке Навигация</span>';
 }
 
-// Режим «Сразу» — последние 60 секунд
 function calcWindInstant() {
   const resultEl = document.getElementById('windResult');
   if (!rtTracking) {
@@ -2124,7 +2206,6 @@ function calcWindInstant() {
   doWindCalc(seg);
 }
 
-// Режим «Измерить» — сбор данных за указанное время
 function startWindMeasure() {
   const resultEl = document.getElementById('windResult');
   if (!rtTracking) {
@@ -2155,7 +2236,6 @@ function startWindMeasure() {
   resultEl.innerHTML = 'Измерение... ' + windMeasureDuration + ' с. Летите прямо с постоянным курсом.';
 }
 
-// Естественное завершение измерения (по таймеру)
 function stopWindMeasure() {
   if (windMeasureTick) {
     clearInterval(windMeasureTick);
@@ -2180,7 +2260,6 @@ function stopWindMeasure() {
   doWindCalc(data);
 }
 
-// Отмена измерения пользователем
 function cancelWindMeasure() {
   if (windMeasureTick) {
     clearInterval(windMeasureTick);
@@ -2192,7 +2271,6 @@ function cancelWindMeasure() {
   document.getElementById('windResult').innerHTML = '<span style="color:#888">Измерение отменено.</span>';
 }
 
-// Восстановление внешнего вида кнопки «Измерить»
 function restoreWindMeasureButton() {
   const btn = document.getElementById('windMeasureBtn');
   btn.classList.remove('stop');
@@ -2251,6 +2329,7 @@ function getMyPosition() {
       trackGps.push({ lat, lon, t: Date.now() });
       saveTrackGps();
       renderTrack();
+      refreshOpenPopup();
 
       resultEl.innerHTML = html;
       updateNavUI();
@@ -2390,6 +2469,7 @@ function calculate() {
     track.push({ lat: pos.lat, lon: pos.lon, t: Date.now() });
     saveTrack();
     renderTrack();
+    refreshOpenPopup();
 
     let geomWarning = '';
     if (usedForLines.length === 2) {
@@ -2430,7 +2510,6 @@ function calculate() {
   }
 }
 
-// Синхронизация МК: Место → РВ
 function onCourseChange() {
   const a = document.getElementById('course');
   const b = document.getElementById('courseRT');
@@ -2438,7 +2517,6 @@ function onCourseChange() {
   if (track.length > 0 || trackGps.length > 0) renderTrack();
 }
 
-// Синхронизация МК: РВ → Место
 function onCourseRTInput() {
   const a = document.getElementById('course');
   const b = document.getElementById('courseRT');
