@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.52</title>
+<title>НАЕБАЦИЯ v1.53</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -12,9 +12,6 @@
 <style>
   html, body { margin:0; height:100%; font-family: sans-serif; overflow:hidden; }
   #map { height:100%; width:100%; }
-
-  /* Скрываем флажок Украины в атрибуции Leaflet */
-  .leaflet-attribution-flag { display: none !important; }
 
   #map.nav-mode .leaflet-overlay-pane,
   #map.nav-mode .leaflet-marker-pane,
@@ -116,6 +113,7 @@
   .oprs.course-box { border-color:#2a7; background:#f0fff5; }
   .oprs.routes-box { border-color:#c80; background:#fff8f0; }
   .oprs.areas-box { border-color:#d95; background:#fff5f0; }
+  .oprs.circle-box { border-color:#2a7; background:#f0fff5; }
   .oprs.nav-box { border-color:#e67e22; background:#fff8f0; }
   .oprs.rt-box { border-color:#08c; background:#f0f8ff; }
   .oprs b { display:block; margin-bottom:4px; font-size:13px; }
@@ -174,13 +172,6 @@
 
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
-
-  .popup-goal-btn {
-    width:100%; margin-top:6px; padding:8px;
-    background:#e67e22; color:white; border:none; border-radius:4px;
-    font-size:13px; cursor:pointer; font-family:inherit;
-  }
-  .popup-goal-btn:active { background:#c4621a; }
 </style>
 <!-- === КОНЕЦ БЛОКА 4: STYLE: ЭЛЕМЕНТЫ === -->
 
@@ -276,15 +267,23 @@
       <div class="calc-line" id="calc3"></div>
     </div>
 
-    <div class="oprs vor" id="block4">
-      <b>VOR <span id="label4"></span> <span class="freq vor" id="freq4"></span></b>
+    <div class="oprs" id="block4">
+      <b>ОПРС 4 <span id="label4"></span> <span class="freq" id="freq4"></span></b>
+      <div class="row">
+        <label>МПР:</label> <input id="brg4" placeholder="—" inputmode="numeric" oninput="preview()"> °
+      </div>
+      <div class="calc-line" id="calc4"></div>
+    </div>
+
+    <div class="oprs vor" id="block5">
+      <b>VOR <span id="label5"></span> <span class="freq vor" id="freq5"></span></b>
       <div class="row">
         <label>Радиал:</label> <input id="vorRadial" placeholder="—" inputmode="numeric" oninput="preview()"> °
       </div>
       <div class="row">
         <label>Дальность:</label> <input id="vorDist" placeholder="—" inputmode="decimal" oninput="preview()"> км
       </div>
-      <div class="calc-line" id="calc4"></div>
+      <div class="calc-line" id="calc5"></div>
     </div>
 
     <div class="row">
@@ -453,8 +452,24 @@
       </div>
     </div>
 
+    <div class="oprs circle-box">
+      <b>Круг полётов</b>
+      <div class="route-toggle">
+        <input type="checkbox" id="toggleCircle" onchange="renderCircle()">
+        <span class="route-swatch" style="background:#2a7"></span>
+        <label for="toggleCircle">Показывать круг</label>
+      </div>
+      <div class="row" style="margin-top:4px;">
+        <label>Тип:</label>
+        <select id="circleType" onchange="renderCircle()" style="width:auto;display:inline-block;">
+          <option value="small" selected>Малый</option>
+          <option value="big">Большой</option>
+        </select>
+      </div>
+    </div>
+
     <div class="oprs areas-box">
-      <b>Зоны и районы</b>
+      <b>Зоны и сектора</b>
       <div class="route-toggle">
         <input type="checkbox" id="toggleZones" onchange="renderAreas()">
         <span class="route-swatch" style="background:rgba(220,50,50,0.4);border:1px solid #dc3232;"></span>
@@ -463,7 +478,7 @@
       <div class="route-toggle">
         <input type="checkbox" id="toggleSectors" onchange="renderAreas()">
         <span class="route-swatch" style="background:rgba(50,50,220,0.4);border:1px solid #3232dc;"></span>
-        <label for="toggleSectors">Районы (ЗПП) — R 5 км</label>
+        <label for="toggleSectors">Сектора (ЗПП) — R 5 км</label>
       </div>
     </div>
   </div>
@@ -505,6 +520,10 @@ const RT_MAX_POINTS = 10000;
 
 // Свежесть позиции: старше этого порога — показываем предупреждение
 const GPS_STALE_SEC = 60;
+
+// Опорные точки п.п. Красный Кут
+const KTA_POINT  = { lat: 50.960278,  lon: 46.945556  };
+const DPRM_POINT = { lat: 50.9276919, lon: 46.9191843 };
 <!-- === КОНЕЦ БЛОКА 11 === -->
 
 <!-- === БЛОК 12: TABS === -->
@@ -577,8 +596,12 @@ const PRESET = [
   { name: 'Красный Кут',   lat: 50.9330, lon: 46.9180, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
   { name: 'Ямское',         lat: 50.9675, lon: 47.2190, freq: '1245 кГц',  type: 'NDB', color: 'red' },
   { name: 'Комсомольское',  lat: 50.8000, lon: 47.0445, freq: '310 кГц',   type: 'NDB', color: 'orange' },
+  { name: 'Красноармейск',  lat: 51.02833, lon: 45.69778, freq: '932 кГц', type: 'NDB', color: 'green' },
   { name: 'Саратов VOR',    lat: 51.5628, lon: 46.0458, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
 ];
+
+// Индекс VOR в PRESET (после добавления 4-го NDB стал 4)
+const VOR_IDX = 4;
 <!-- === КОНЕЦ БЛОКА 14 === -->
 
 <!-- === БЛОК 15: DATA: ROUTES === -->
@@ -621,7 +644,7 @@ const ROUTES = {
   GAGARIN_FWD: {
     name: 'Гагарин (туда)', color: '#e33',
     points: [
-      { name: 'UWSK (ДПРМ)',      lat: 50.9230, lon: 46.9180 },
+      { name: 'UWSK (ДПРМ)',      lat: 50.9276919, lon: 46.9191843 },
       { name: 'тр. Зорино',       lat: 51.1167, lon: 46.9667 },
       { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
       { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
@@ -637,7 +660,7 @@ const ROUTES = {
       { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
       { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
       { name: 'тр. Зорино',       lat: 51.1167, lon: 46.9667 },
-      { name: 'UWSK (ДПРМ)',      lat: 50.9230, lon: 46.9180 }
+      { name: 'UWSK (ДПРМ)',      lat: 50.9276919, lon: 46.9191843 }
     ]
   }
 };
@@ -645,33 +668,42 @@ const ROUTES = {
 let routeLayers = { A4: [], A5: [], LOCAL: [], GAGARIN_FWD: [], GAGARIN_BACK: [] };
 <!-- === КОНЕЦ БЛОКА 15 === -->
 
-<!-- === БЛОК 16: DATA: ZONES === -->
+<!-- === БЛОК 16: DATA: ZONES / SECTORS === -->
+// Зоны (ПЗ) — данные из таблицы, R = 2,5 км.
+// zmpu — ЗМПУ в зону (магнитное), s — удаление от КТА в км.
 const ZONES = [
-  { id: 'ПЗ №1', name: 'пр. Орлов',          lat: 51.08667, lon: 47.05500 },
-  { id: 'ПЗ №2', name: 'н.п. Рудня',          lat: 51.01667, lon: 47.07167 },
-  { id: 'ПЗ №3', name: 'ю. ж/д развилка',     lat: 50.90167, lon: 46.98833 },
-  { id: 'ПЗ №4', name: 'н.п. Усатово',        lat: 50.80000, lon: 46.90000 },
-  { id: 'ПЗ №5', name: 'юж. Чкалово',         lat: 50.67050, lon: 47.04000 },
-  { id: 'ПЗ №6', name: 'с.в. Тимофеево',      lat: 50.82500, lon: 47.06667 },
-  { id: 'ПЗ №7', name: 'Журавлевка',          lat: 50.88333, lon: 47.16667 },
-  { id: 'ПЗ №8', name: 'Первое Мая',          lat: 50.86667, lon: 47.33333 },
-  { id: 'ПЗ №9', name: 'с.з. Придорожное',    lat: 51.02000, lon: 47.23333 }
+  { id: 'ПЗ №1', name: 'пруд Орлов',             lat: 51.08667, lon: 47.05500, zmpu: 17,  s: 16 },
+  { id: 'ПЗ №2', name: 'с.з. н.п. Рудня 2 км',   lat: 51.01667, lon: 47.07167, zmpu: 44,  s: 11 },
+  { id: 'ПЗ №3', name: 'юж. развилки ж.д. 3 км', lat: 50.90167, lon: 46.98833, zmpu: 145, s: 7  },
+  { id: 'ПЗ №4', name: 'н.п. Усатово',           lat: 50.80000, lon: 46.90000, zmpu: 179, s: 18 },
+  { id: 'ПЗ №5', name: 'юж. н.п. Чкалово',       lat: 50.67050, lon: 47.04000, zmpu: 157, s: 33 },
+  { id: 'ПЗ №6', name: 'с.в. ж/д ст. Тимофеево', lat: 50.82500, lon: 47.06667, zmpu: 139, s: 17 },
+  { id: 'ПЗ №7', name: 'н.п. Журавлевка',        lat: 50.88333, lon: 47.16667, zmpu: 108, s: 18 },
+  { id: 'ПЗ №8', name: 'н.п. Первое Мая',        lat: 50.86667, lon: 47.33333, zmpu: 100, s: 29 },
+  { id: 'ПЗ №9', name: 'с.з. н.п. Придорожное',  lat: 51.02000, lon: 47.23333, zmpu: 61,  s: 21 }
 ];
 
+// Сектора (ЗПП) — данные из таблицы, R = 5 км.
+// zmpu — ЗМПУ в зону (магнитное), s — удаление от ДПРМ в км.
 const SECTORS = [
-  { id: 'ЗПП №1', name: 'н.п. Мухино',          lat: 51.05833, lon: 46.90500 },
-  { id: 'ЗПП №2', name: 'н.п. Первомайское',    lat: 50.93333, lon: 46.70000 },
-  { id: 'ЗПП №3', name: 'н.п. Лепехинка',       lat: 50.67500, lon: 46.87333 },
-  { id: 'ЗПП №4', name: 'н.п. Доронкин',        lat: 50.71667, lon: 47.23333 },
-  { id: 'ЗПП №5', name: 'пр. Таловский',        lat: 50.93333, lon: 47.50000 },
-  { id: 'ЗПП №6', name: 'пр. Новый',            lat: 51.09167, lon: 47.40000 }
+  { id: 'ЗПП №1', name: 'н.п. Мухино',        lat: 51.05833, lon: 46.90500, zmpu: 345, s: 16 },
+  { id: 'ЗПП №2', name: 'н.п. Первомайское',  lat: 50.93333, lon: 46.70000, zmpu: 262, s: 15 },
+  { id: 'ЗПП №3', name: 'н.п. Лепехинка',     lat: 50.67500, lon: 46.87333, zmpu: 176, s: 29 },
+  { id: 'ЗПП №4', name: 'н.п. Доронкин',      lat: 50.71667, lon: 47.23333, zmpu: 125, s: 32 },
+  { id: 'ЗПП №5', name: 'пр. Таловский',      lat: 50.93333, lon: 47.50000, zmpu: 78,  s: 41 },
+  { id: 'ЗПП №6', name: 'пр. Новый',          lat: 51.09167, lon: 47.40000, zmpu: 50,  s: 38 }
 ];
 
 let areaLayers = { zones: [], sectors: [] };
+
+// Форматирование ЗМПУ как «017°» (три цифры с ведущим нулём, как в таблице)
+function fmtZmpu(v) {
+  return String(Math.round(v)).padStart(3, '0') + '°';
+}
 <!-- === КОНЕЦ БЛОКА 16 === -->
 
 <!-- === БЛОК 17: STATE === -->
-let oprsMarkers = [null, null, null, null];
+let oprsMarkers = [null, null, null, null, null];
 let stationLines = [];
 let errorLines = [];
 let trackSegments = [];
@@ -679,8 +711,8 @@ let trackPointLayers = [];
 let posMarker = null;
 let gpsMarker = null;
 
-let track = [];       // трек ОПРС (зелёный)
-let trackGps = [];    // трек GPS (оранжевый)
+let track = [];
+let trackGps = [];
 
 let navTarget = null;
 let navLineStart = null;
@@ -696,17 +728,17 @@ let rtLineLayer = null;
 let rtStartMarker = null;
 let rtMarker = null;
 
-// Расчёт ветра в РВ
 let windMeasuring = false;
 let windMeasureStart = 0;
 let windMeasureDuration = 30;
 let windMeasureData = [];
 let windMeasureTick = null;
 
-// Активный попап: позволяет обновлять содержимое при новых GPS-точках
 let openPopupLayer = null;
-// Карта «слой → функция-генератор содержимого попапа»
 const popupContentFns = new WeakMap();
+
+// Слой круга полётов
+let circleLayer = [];
 <!-- === КОНЕЦ БЛОКА 17 === -->
 
 <!-- === БЛОК 18: WAKELOCK === -->
@@ -739,6 +771,11 @@ document.addEventListener('visibilitychange', async () => {
 function toRad(d) { return d * Math.PI / 180; }
 function toDeg(r) { return r * 180 / Math.PI; }
 function norm360(d) { return ((d % 360) + 360) % 360; }
+function norm180(a) {
+  while (a > 180) a -= 360;
+  while (a < -180) a += 360;
+  return a;
+}
 
 function ddToDM(val, isLat) {
   const hemi = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
@@ -781,7 +818,6 @@ function fmtDuration(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-// Абсолютное время прибытия как «ЧЧ:ММ» от «сейчас + etaSec»
 function fmtEtaAbs(etaSec) {
   const d = new Date(Date.now() + etaSec * 1000);
   return String(d.getHours()).padStart(2, '0') + ':' +
@@ -795,13 +831,18 @@ function getCourseMag() {
   return isNaN(n) ? 0 : n;
 }
 
+function getDecl() {
+  const v = document.getElementById('decl').value;
+  const n = parseFloat(v);
+  return isNaN(n) ? 11 : n;
+}
+
 function parseDistance(v) {
   if (v === '') return null;
   const n = parseFloat(v.replace(',', '.'));
   return isNaN(n) ? null : n;
 }
 
-// Регистрирует попап и запоминает функцию-генератор, чтобы потом обновлять содержимое
 function bindLivePopup(layer, content, options) {
   if (typeof content === 'function') {
     popupContentFns.set(layer, content);
@@ -810,7 +851,6 @@ function bindLivePopup(layer, content, options) {
   return layer;
 }
 
-// Пересобирает контент активного попапа (если его генератор зарегистрирован)
 function refreshOpenPopup() {
   if (!openPopupLayer) return;
   const fn = popupContentFns.get(openPopupLayer);
@@ -820,7 +860,6 @@ function refreshOpenPopup() {
   } catch (e) { /* слой мог быть удалён */ }
 }
 
-// Единая плашка «данные устарели», если возраст позиции превышает порог
 function freshnessWarning(cur) {
   if (!cur || !cur.t) return '';
   const age = (Date.now() - cur.t) / 1000;
@@ -838,10 +877,8 @@ function makeClickableLine(latlngs, options, popupContent) {
   return [visible, hitbox];
 }
 
-// События Leaflet: запоминаем активный попап
 map.on('popupopen', (e) => {
   openPopupLayer = e.popup._source || null;
-  // В follow-режиме попап мешает автопозиционированию — выключаем follow
   if (followMode) {
     followMode = false;
     localStorage.setItem(FOLLOW_KEY, '0');
@@ -978,9 +1015,6 @@ map.on('dragstart', () => {
 <!-- === БЛОК 24: ICONS === -->
 function planeIconSvg(courseDeg, color) {
   const fill = color || '#2a7';
-  // Силуэт Cessna 172 (вид сверху): высокоплан с прямым длинным крылом,
-  // узкий фюзеляж, скруглённый тупой нос, прямой хвост со стабилизатором и килем.
-  // Нос смотрит вверх (север), viewBox —15×24, вершина носа в точке (0,-11.3).
   return '<svg viewBox="-15 -12 30 24" width="40" height="32" ' +
     'style="transform: rotate(' + courseDeg + 'deg); transform-origin: center; filter: drop-shadow(0 0 3px rgba(0,0,0,0.65));">' +
     '<path d="M -0.7,-10.6 ' +
@@ -1011,7 +1045,6 @@ function planeIconSvg(courseDeg, color) {
       'L -0.7,-10.6 ' +
       'Z" ' +
       'fill="' + fill + '" stroke="white" stroke-width="0.7" stroke-linejoin="round"/>' +
-    // Кок винта
     '<circle cx="0" cy="-10.9" r="0.5" fill="white" fill-opacity="0.75"/>' +
     '</svg>';
 }
@@ -1062,6 +1095,14 @@ function targetIcon() {
           '<div style="position:absolute;left:11px;top:11px;width:10px;height:10px;background:#e67e22;border-radius:50%;border:2px solid white;"></div>' +
           '</div>',
     iconSize: [32, 32], iconAnchor: [16, 16]
+  });
+}
+function turnIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:22px;height:22px;background:' + color + ';border:2px solid white;border-radius:50%;' +
+          'box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>',
+    iconSize: [22, 22], iconAnchor: [11, 11]
   });
 }
 <!-- === КОНЕЦ БЛОКА 24 === -->
@@ -1138,8 +1179,6 @@ function loadPreset() {
 
 <!-- === БЛОК 27: ROUTES RENDER === -->
 function dedupeRoutePoints(points, threshold = 20) {
-  // Возвращает [{ pt, indices }] — первая по порядку точка + список всех исходных индексов,
-  // попавших в этот географический пункт (в пределах threshold метров).
   const unique = [];
   points.forEach((pt, idx) => {
     const hit = unique.find(u => distance(u.pt, pt) < threshold);
@@ -1147,12 +1186,6 @@ function dedupeRoutePoints(points, threshold = 20) {
     else unique.push({ pt, indices: [idx] });
   });
   return unique;
-}
-
-function setNavTargetFromRoute(lat, lon) {
-  setNavTarget(lat, lon);
-  map.closePopup();
-  switchTab('nav');
 }
 
 function buildRouteSegmentPopup(routeKey, idx) {
@@ -1242,9 +1275,6 @@ function buildRoutePointPopup(routeKey, idx, allIndices) {
   } else {
     html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
   }
-
-  html += '<button class="popup-goal-btn" onclick="setNavTargetFromRoute(' +
-          pt.lat + ',' + pt.lon + ')">🎯 Сделать целью</button>';
   return html;
 }
 
@@ -1267,7 +1297,6 @@ function renderRoutes() {
       routeLayers[key].push(pair[0], pair[1]);
     }
 
-    // Один маркер на каждую географическую точку, попап ссылается на первый индекс
     const uniquePoints = dedupeRoutePoints(route.points);
     uniquePoints.forEach(({ pt, indices }) => {
       const primaryIdx = indices[0];
@@ -1281,12 +1310,10 @@ function renderRoutes() {
 
 <!-- === БЛОК 28: AREAS RENDER === -->
 
-// Метры на пиксель на данной широте и зуме
 function metersPerPixel(lat, zoom) {
   return 156543.03392 * Math.cos(toRad(lat)) / Math.pow(2, zoom);
 }
 
-// Иконка с номером, размер подгоняется под диаметр круга в пикселях
 function makeAreaLabel(lat, radiusM, color, num) {
   const mpp = metersPerPixel(lat, map.getZoom());
   const diamPx = (2 * radiusM) / mpp;
@@ -1308,7 +1335,6 @@ function makeAreaLabel(lat, radiusM, color, num) {
   });
 }
 
-// Красная точка центра
 function makeAreaDot() {
   return L.circleMarker([0, 0], {
     radius: 4, color: '#ffffff', weight: 1.5,
@@ -1316,10 +1342,25 @@ function makeAreaDot() {
   });
 }
 
-// Из «ПЗ №1» / «ЗПП №3» достаём только цифру
 function extractNum(id) {
   const m = id.match(/\d+/);
   return m ? m[0] : id;
+}
+
+function buildZonePopup(z) {
+  let html = '<b>' + z.id + '</b> · ' + z.name;
+  html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+  html += 'Удаление от КТА: <b>' + z.s + ' км</b><br>';
+  html += 'ЗМПУ в зону: <b>' + fmtZmpu(z.zmpu) + '</b>';
+  return html;
+}
+
+function buildSectorPopup(s) {
+  let html = '<b>' + s.id + '</b> · ' + s.name;
+  html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
+  html += 'Удаление от ДПРМ: <b>' + s.s + ' км</b><br>';
+  html += 'ЗМПУ в зону: <b>' + fmtZmpu(s.zmpu) + '</b>';
+  return html;
 }
 
 function renderAreas() {
@@ -1331,8 +1372,8 @@ function renderAreas() {
       const circle = L.circle([z.lat, z.lon], {
         radius: 2500, color: '#dc3232', weight: 2, opacity: 0.8,
         fillColor: '#dc3232', fillOpacity: 0.15
-      }).addTo(map).bindPopup('<b>' + z.id + '</b><br>' + z.name + '<br>' +
-                              ddToDM(z.lat, true) + ' ' + ddToDM(z.lon, false) + '<br>Радиус: 2,5 км');
+      }).addTo(map);
+      bindLivePopup(circle, () => buildZonePopup(z), { autoPan: true });
       areaLayers.zones.push(circle);
 
       const dot = makeAreaDot();
@@ -1355,8 +1396,8 @@ function renderAreas() {
       const circle = L.circle([s.lat, s.lon], {
         radius: 5000, color: '#3232dc', weight: 2, opacity: 0.8,
         fillColor: '#3232dc', fillOpacity: 0.15
-      }).addTo(map).bindPopup('<b>' + s.id + '</b><br>' + s.name + '<br>' +
-                              ddToDM(s.lat, true) + ' ' + ddToDM(s.lon, false) + '<br>Радиус: 5 км');
+      }).addTo(map);
+      bindLivePopup(circle, () => buildSectorPopup(s), { autoPan: true });
       areaLayers.sectors.push(circle);
 
       const dot = makeAreaDot();
@@ -1379,6 +1420,191 @@ map.on('zoomend', () => {
   }
 });
 <!-- === КОНЕЦ БЛОКА 28 === -->
+
+<!-- === БЛОК 28-B: CIRCLE RENDER === -->
+
+// Локальная плоская СК относительно КТА: x — восток, y — север (м)
+function ktaCosLat() { return Math.cos(toRad(KTA_POINT.lat)); }
+
+function toXYkta(p) {
+  const R = 6371000;
+  const c = ktaCosLat();
+  return {
+    x: toRad(p.lon - KTA_POINT.lon) * R * c,
+    y: toRad(p.lat - KTA_POINT.lat) * R
+  };
+}
+function fromXYkta(xy) {
+  const R = 6371000;
+  const c = ktaCosLat();
+  return {
+    lat: KTA_POINT.lat + toDeg(xy.y / R),
+    lon: KTA_POINT.lon + toDeg(xy.x / (R * c))
+  };
+}
+function dirVec(magDeg, decl) {
+  const t = magDeg + decl;
+  return { x: Math.sin(toRad(t)), y: Math.cos(toRad(t)) };
+}
+function advancePt(xy, magDeg, distM, decl) {
+  const d = dirVec(magDeg, decl);
+  return { x: xy.x + d.x * distM, y: xy.y + d.y * distM };
+}
+function bearingXY(from, to) {
+  return norm360(toDeg(Math.atan2(to.x - from.x, to.y - from.y)));
+}
+
+// Поиск точки на луче, где МПР к targetXY = targetMpr
+function findMprPoint(start, magDeg, targetMpr, targetXY, decl) {
+  const dir = dirVec(magDeg, decl);
+  const step = 25;
+  const maxT = 60000;
+  const mprAt = (t) => {
+    const P = { x: start.x + dir.x * t, y: start.y + dir.y * t };
+    return norm360(bearingXY(P, targetXY) - decl);
+  };
+  let prevDiff = norm180(mprAt(0) - targetMpr);
+  for (let t = step; t <= maxT; t += step) {
+    const diff = norm180(mprAt(t) - targetMpr);
+    if (prevDiff * diff <= 0) {
+      const frac = Math.abs(prevDiff) / (Math.abs(prevDiff) + Math.abs(diff));
+      const tHit = t - step + frac * step;
+      return { x: start.x + dir.x * tHit, y: start.y + dir.y * tHit, t: tHit };
+    }
+    prevDiff = diff;
+  }
+  return null;
+}
+
+function rayIntersectXY(p1, d1, p2, d2) {
+  const denom = d1.x * d2.y - d1.y * d2.x;
+  if (Math.abs(denom) < 1e-12) return null;
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const t = (dx * d2.y - dy * d2.x) / denom;
+  return { x: p1.x + t * d1.x, y: p1.y + t * d1.y, t };
+}
+
+function buildSmallCircleXY(decl) {
+  const p0 = { x: 0, y: 0 };
+  const p1 = advancePt(p0, 16,  3000, decl);
+  const p2 = advancePt(p1, 286, 3000, decl);
+  const p3 = advancePt(p2, 196, 6000, decl);
+  const p4 = advancePt(p3, 106, 3000, decl);
+  const p5 = advancePt(p4, 16,  3000, decl);
+  // Замыкаем на КТА — независимо от накопленной погрешности
+  return { points: [p0, p1, p2, p3, p4, p5, { x: 0, y: 0 }], turns: null };
+}
+
+function buildBigCircleXY(decl) {
+  const DPRM_xy = toXYkta(DPRM_POINT);
+  const p0 = { x: 0, y: 0 };
+  const p1 = advancePt(p0, 16,  3000, decl);
+  const p2 = advancePt(p1, 286, 3000, decl);
+
+  // Б3: вдоль 196 mag до МПР ДПРМ = 057
+  let p3 = findMprPoint(p2, 196, 57, DPRM_xy, decl);
+  if (!p3) p3 = advancePt(p2, 196, 11000, decl); // fallback
+
+  // Б4: вдоль 106 mag до пересечения с линией через КТА в направлении 196 mag
+  let p4 = rayIntersectXY(p3, dirVec(106, decl), { x: 0, y: 0 }, dirVec(196, decl));
+  if (!p4 || p4.t < 0) p4 = advancePt(p3, 106, 3000, decl); // fallback
+
+  // Идеальная точка 4-го разворота (МПР = 029) — для справки
+  const p4_ideal = findMprPoint(p3, 106, 29, DPRM_xy, decl);
+
+  // Б5: замыкаем в КТА
+  return {
+    points: [p0, p1, p2, p3, p4, { x: 0, y: 0 }],
+    turns: { p3, p4, p4_ideal, DPRM_xy }
+  };
+}
+
+function fmtTurnMpr(decl) {
+  return 'МПР ДПРМ';
+}
+
+function renderCircle() {
+  circleLayer.forEach(l => map.removeLayer(l));
+  circleLayer = [];
+
+  const cb = document.getElementById('toggleCircle');
+  if (!cb || !cb.checked) return;
+
+  const typeEl = document.getElementById('circleType');
+  const type = typeEl ? typeEl.value : 'small';
+  const decl = getDecl();
+
+  let built, color, dash;
+
+  if (type === 'small') {
+    built = buildSmallCircleXY(decl);
+    color = '#2a7';
+    dash = null;
+  } else {
+    built = buildBigCircleXY(decl);
+    color = '#e33';
+    dash = '8,4';
+  }
+
+  const latlngs = built.points.map(xy => {
+    const p = fromXYkta(xy);
+    return [p.lat, p.lon];
+  });
+
+  const line = L.polyline(latlngs, {
+    color: color, weight: 3, opacity: 0.85,
+    dashArray: dash, interactive: false
+  }).addTo(map);
+  circleLayer.push(line);
+
+  // Маркеры разворотов для большого круга
+  if (type === 'big' && built.turns) {
+    const t3 = fromXYkta(built.turns.p3);
+    const m3 = L.marker([t3.lat, t3.lon], { icon: turnIcon('#e67e22') }).addTo(map);
+    m3.bindPopup(
+      '<b>3-й разворот</b><br>' +
+      'МПР ДПРМ = 057°<br>' +
+      '<span style="color:#888;font-size:11px">' + ddToDM(t3.lat, true) + ' ' + ddToDM(t3.lon, false) + '</span>'
+    );
+    circleLayer.push(m3);
+
+    if (built.turns.p4) {
+      const t4 = fromXYkta(built.turns.p4);
+      const m4 = L.marker([t4.lat, t4.lon], { icon: turnIcon('#888') }).addTo(map);
+      m4.bindPopup(
+        '<b>Конец 4-го разворота (расчёт)</b><br>' +
+        'Пересечение курса 106° с линией 016° через КТА<br>' +
+        '<span style="color:#888;font-size:11px">' + ddToDM(t4.lat, true) + ' ' + ddToDM(t4.lon, false) + '</span>'
+      );
+      circleLayer.push(m4);
+    }
+
+    if (built.turns.p4_ideal) {
+      const t4i = fromXYkta(built.turns.p4_ideal);
+      const m4i = L.marker([t4i.lat, t4i.lon], { icon: turnIcon('#a0a') }).addTo(map);
+      m4i.bindPopup(
+        '<b>4-й разворот (идеал)</b><br>' +
+        'МПР ДПРМ = 029°<br>' +
+        '<span style="color:#888;font-size:11px">' + ddToDM(t4i.lat, true) + ' ' + ddToDM(t4i.lon, false) + '</span>'
+      );
+      circleLayer.push(m4i);
+    }
+  }
+
+  // Метка на КТА (для наглядности)
+  const ktaLL = KTA_POINT;
+  const ktaMark = L.marker([ktaLL.lat, ktaLL.lon], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="width:16px;height:16px;background:#d00;border:2px solid white;border-radius:50%;' +
+            'box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>',
+      iconSize: [16, 16], iconAnchor: [8, 8]
+    }),
+    interactive: false
+  }).addTo(map);
+  circleLayer.push(ktaMark);
+}
+<!-- === КОНЕЦ БЛОКА 28-B === -->
 
 <!-- === БЛОК 29: ERROR LINES === -->
 function drawErrorLines(sources) {
@@ -1410,12 +1636,12 @@ function clearErrorLines() {
 
 <!-- === БЛОК 30: CLEAR === -->
 function clearFields() {
-  ['brg1','brg2','brg3','vorRadial','vorDist','course','courseRT'].forEach(id => {
+  ['brg1','brg2','brg3','brg4','vorRadial','vorDist','course','courseRT'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   document.getElementById('decl').value = '11';
-  for (let i = 1; i <= 4; i++) document.getElementById('calc' + i).innerHTML = '';
+  for (let i = 1; i <= 5; i++) document.getElementById('calc' + i).innerHTML = '';
   stationLines.forEach(l => map.removeLayer(l));
   stationLines = [];
   clearErrorLines();
@@ -1447,7 +1673,7 @@ function clearGps() {
 <!-- === БЛОК 31: PREVIEW === -->
 function preview() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const v = document.getElementById('brg' + (i + 1)).value.trim();
     const el = document.getElementById('calc' + (i + 1));
     if (v === '') { el.innerHTML = ''; continue; }
@@ -1459,14 +1685,14 @@ function preview() {
                    '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
   }
   const rv = document.getElementById('vorRadial').value.trim();
-  const el4 = document.getElementById('calc4');
+  const el5 = document.getElementById('calc5');
   if (rv !== '') {
     const radial = parseFloat(rv);
     if (!isNaN(radial)) {
       const ips = norm360(radial + decl);
-      el4.innerHTML = 'Радиал (МПС) ' + radial.toFixed(0) + '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
-    } else el4.innerHTML = '';
-  } else el4.innerHTML = '';
+      el5.innerHTML = 'Радиал (МПС) ' + radial.toFixed(0) + '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
+    } else el5.innerHTML = '';
+  } else el5.innerHTML = '';
 }
 <!-- === КОНЕЦ БЛОКА 31 === -->
 
@@ -1483,7 +1709,7 @@ function alignToGPS() {
   const gpsPt = { lat: ll.lat, lon: ll.lng };
   const decl = parseFloat(document.getElementById('decl').value) || 0;
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const s = PRESET[i];
     const brgTrue = trueBearing(gpsPt, s);
     const mpr = norm360(brgTrue - decl);
@@ -2358,7 +2584,8 @@ function calculate() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const sources = [];
 
-  for (let i = 0; i < 3; i++) {
+  // 4 NDB (0..3)
+  for (let i = 0; i < 4; i++) {
     const v = document.getElementById('brg' + (i + 1)).value.trim();
     if (v === '') continue;
     const mpr = parseFloat(v);
@@ -2371,16 +2598,17 @@ function calculate() {
     });
   }
 
+  // VOR — индекс 4
   const rv = document.getElementById('vorRadial').value.trim();
   const radial = rv === '' ? null : parseFloat(rv);
   const vorDist = parseDistance(document.getElementById('vorDist').value.trim());
   if (radial !== null && !isNaN(radial)) {
     sources.push({
-      idx: 3, type: 'VOR', name: PRESET[3].name,
-      data: { lat: PRESET[3].lat, lon: PRESET[3].lon },
+      idx: VOR_IDX, type: 'VOR', name: PRESET[VOR_IDX].name,
+      data: { lat: PRESET[VOR_IDX].lat, lon: PRESET[VOR_IDX].lon },
       ips: norm360(radial + decl),
       inputLabel: 'Радиал ' + radial.toFixed(0) + '°',
-      color: PRESET[3].color, dist: vorDist
+      color: PRESET[VOR_IDX].color, dist: vorDist
     });
   }
 
@@ -2542,6 +2770,7 @@ updateSpeedUnitLabel();
 
 renderTrack();
 renderRoutes();
+renderCircle();
 renderAreas();
 updateNavUI();
 updateRTUI();
