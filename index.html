@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.53</title>
+<title>НАЕБАЦИЯ v1.54</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -169,6 +169,29 @@
   .route-toggle input { width:auto; }
   .route-toggle label { cursor:pointer; user-select:none; }
   .route-swatch { display:inline-block; width:14px; height:14px; border-radius:2px; }
+
+  /* Переключатель типа круга — удобный для касания на телефоне */
+  .circle-mode-row { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
+  .circle-mode-row .circle-mode-name { font-size:13px; color:#333; }
+  .circle-switch { display:inline-flex; align-items:center; position:relative; cursor:pointer; min-height:44px; }
+  .oprs .circle-switch input {
+    position:absolute; width:1px; height:1px; margin:0; padding:0;
+    opacity:0; overflow:hidden; pointer-events:none;
+  }
+  .circle-switch-track {
+    position:relative; display:block; width:54px; height:32px;
+    background:#2a7; border-radius:20px;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.2);
+    transition:background .15s ease;
+  }
+  .circle-switch-track::before {
+    content:''; position:absolute; top:3px; left:3px;
+    width:26px; height:26px; background:white; border-radius:50%;
+    box-shadow:0 1px 3px rgba(0,0,0,.3); transition:transform .15s ease;
+  }
+  .circle-switch input:checked + .circle-switch-track { background:#e33; }
+  .circle-switch input:checked + .circle-switch-track::before { transform:translateX(22px); }
+  .circle-switch input:focus-visible + .circle-switch-track { outline:3px solid #08c; outline-offset:3px; }
 
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
@@ -459,12 +482,13 @@
         <span class="route-swatch" style="background:#2a7"></span>
         <label for="toggleCircle">Показывать круг</label>
       </div>
-      <div class="row" style="margin-top:4px;">
-        <label>Тип:</label>
-        <select id="circleType" onchange="renderCircle()" style="width:auto;display:inline-block;">
-          <option value="small" selected>Малый</option>
-          <option value="big">Большой</option>
-        </select>
+      <div class="circle-mode-row">
+        <span class="circle-mode-name">Малый</span>
+        <label class="circle-switch" title="Переключить малый / большой круг">
+          <input type="checkbox" id="circleType" role="switch" aria-label="Большой круг" onchange="renderCircle()">
+          <span class="circle-switch-track" aria-hidden="true"></span>
+        </label>
+        <span class="circle-mode-name">Большой</span>
       </div>
     </div>
 
@@ -1016,42 +1040,32 @@ map.on('dragstart', () => {
 
 <!-- === БЛОК 24: ICONS === -->
 function planeIconSvg(courseDeg, color) {
+  // Вид сверху: длинный фюзеляж, прямое крыло и горизонтальное оперение.
+  // Весь силуэт окрашен в один цвет; верх значка — нос самолёта.
   const fill = color || '#2a7';
-  return '<svg viewBox="-15 -12 30 24" width="40" height="32" ' +
-    'style="transform: rotate(' + courseDeg + 'deg); transform-origin: center; filter: drop-shadow(0 0 3px rgba(0,0,0,0.65));">' +
-    '<path d="M -0.7,-10.6 ' +
-      'C -0.55,-11.1 -0.3,-11.3 0,-11.3 ' +
-      'C 0.3,-11.3 0.55,-11.1 0.7,-10.6 ' +
-      'L 0.85,-8.5 ' +
-      'L 0.95,-4 ' +
-      'L 14.5,-4 ' +
-      'L 14.5,-1 ' +
-      'L 1.2,-1 ' +
-      'L 1.2,2 ' +
-      'L 0.6,7.5 ' +
-      'L 5,8.5 ' +
-      'L 5,10.2 ' +
-      'L 0.55,10 ' +
-      'L 0.35,11 ' +
-      'L -0.35,11 ' +
-      'L -0.55,10 ' +
-      'L -5,10.2 ' +
-      'L -5,8.5 ' +
-      'L -0.6,7.5 ' +
-      'L -1.2,2 ' +
-      'L -1.2,-1 ' +
-      'L -14.5,-1 ' +
-      'L -14.5,-4 ' +
-      'L -0.95,-4 ' +
-      'L -0.85,-8.5 ' +
-      'L -0.7,-10.6 ' +
-      'Z" ' +
-      'fill="' + fill + '" stroke="white" stroke-width="0.7" stroke-linejoin="round"/>' +
-    '<circle cx="0" cy="-10.9" r="0.5" fill="white" fill-opacity="0.75"/>' +
+  return '<svg viewBox="0 0 44 54" width="44" height="54" ' +
+    'xmlns="http://www.w3.org/2000/svg" aria-hidden="true" ' +
+    'style="transform:rotate(' + norm360(courseDeg) + 'deg);transform-origin:50% 50%;' +
+    'filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));">' +
+    '<path d="M22 2.5 ' +
+      'C19.8 2.5 19.2 6 19.1 10.5 ' +
+      'L18.3 21.3 ' +
+      'L4.2 23.8 Q2.5 24.1 2.5 25.7 L2.5 28.5 ' +
+      'L18.2 28.0 ' +
+      'L18.9 45.1 ' +
+      'L12.7 47.2 Q11.8 47.5 11.8 48.8 L11.8 50.6 ' +
+      'L21 50.2 L21.4 52 L22.6 52 L23 50.2 ' +
+      'L32.2 50.6 L32.2 48.8 Q32.2 47.5 31.3 47.2 ' +
+      'L25.1 45.1 ' +
+      'L25.8 28.0 L41.5 28.5 L41.5 25.7 ' +
+      'Q41.5 24.1 39.8 23.8 ' +
+      'L25.7 21.3 L24.9 10.5 ' +
+      'C24.8 6 24.2 2.5 22 2.5 Z" ' +
+      'fill="' + fill + '" stroke="white" stroke-width="1.2" stroke-linejoin="round"/>' +
     '</svg>';
 }
-function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [40, 32], iconAnchor: [20, 16] }); }
-function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [40, 32], iconAnchor: [20, 16] }); }
+function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [44, 54], iconAnchor: [22, 27] }); }
+function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [44, 54], iconAnchor: [22, 27] }); }
 
 function dotIcon(color) {
   const c = color || '#2a7';
@@ -1511,13 +1525,11 @@ function buildBigCircleXY(decl) {
   let p4 = rayIntersectXY(p3, dirVec(106, decl), { x: 0, y: 0 }, dirVec(196, decl));
   if (!p4 || p4.t < 0) p4 = advancePt(p3, 106, 3000, decl); // fallback
 
-  // Идеальная точка 4-го разворота (МПР = 029) — для справки
-  const p4_ideal = findMprPoint(p3, 106, 29, DPRM_xy, decl);
-
-  // Б5: замыкаем в КТА
+  // Б5: замыкаем в КТА. Линия Б4 идёт до расчётной точки p4;
+  // справочная фиолетовая точка МПР 029° больше не отображается.
   return {
     points: [p0, p1, p2, p3, p4, { x: 0, y: 0 }],
-    turns: { p3, p4, p4_ideal, DPRM_xy }
+    turns: { p3, p4, DPRM_xy }
   };
 }
 
@@ -1533,7 +1545,7 @@ function renderCircle() {
   if (!cb || !cb.checked) return;
 
   const typeEl = document.getElementById('circleType');
-  const type = typeEl ? typeEl.value : 'small';
+  const type = typeEl && typeEl.checked ? 'big' : 'small';
   const decl = getDecl();
 
   let built, color, dash;
@@ -1581,16 +1593,6 @@ function renderCircle() {
       circleLayer.push(m4);
     }
 
-    if (built.turns.p4_ideal) {
-      const t4i = fromXYkta(built.turns.p4_ideal);
-      const m4i = L.marker([t4i.lat, t4i.lon], { icon: turnIcon('#a0a') }).addTo(map);
-      m4i.bindPopup(
-        '<b>4-й разворот (идеал)</b><br>' +
-        'МПР ДПРМ = 029°<br>' +
-        '<span style="color:#888;font-size:11px">' + ddToDM(t4i.lat, true) + ' ' + ddToDM(t4i.lon, false) + '</span>'
-      );
-      circleLayer.push(m4i);
-    }
   }
 
   // Метка на КТА (для наглядности)
@@ -2110,6 +2112,7 @@ function stopRT() {
   document.getElementById('rtToggleBtn').classList.remove('stop');
   document.getElementById('rtToggleBtn').classList.add('gps');
   releaseWakeLock();
+  renderRTMarker(); // После остановки РВ убрать текущий самолёт с карты.
   updateRTUI();
   updateSpeedHudVisibility();
 }
@@ -2198,7 +2201,8 @@ function renderRTTrack() {
 }
 
 function renderRTMarker() {
-  const show = currentTab === 'rtnav';
+  // Пока РВ запущен, самолёт отображается на любой вкладке.
+  const show = rtTracking;
   if (!show || !rtCurrentPosition) {
     if (rtMarker) { map.removeLayer(rtMarker); rtMarker = null; }
     return;
@@ -2217,7 +2221,9 @@ function renderRTMarker() {
     rtMarker.setLatLng([lat, lon]);
     rtMarker.setIcon(planeIconBlue(course));
   } else {
-    rtMarker = L.marker([lat, lon], { icon: planeIconBlue(course), interactive: false }).addTo(map);
+    rtMarker = L.marker([lat, lon], {
+      icon: planeIconBlue(course), interactive: false, zIndexOffset: 1200
+    }).addTo(map);
   }
 }
 
