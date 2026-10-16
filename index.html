@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.54</title>
+<title>НАЕБАЦИЯ v1.55 — правый круг ВПП 20</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -174,7 +174,9 @@
   .route-swatch { display:inline-block; width:14px; height:14px; border-radius:2px; }
 
   /* Переключатель типа круга — удобный для касания на телефоне */
-  .circle-mode-row { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
+  /* Оба переключателя всегда видны в одной строке: ВПП слева, тип круга справа. */
+  .circle-controls-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; flex-wrap:nowrap; }
+  .circle-mode-row { display:flex; align-items:center; gap:6px; min-width:0; white-space:nowrap; }
   .circle-mode-row .circle-mode-name { font-size:13px; color:#333; }
   .circle-switch { display:inline-flex; align-items:center; position:relative; cursor:pointer; min-height:44px; }
   .oprs .circle-switch input {
@@ -195,6 +197,11 @@
   .circle-switch input:checked + .circle-switch-track { background:#e33; }
   .circle-switch input:checked + .circle-switch-track::before { transform:translateX(18px); }
   .circle-switch input:focus-visible + .circle-switch-track { outline:3px solid #08c; outline-offset:3px; }
+  /* Выбор ВПП остаётся на виду и при малом круге, но на него не влияет. */
+  .circle-runway-row { display:flex; align-items:center; gap:6px; min-width:0; white-space:nowrap; }
+  .circle-runway-row .circle-mode-name { font-size:13px; color:#333; }
+  .circle-runway-row .circle-switch input:checked + .circle-switch-track { background:#08c; }
+  .circle-runway-row .hint { margin:0; }
 
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
@@ -485,13 +492,23 @@
         <span class="route-swatch" style="background:#2a7"></span>
         <label for="toggleCircle">Круг</label>
       </div>
-      <div class="circle-mode-row">
-        <span class="circle-mode-name">Малый</span>
-        <label class="circle-switch" title="Переключить малый / большой круг">
-          <input type="checkbox" id="circleType" role="switch" aria-label="Большой круг" onchange="renderCircle()">
-          <span class="circle-switch-track" aria-hidden="true"></span>
-        </label>
-        <span class="circle-mode-name">Большой</span>
+      <div class="circle-controls-row">
+        <div class="circle-runway-row" id="circleRunwayRow">
+          <span class="circle-mode-name">02</span>
+          <label class="circle-switch" title="Выбор ВПП для большого круга: 02 / 20">
+            <input type="checkbox" id="circleRunway20" role="switch" aria-label="ВПП 20 (для большого круга)" onchange="renderCircle()">
+            <span class="circle-switch-track" aria-hidden="true"></span>
+          </label>
+          <span class="circle-mode-name">20</span>
+        </div>
+        <div class="circle-mode-row">
+          <span class="circle-mode-name">Малый</span>
+          <label class="circle-switch" title="Переключить малый / большой круг">
+            <input type="checkbox" id="circleType" role="switch" aria-label="Большой круг" onchange="renderCircle()">
+            <span class="circle-switch-track" aria-hidden="true"></span>
+          </label>
+          <span class="circle-mode-name">Большой</span>
+        </div>
       </div>
     </div>
 
@@ -1528,11 +1545,54 @@ function buildBigCircleXY(decl) {
   let p4 = rayIntersectXY(p3, dirVec(106, decl), { x: 0, y: 0 }, dirVec(196, decl));
   if (!p4 || p4.t < 0) p4 = advancePt(p3, 106, 3000, decl); // fallback
 
-  // Б5: замыкаем в КТА. Линия Б4 идёт до расчётной точки p4;
-  // справочная фиолетовая точка МПР 029° больше не отображается.
+  // Траверз ДПРМ на участке Б3 (МК 196°): КУР 270° = МПР 106°.
+  // Находим ортогональную проекцию ДПРМ на линию p2 → p3.
+  const downwindDir = dirVec(196, decl);
+  const traverseDist = (DPRM_xy.x - p2.x) * downwindDir.x +
+                       (DPRM_xy.y - p2.y) * downwindDir.y;
+  const legLen = (p3.x - p2.x) * downwindDir.x +
+                 (p3.y - p2.y) * downwindDir.y;
+  const traverse = traverseDist >= 0 && traverseDist <= legLen
+    ? { x: p2.x + downwindDir.x * traverseDist,
+        y: p2.y + downwindDir.y * traverseDist }
+    : null;
+
+  // Б5: замыкаем в КТА. Фиолетовая точка МПР 029° не отображается.
   return {
     points: [p0, p1, p2, p3, p4, { x: 0, y: 0 }],
-    turns: { p3, p4, DPRM_xy }
+    turns: { p3, p4, traverse }
+  };
+}
+
+// ВПП 20: сначала разворот маршрута 02 на 180° относительно КТА,
+// затем зеркальное отражение относительно ОСИ ВПП, проходящей через КТА.
+// Ось параллельна длинной стороне круга (Б3). Поэтому начальная/конечная
+// точка остаётся на КТА, северная вытянутая часть сохраняется, а все четыре
+// поворота становятся ПРАВЫМИ. Отражение относительно самой линии Б3
+// сдвинуло бы КТА и привело к неверному началу/концу маршрута.
+function buildBigCircle20XY(decl) {
+  const circle02 = buildBigCircleXY(decl);
+  const axis = dirVec(16, decl); // ось ВПП 02/20 через КТА
+  const turnAndMirror = p => {
+    if (!p) return null;
+    // Центральная симметрия: (x, y) -> (-x, -y).
+    const rx = -p.x, ry = -p.y;
+    // Отражение относительно прямой через КТА с единичным вектором axis.
+    const projection = rx * axis.x + ry * axis.y;
+    return {
+      x: 2 * projection * axis.x - rx,
+      y: 2 * projection * axis.y - ry
+    };
+  };
+  return {
+    points: circle02.points.map(turnAndMirror),
+    turns: circle02.turns ? {
+      p3: turnAndMirror(circle02.turns.p3),
+      p4: turnAndMirror(circle02.turns.p4),
+      // Условный траверз на том же удалении от начала Б3, что и у ВПП 02.
+      // Это НЕ реальный траверз ДПРМ по КУР — только геометрическая метка.
+      traverse: turnAndMirror(circle02.turns.traverse)
+    } : null
   };
 }
 
@@ -1545,10 +1605,11 @@ function renderCircle() {
   circleLayer = [];
 
   const cb = document.getElementById('toggleCircle');
-  if (!cb || !cb.checked) return;
-
   const typeEl = document.getElementById('circleType');
   const type = typeEl && typeEl.checked ? 'big' : 'small';
+  if (!cb || !cb.checked) return;
+
+  const runway20 = !!document.getElementById('circleRunway20')?.checked;
   const decl = getDecl();
 
   let built, color, dash;
@@ -1558,7 +1619,7 @@ function renderCircle() {
     color = '#2a7';
     dash = null;
   } else {
-    built = buildBigCircleXY(decl);
+    built = runway20 ? buildBigCircle20XY(decl) : buildBigCircleXY(decl);
     color = '#e33';
     dash = '8,4';
   }
@@ -1580,7 +1641,7 @@ function renderCircle() {
     const m3 = L.marker([t3.lat, t3.lon], { icon: turnIcon('#e67e22') }).addTo(map);
     m3.bindPopup(
       '<b>3-й разворот</b><br>' +
-      'МПР ДПРМ = 057°<br>' +
+      (runway20 ? 'Правый круг ВПП 20 (геометрический вариант)<br>' : 'МПР ДПРМ = 057°<br>') +
       '<span style="color:#888;font-size:11px">' + ddToDM(t3.lat, true) + ' ' + ddToDM(t3.lon, false) + '</span>'
     );
     circleLayer.push(m3);
@@ -1590,12 +1651,32 @@ function renderCircle() {
       const m4 = L.marker([t4.lat, t4.lon], { icon: turnIcon('#888') }).addTo(map);
       m4.bindPopup(
         '<b>Конец 4-го разворота (расчёт)</b><br>' +
-        'Пересечение курса 106° с линией 016° через КТА<br>' +
+        (runway20
+          ? 'Правый круг ВПП 20, расчётная точка<br>'
+          : 'Пересечение курса 106° с линией 016° через КТА<br>') +
         '<span style="color:#888;font-size:11px">' + ddToDM(t4.lat, true) + ' ' + ddToDM(t4.lon, false) + '</span>'
       );
       circleLayer.push(m4);
     }
 
+    // Траверз ВПП 02 — действительная геометрическая проекция ДПРМ.
+    // Для ВПП 20 метка ТОЛЬКО условная: зеркальный перенос на то же
+    // расстояние от второго разворота вдоль длинной стороны круга.
+    if (built.turns.traverse) {
+      const tv = fromXYkta(built.turns.traverse);
+      const marker = L.marker([tv.lat, tv.lon], { icon: turnIcon(runway20 ? '#7186a1' : '#08c') }).addTo(map);
+      marker.bindPopup(runway20
+        ? '<b>Виртуальный траверз — ВПП 20</b><br>' +
+          'Условная точка на длинной стороне, на том же удалении от 2-го разворота, что и траверз ВПП 02.<br>' +
+          '<span style="color:#b45b00">Не является реальным траверзом ДПРМ или точкой по КУР.</span><br>' +
+          '<span style="color:#888;font-size:11px">' + ddToDM(tv.lat, true) + ' ' + ddToDM(tv.lon, false) + '</span>'
+        : '<b>Траверз ДПРМ — ВПП 02</b><br>' +
+          'МК 196° / КУР 270° (−90°)<br>' +
+          'МПР ДПРМ = 106°<br>' +
+          '<span style="color:#888;font-size:11px">' + ddToDM(tv.lat, true) + ' ' + ddToDM(tv.lon, false) + '</span>'
+      );
+      circleLayer.push(marker);
+    }
   }
 
   // Метка на КТА (для наглядности)
