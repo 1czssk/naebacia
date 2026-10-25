@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.55 — правый круг ВПП 20</title>
+<title>НАЕБАЦИЯ v1.56</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -203,6 +203,16 @@
   .circle-runway-row .circle-switch input:checked + .circle-switch-track { background:#08c; }
   .circle-runway-row .hint { margin:0; }
 
+  /* Цветовое отображение GPS-высоты: только линия трека, не самолёт. */
+  #altitudeLegend { display:none; margin:6px 0 2px; }
+  .altitude-gradient {
+    height:10px; border-radius:6px;
+    background:linear-gradient(to right, #e84c4c, #f7c344, #91ce49, #20bca6, #3674ed);
+    border:1px solid #ddd;
+  }
+  .altitude-legend-labels { display:flex; justify-content:space-between; font-size:11px; color:#555; margin-top:2px; }
+  #rt-log-status { font-size:11px; color:#555; margin-top:6px; white-space:normal; }
+  #rt-log-status.warning { color:#b00020; font-weight:bold; }
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
 </style>
@@ -438,6 +448,12 @@
     </div>
 
     <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
+    <div class="oprs rt-box" style="margin-top:8px;">
+      <b>Журнал полёта</b>
+      <div class="hint">Запись начинается со «Старт РВ» и завершается со «Стоп РВ». GPS-высота записывается, но не показывается числом.</div>
+      <button class="gps big" id="downloadRTLogBtn" onclick="downloadRTLog()" disabled>⬇ Скачать трек (JSON)</button>
+      <div id="rt-log-status" aria-live="polite">Нет записанного полёта.</div>
+    </div>
   </div>
 
   <!-- --- ВКЛАДКА СЛОИ --- -->
@@ -482,6 +498,19 @@
         <input type="checkbox" id="routeGAGARIN_BACK" onchange="renderRoutes()">
         <span class="route-swatch" style="background:#e6a"></span>
         <label for="routeGAGARIN_BACK">Гагарин (обратно)</label>
+      </div>
+    </div>
+
+    <div class="oprs rt-box">
+      <b>GPS-высота</b>
+      <div class="route-toggle">
+        <input type="checkbox" id="toggleAltitudeColors" onchange="toggleAltitudeView()">
+        <label for="toggleAltitudeColors">Окрашивать GPS-трек по высоте</label>
+      </div>
+      <div id="altitudeLegend">
+        <div class="altitude-gradient"></div>
+        <div class="altitude-legend-labels"><span>Ниже</span><span>Выше</span></div>
+        <div class="hint">Относительные высоты одного трека; без GPS-высоты — серый участок.</div>
       </div>
     </div>
 
@@ -553,7 +582,11 @@ const SPEED_UNITS_ORDER = ['kmh', 'ms', 'kt'];
 
 const TRACK_KEY = 'oprs_nav_track_v1';
 const TRACK_GPS_KEY = 'oprs_nav_track_gps_v1';
-const RT_TRACK_KEY = 'oprs_nav_rt_track_v1';
+const RT_TRACK_KEY = 'oprs_nav_rt_track_v1'; // старый ключ: для совместимости
+const FLIGHT_LOG_KEY = 'naebacia_flight_session_v1';
+const ALT_COLORS_KEY = 'naebacia_alt_colors_v1';
+const FLIGHT_SAVE_INTERVAL_MS = 5000;
+
 const MAX_DIST_KM = 300;
 const ANGLE_ERROR_DEG = 10;
 const ANGLE_WARN_DEG = 20;
@@ -770,6 +803,9 @@ let rtTracking = false;
 let rtWatchId = null;
 let rtCurrentPosition = null;
 let rtTrack = [];
+let rtFlightLog = null;  // отдельный журнал: весь полёт, а не только отображаемый трек
+let rtLogSaveWarning = '';
+let lastFlightSaveAt = 0;
 let rtLineLayer = null;
 let rtStartMarker = null;
 let rtMarker = null;
@@ -2167,23 +2203,56 @@ map.on('click', e => {
 <!-- === БЛОК 35: RTNAV === -->
 function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
+function makeNewFlightLog() {
+  return {
+    format: 'naebacia-flight-log', version: 1,
+    startedAt: Date.now(), endedAt: null, status: 'recording',
+    downloaded: false, points: []
+  };
+}
+
 function startRT() {
   if (!navigator.geolocation) { alert('Геолокация не поддерживается.'); return; }
   if (rtTracking) return;
+  // Новый запуск РВ — новый полёт; предыдущий не подменяем незаметно.
+  if (rtFlightLog && rtFlightLog.points.length) {
+    const warn = rtFlightLog.downloaded
+      ? 'Начать новый РВ? Предыдущий журнал будет заменён. Убедитесь, что JSON сохранился на телефоне.'
+      : 'Предыдущий полёт ещё не скачан. Новый РВ заменит его журнал. Сначала можно нажать «Скачать трек». Продолжить?';
+    if (!confirm(warn)) return;
+  }
+  rtTrack = [];
+  rtCurrentPosition = null;
+  rtFlightLog = makeNewFlightLog();
+  rtLogSaveWarning = '';
+  saveFlightLog(true);
+  // После начала новой записи старый трек больше не загружаем из предыдущего формата.
+  try { localStorage.removeItem(RT_TRACK_KEY); } catch (e) {}
+  renderRTTrack();
+  renderRTMarker();
   rtTracking = true;
   document.getElementById('rtToggleBtn').innerHTML = '<b>⏸ Стоп РВ</b>';
   document.getElementById('rtToggleBtn').classList.remove('gps');
   document.getElementById('rtToggleBtn').classList.add('stop');
 
-  rtWatchId = navigator.geolocation.watchPosition(
-    onRTPosition, onRTError,
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+  try {
+    rtWatchId = navigator.geolocation.watchPosition(
+      onRTPosition, onRTError,
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  } catch (err) {
+    stopRT();
+    const el = document.getElementById('rt-result');
+    el.classList.add('error');
+    el.textContent = '⚠️ Не удалось запустить GPS: ' + err.message;
+    return;
+  }
   document.getElementById('rt-result').innerHTML = 'Определение позиции...';
   document.getElementById('rt-result').classList.remove('error');
   requestWakeLock();
   updateRTUI();
   updateSpeedHudVisibility();
+  updateFlightLogUI();
 }
 
 function stopRT() {
@@ -2192,6 +2261,11 @@ function stopRT() {
     rtWatchId = null;
   }
   rtTracking = false;
+  if (rtFlightLog && rtFlightLog.status === 'recording') {
+    rtFlightLog.endedAt = Date.now();
+    rtFlightLog.status = 'completed';
+    saveFlightLog(true);
+  }
   document.getElementById('rtToggleBtn').innerHTML = '<b>▶ Старт РВ</b>';
   document.getElementById('rtToggleBtn').classList.remove('stop');
   document.getElementById('rtToggleBtn').classList.add('gps');
@@ -2199,34 +2273,49 @@ function stopRT() {
   renderRTMarker(); // После остановки РВ убрать текущий самолёт с карты.
   updateRTUI();
   updateSpeedHudVisibility();
+  updateFlightLogUI();
+}
+
+function finiteOrNull(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
 function onRTPosition(pos) {
+  if (!rtTracking) return;
   const lat = pos.coords.latitude;
   const lon = pos.coords.longitude;
-  const acc = pos.coords.accuracy;
-  const speed = (pos.coords.speed !== null && !isNaN(pos.coords.speed)) ? pos.coords.speed : null;
-  const heading = (pos.coords.heading !== null && !isNaN(pos.coords.heading)) ? pos.coords.heading : null;
-  const now = Date.now();
-  const last = rtTrack[rtTrack.length - 1];
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  const acc = finiteOrNull(pos.coords.accuracy);
+  const speed = finiteOrNull(pos.coords.speed);
+  const heading = finiteOrNull(pos.coords.heading);
+  const alt = finiteOrNull(pos.coords.altitude); // WGS84, не QNH
+  const altAcc = finiteOrNull(pos.coords.altitudeAccuracy);
+  const receivedAt = Date.now();
+  const t = Number.isFinite(pos.timestamp) && pos.timestamp > 0 ? pos.timestamp : receivedAt;
+  const last = rtFlightLog && rtFlightLog.points.length
+    ? rtFlightLog.points[rtFlightLog.points.length - 1] : null;
+  // Полученная со старой/дублированной меткой времени точка в журнал не добавляется.
+  const validNewTime = !last || t > last.t;
   let shouldAdd = false;
-  if (!last) shouldAdd = true;
-  else if (distance(last, { lat, lon }) >= RT_MIN_STEP_M) shouldAdd = true;
-  else if (now - last.t > 5000) shouldAdd = true;
-  if (shouldAdd) {
-    rtTrack.push({ lat, lon, t: now, speed, heading, acc });
+  if (validNewTime && !last) shouldAdd = true;
+  else if (validNewTime && distance(last, { lat, lon }) >= RT_MIN_STEP_M) shouldAdd = true;
+  else if (validNewTime && t - last.t >= 5000) shouldAdd = true;
+
+  if (shouldAdd && rtFlightLog) {
+    const sample = { lat, lon, t, speed, heading, acc, alt, altAcc };
+    rtFlightLog.points.push(sample);  // Журнал не обрезаем: полный полёт для воспроизводилки.
+    rtFlightLog.downloaded = false;   // После скачивания новые точки ещё не экспортированы.
+    rtTrack.push(sample);             // На карте держим только последние RT_MAX_POINTS.
     if (rtTrack.length > RT_MAX_POINTS) rtTrack.shift();
+    saveFlightLog();
+    renderRTTrack();
   }
-  rtCurrentPosition = { lat, lon, t: now, speed, heading, acc };
+  rtCurrentPosition = { lat, lon, t, speed, heading, acc };
+  if (windMeasuring) windMeasureData.push({ lat, lon, t });
 
-  if (windMeasuring) {
-    windMeasureData.push({ lat, lon, t: now });
-  }
-
-  saveRTTrack();
-  renderRTTrack();
   renderRTMarker();
   updateRTUI();
+  updateFlightLogUI();
   refreshOpenPopup();
 
   if (isFollowOn() && currentTab === 'rtnav') {
@@ -2247,28 +2336,155 @@ function onRTError(err) {
   el.textContent = msg;
 }
 
-function saveRTTrack() {
+function saveFlightLog(force) {
+  if (!rtFlightLog) return;
+  const now = Date.now();
+  if (!force && now - lastFlightSaveAt < FLIGHT_SAVE_INTERVAL_MS) return;
   try {
-    const toSave = rtTrack.slice(-5000);
-    localStorage.setItem(RT_TRACK_KEY, JSON.stringify(toSave));
-  } catch (e) {}
+    localStorage.setItem(FLIGHT_LOG_KEY, JSON.stringify(rtFlightLog));
+    lastFlightSaveAt = now;
+    rtLogSaveWarning = '';
+  } catch (e) {
+    rtLogSaveWarning = '⚠ Не удалось сохранить журнал на телефоне. Скачайте JSON до закрытия страницы.';
+  }
 }
+
 function loadRTTrack() {
   try {
-    const raw = localStorage.getItem(RT_TRACK_KEY);
-    if (raw) rtTrack = JSON.parse(raw) || [];
-  } catch (e) { rtTrack = []; }
+    const raw = localStorage.getItem(FLIGHT_LOG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.format === 'naebacia-flight-log' && Array.isArray(parsed.points)) {
+        rtFlightLog = parsed;
+        // После перезапуска браузера запись не продолжается сама собой.
+        if (rtFlightLog.status === 'recording') {
+          rtFlightLog.status = 'interrupted';
+          rtFlightLog.endedAt = null;
+          saveFlightLog(true);
+        }
+        rtTrack = rtFlightLog.points.slice(-RT_MAX_POINTS);
+        return;
+      }
+    }
+    // Поддержка трека из v1.55: он виден на карте, но не считается новым логом.
+    const old = localStorage.getItem(RT_TRACK_KEY);
+    if (old) {
+      const parsed = JSON.parse(old);
+      if (Array.isArray(parsed)) rtTrack = parsed;
+    }
+  } catch (e) { rtTrack = []; rtFlightLog = null; }
+}
+
+function saveRTTrack() {
+  // Сохранение исторического метода для других возможных вызовов.
+  saveFlightLog();
 }
 
 function clearRTTrack() {
+  if (rtFlightLog && rtFlightLog.points.length) {
+    if (!confirm('Очистить трек и удалить его журнал? Убедитесь, что нужный JSON сохранён.')) return;
+  }
   rtTrack = [];
   rtCurrentPosition = null;
-  try { localStorage.removeItem(RT_TRACK_KEY); } catch (e) {}
+  rtFlightLog = rtTracking ? makeNewFlightLog() : null;
+  rtLogSaveWarning = '';
+  try {
+    localStorage.removeItem(RT_TRACK_KEY);
+    localStorage.removeItem(FLIGHT_LOG_KEY);
+  } catch (e) {}
+  if (rtFlightLog) saveFlightLog(true);
   renderRTTrack();
   renderRTMarker();
   updateRTUI();
+  updateFlightLogUI();
   document.getElementById('rt-result').textContent = 'Трек РВ очищен.';
   document.getElementById('rt-result').classList.remove('error');
+}
+
+function flightLogExportObject() {
+  if (!rtFlightLog) return null;
+  return {
+    format: 'naebacia-flight-log',
+    version: 1,
+    appVersion: '1.56',
+    source: 'browser-geolocation',
+    startedAt: new Date(rtFlightLog.startedAt).toISOString(),
+    endedAt: rtFlightLog.endedAt ? new Date(rtFlightLog.endedAt).toISOString() : null,
+    status: rtTracking ? 'recording' : rtFlightLog.status,
+    units: {
+      coordinates: 'WGS84 decimal degrees',
+      altitude: 'meters above WGS84 ellipsoid (GPS, not barometric/QNH)',
+      speed: 'm/s', heading: 'true degrees', accuracy: 'meters'
+    },
+    points: rtFlightLog.points.map(p => ({
+      timestamp: new Date(p.t).toISOString(),
+      latitude: p.lat, longitude: p.lon,
+      groundSpeedMps: p.speed ?? null,
+      trueTrackDeg: p.heading ?? null,
+      horizontalAccuracyM: p.acc ?? null,
+      gpsAltitudeM: p.alt ?? null,
+      altitudeAccuracyM: p.altAcc ?? null
+    }))
+  };
+}
+
+function downloadRTLog() {
+  if (!rtFlightLog || rtFlightLog.points.length === 0) {
+    alert('Нет записанных GPS-точек. Включите РВ и дождитесь координат.');
+    return;
+  }
+  const data = flightLogExportObject();
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const d = new Date(rtFlightLog.startedAt);
+  const stamp = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0') + '_' + String(d.getHours()).padStart(2,'0') + '-' +
+    String(d.getMinutes()).padStart(2,'0');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'NAEBACIA_' + stamp + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  // Браузер не сообщает, завершилось ли сохранение: это лишь попытка скачивания.
+  rtFlightLog.downloaded = true;
+  saveFlightLog(true);
+  updateFlightLogUI();
+}
+
+function updateFlightLogUI() {
+  const btn = document.getElementById('downloadRTLogBtn');
+  const el = document.getElementById('rt-log-status');
+  if (!btn || !el) return;
+  const count = rtFlightLog ? rtFlightLog.points.length : 0;
+  btn.disabled = count === 0;
+  if (rtLogSaveWarning) {
+    el.textContent = rtLogSaveWarning;
+    el.classList.add('warning');
+  } else {
+    el.classList.remove('warning');
+    if (!rtFlightLog) el.textContent = 'Нет записанного полёта.';
+    else if (rtTracking) el.textContent = 'Идёт запись РВ · точек: ' + count + '. Скачать можно в любой момент.';
+    else if (rtFlightLog.status === 'interrupted') el.textContent = 'После перезапуска восстановлен прерванный полёт · точек: ' + count + '.';
+    else el.textContent = 'Запись завершена · точек: ' + count + '. Файл доступен для скачивания.';
+  }
+}
+
+const ALTITUDE_PALETTE = ['#e84c4c', '#f58b3d', '#f7c344', '#dfce44', '#91ce49', '#71c96a', '#20bca6', '#20aaae', '#267fdb', '#3674ed'];
+function toggleAltitudeView() {
+  const enabled = document.getElementById('toggleAltitudeColors').checked;
+  try { localStorage.setItem(ALT_COLORS_KEY, enabled ? '1' : '0'); } catch (e) {}
+  document.getElementById('altitudeLegend').style.display = enabled ? 'block' : 'none';
+  renderRTTrack();
+}
+
+function altitudeSegmentColor(a, b, min, max) {
+  if (!Number.isFinite(a.alt) || !Number.isFinite(b.alt)) return '#888888';
+  // Когда разброс меньше 50 м, не разукрашиваем шум высотомера во все цвета.
+  const ratio = max - min < 50 ? 0.5 : Math.max(0, Math.min(1, ((a.alt + b.alt)/2 - min)/(max-min)));
+  return ALTITUDE_PALETTE[Math.min(ALTITUDE_PALETTE.length-1, Math.floor(ratio*ALTITUDE_PALETTE.length))];
 }
 
 function renderRTTrack() {
@@ -2276,10 +2492,33 @@ function renderRTTrack() {
   if (rtLineLayer) { map.removeLayer(rtLineLayer); rtLineLayer = null; }
   if (rtStartMarker) { map.removeLayer(rtStartMarker); rtStartMarker = null; }
   if (!show || rtTrack.length === 0) return;
-  const latlngs = rtTrack.map(p => [p.lat, p.lon]);
-  rtLineLayer = L.polyline(latlngs, {
-    color: '#08c', weight: 3, opacity: 0.85, interactive: false
-  }).addTo(map);
+  const colored = document.getElementById('toggleAltitudeColors').checked;
+  if (!colored || rtTrack.length < 2) {
+    rtLineLayer = L.polyline(rtTrack.map(p => [p.lat, p.lon]), {
+      color: '#08c', weight: 3, opacity: 0.85, interactive: false
+    }).addTo(map);
+  } else {
+    const altitudes = rtTrack.map(p => p.alt).filter(v => Number.isFinite(v));
+    const min = altitudes.length ? Math.min(...altitudes) : 0;
+    const max = altitudes.length ? Math.max(...altitudes) : 0;
+    const layers = [];
+    let currentColor = null;
+    let coordinates = null;
+    function emit() {
+      if (coordinates && coordinates.length >= 2) {
+        layers.push(L.polyline(coordinates, { color: currentColor, weight: 4, opacity: 0.9, interactive: false }));
+      }
+    }
+    for (let i=1; i<rtTrack.length; i++) {
+      const a=rtTrack[i-1], b=rtTrack[i];
+      const c=altitudeSegmentColor(a,b,min,max);
+      if (c !== currentColor) {
+        emit(); currentColor=c; coordinates=[[a.lat,a.lon],[b.lat,b.lon]];
+      } else coordinates.push([b.lat,b.lon]);
+    }
+    emit();
+    rtLineLayer = L.layerGroup(layers).addTo(map);
+  }
   const start = rtTrack[0];
   rtStartMarker = L.marker([start.lat, start.lon], { icon: rtStartIcon(), interactive: false }).addTo(map);
 }
@@ -2337,7 +2576,7 @@ function updateRTUI() {
     if (fmpu !== null) hdEl.textContent = fmpu.toFixed(0) + '°';
     else hdEl.textContent = '—';
 
-    acEl.textContent = '±' + rtCurrentPosition.acc.toFixed(0) + ' м';
+    acEl.textContent = Number.isFinite(rtCurrentPosition.acc) ? '±' + rtCurrentPosition.acc.toFixed(0) + ' м' : '—';
     const age = (Date.now() - rtCurrentPosition.t) / 1000;
     agEl.textContent = age.toFixed(1) + ' с';
   }
@@ -2856,6 +3095,8 @@ loadPreset();
 loadTrack();
 loadTrackGps();
 loadRTTrack();
+// Автономный запрос разрешения при загрузке не включает РВ и не записывает трек.
+requestGpsPermissionAtStartup();
 
 updateFollowBtn();
 updateSpeedUnitLabel();
@@ -2864,8 +3105,29 @@ renderTrack();
 renderRoutes();
 renderCircle();
 renderAreas();
+document.getElementById('toggleAltitudeColors').checked = localStorage.getItem(ALT_COLORS_KEY) === '1';
+toggleAltitudeView();
 updateNavUI();
 updateRTUI();
+updateFlightLogUI();
+
+// Браузер сам решает, показать ли диалог повторно для разрешения «только сейчас».
+function requestGpsPermissionAtStartup() {
+  if (!navigator.geolocation) return;
+  try {
+    navigator.geolocation.getCurrentPosition(
+      () => { /* Разрешение получено: это НЕ старт записи. */ },
+      () => { /* Ничего не пишем; кнопки РВ и «Получить МС» остаются доступны. */ },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  } catch (e) { console.warn('Запрос GPS при запуске:', e); }
+}
+
+// Сохраняем данные при уходе браузера в фон; iOS может выгружать вкладку.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveFlightLog(true);
+});
+window.addEventListener('pagehide', () => saveFlightLog(true));
 <!-- === КОНЕЦ БЛОКА 38 === -->
 
 </script>
