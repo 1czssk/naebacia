@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.57 🎃 — журнал полётов</title>
+<title>НАЕБАЦИЯ v1.58 🎃 — HSI / OBS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -127,6 +127,45 @@
   #hudContainer #followBtn:active { transform: scale(0.95); }
 </style>
 <!-- === КОНЕЦ БЛОКА 3: STYLE: HUD === -->
+
+
+<!-- === БЛОК 3-B: STYLE HSI === -->
+<style>
+  .hsi-open-btn { width:100%; margin-top:7px; padding:10px; border-radius:6px; font-weight:650; background:#1c6f8d; border:0; color:white; font-size:13px; }
+  .hsi-mini-modes { display:flex; gap:4px; margin:6px 0; }
+  .hsi-mini-modes button { flex:1; min-width:0; border:1px solid #b6c9ce; border-radius:5px; padding:9px 4px; background:#f8fafb; color:#26363c; font-size:12px; }
+  .hsi-mini-modes button.active { background:#0b7c91; color:white; border-color:#0b7c91; font-weight:700; }
+  #hsiPanel { position:fixed; left:50%; bottom:152px; transform:translateX(-50%); width:min(382px,calc(100vw - 18px)); max-height:calc(100dvh - 174px); overflow:auto; box-sizing:border-box; border-radius:15px; z-index:1320; padding:12px 13px 13px; box-shadow:0 8px 30px rgba(0,0,0,.48); background:rgba(15,27,37,.97); color:#f4f8fc; font:13px -apple-system,'Segoe UI',sans-serif; }
+  #hsiPanel.hidden { display:none; }
+  #hsiPanel.no-hud { bottom:14px; max-height:calc(100dvh - 30px); }
+  #hsiPanel button { min-height:36px; padding:6px; border-radius:6px; }
+  #hsiPanel button:focus-visible, #hsiPanel select:focus-visible, #hsiPanel input:focus-visible { outline:3px solid #53bfea; outline-offset:2px; }
+  .hsi-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .hsi-head strong { font-size:15px; letter-spacing:1px; }
+  #hsiClose { width:42px;height:40px; background:#3b4b58;color:white;border:1px solid #6e7b87; font-size:24px; line-height:1; margin:0; }
+  .hsi-mode-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:8px; }
+  .hsi-mode-row button { border:1px solid #677b89; background:#293b48; color:#f0f4f6; font-weight:650; margin:0; }
+  .hsi-mode-row button.active { background:#137f99; border-color:#51b8da; }
+  .hsi-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:7px 0; }
+  .hsi-row label { color:#c0d5e1; font-size:12px; }
+  #hsiPanel select, #hsiPanel input[type=number] { font-size:13px; font-family:inherit; color:#12252c; background:white; border:1px solid #7d9dad; border-radius:5px; padding:7px 4px; min-height:34px; box-sizing:border-box; max-width:70%; }
+  #hsiPanel select { flex:1; min-width:0; }
+  #hsiPanel .hsi-details { padding:7px 9px; border:1px solid #3f586b; border-radius:7px; background:#243643; }
+  #hsiPanel .hsi-details[hidden], #hsiPanel [hidden] { display:none !important; }
+  #hsiPanel .hsi-scale { width:100%; display:block; height:105px; }
+  #hsiCdiNeedle { transition:transform .16s linear; }
+  .hsi-course { display:flex; align-items:center; justify-content:center; gap:9px; margin:3px auto; }
+  .hsi-course button { min-width:46px; background:#293d4d; color:#f8fbff; border:1px solid #6b8998; font-size:23px; margin:0; }
+  #hsiCourseInput { max-width:78px !important; width:78px; font-size:24px !important; font-weight:750; text-align:center; }
+  #hsiCourseRead { font-size:27px; font-weight:750; font-variant-numeric:tabular-nums; }
+  #hsiCourseManual { display:flex; flex-direction:row; align-items:center; justify-content:center; gap:9px; }
+  #hsiStatus { font-size:11px; color:#bed4df; margin:7px 0 0; min-height:12px; line-height:1.35; }
+  #hsiXtk { text-align:center; font-size:15px; font-weight:700; color:#f7d37a; }
+  #hsiToFrom { color:#88d9f6; font-weight:700; font-size:12px; }
+  #hsiSpeedOpen { width:100%; margin-top:9px; padding:9px; background:#1c6f8d; color:white; border:0; border-radius:6px; }
+  @media (max-width:600px) { #hsiPanel { bottom:145px; max-height:calc(100dvh - 155px); } }
+</style>
+<!-- === КОНЕЦ БЛОКА 3-B === -->
 
 <!-- === БЛОК 4: STYLE: ЭЛЕМЕНТЫ === -->
 <style>
@@ -296,6 +335,7 @@
       <option value="kt">узлы</option>
     </select>
   </div>
+  <button type="button" id="hsiSpeedOpen" onclick="openHSI()">🧭 Открыть HSI / OBS</button>
 </div>
 <!-- === КОНЕЦ БЛОКА 7 === -->
 
@@ -400,6 +440,17 @@
     </div>
 
     <div class="oprs nav-box">
+      <b>Наведение / HSI</b>
+      <div class="hsi-mini-modes" aria-label="Режим навигации">
+        <button type="button" data-hsi-mode="direct" onclick="setHSIMode('direct')">DIRECT</button>
+        <button type="button" data-hsi-mode="route" onclick="setHSIMode('route')">ROUTE</button>
+        <button type="button" data-hsi-mode="obs" onclick="setHSIMode('obs')">OBS</button>
+      </div>
+      <div id="hsiNavSummary" class="hint">DIRECT: задайте цель на карте</div>
+      <button type="button" class="hsi-open-btn" onclick="openHSI()">🧭 Открыть HSI</button>
+    </div>
+
+    <div class="oprs nav-box">
       <b>Ветер и скорость</b>
       <div class="row">
         <label>δ (напр. ветра):</label>
@@ -494,6 +545,7 @@
       <button class="refresh" onclick="refreshRoute()" style="width:100%; margin-top:6px;">↻ Обновить маршрут</button>
     </div>
 
+    <button type="button" class="hsi-open-btn" onclick="openHSI()">🧭 HSI / OBS</button>
     <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
     <div class="oprs rt-box" style="margin-top:8px;">
       <b>Журнал полёта</b>
@@ -616,6 +668,51 @@
 </div>
 <!-- === КОНЕЦ БЛОКА 8 === -->
 
+<!-- === БЛОК 8-B: ПЛАНОВЫЙ НАВИГАЦИОННЫЙ ИНДИКАТОР === -->
+<section id="hsiPanel" class="hidden" role="dialog" aria-modal="false" aria-label="HSI / OBS">
+  <div class="hsi-head"><strong>🧭 HSI / OBS</strong><button type="button" id="hsiClose" onclick="closeHSI()" aria-label="Закрыть HSI">×</button></div>
+  <div class="hsi-mode-row" aria-label="Режим HSI">
+    <button type="button" data-hsi-mode="direct" onclick="setHSIMode('direct')">DIRECT</button>
+    <button type="button" data-hsi-mode="route" onclick="setHSIMode('route')">ROUTE</button>
+    <button type="button" data-hsi-mode="obs" onclick="setHSIMode('obs')">OBS</button>
+  </div>
+  <div id="hsiRouteControls" class="hsi-details" hidden>
+    <div class="hsi-row"><label for="hsiRouteSelect">Маршрут</label><select id="hsiRouteSelect" onchange="selectHSIRoute(this.value)"><option value="">Выберите маршрут</option></select></div>
+    <div class="hsi-row"><label for="hsiLegSelect">Участок</label><select id="hsiLegSelect" onchange="selectHSILeg(this.value)"></select></div>
+    <div class="hint" style="color:#c3d6de">ППМ переключается автоматически после его прохождения. Можно выбрать участок вручную.</div>
+  </div>
+  <div id="hsiObsControls" class="hsi-details" hidden>
+    <div class="hsi-row"><label for="hsiObsReference">Линия через</label><select id="hsiObsReference" onchange="setHSIReference(this.value)"></select></div>
+    <div class="hint" style="color:#c3d6de">Курс задаётся магнитный. Точка остаётся неподвижной после выбора.</div>
+  </div>
+  <div class="hsi-row" style="justify-content:center; margin:9px 0 0;">
+    <span id="hsiFromToName" style="font-size:12px;color:#c9dce6">—</span>
+    <span id="hsiToFrom">—</span>
+  </div>
+  <svg class="hsi-scale" viewBox="0 0 320 105" role="img" aria-label="Индикатор бокового уклонения от ЛЗП">
+    <rect x="5" y="8" width="310" height="88" rx="9" fill="#213542" stroke="#4a6677"/>
+    <path d="M21 52 H299" stroke="#889eaa" stroke-width="2"/>
+    <g stroke="#829aa7" stroke-width="2">
+      <path d="M44 40 V64 M73 40 V64 M102 40 V64 M131 40 V64 M189 40 V64 M218 40 V64 M247 40 V64 M276 40 V64"/>
+    </g>
+    <path d="M160 20 V84" stroke="#ffffff" stroke-width="3"/>
+    <path d="M152 24 L160 14 L168 24" stroke="#f0f6f8" stroke-width="2" fill="none"/>
+    <g id="hsiCdiNeedle"><rect x="154" y="33" width="12" height="39" rx="5" fill="#ffbf50" stroke="#ffe7af" stroke-width="1"/></g>
+    <text id="hsiScaleLeft" x="17" y="92" fill="#bcd0dd" font-size="10">−1</text>
+    <text id="hsiScaleRight" x="302" y="92" text-anchor="end" fill="#bcd0dd" font-size="10">+1</text>
+  </svg>
+  <div id="hsiXtk">ЛБУ —</div>
+  <div class="hsi-course" id="hsiCourseManual" hidden>
+    <button type="button" onclick="stepHSICourse(-1)" aria-label="Уменьшить ЗМПУ на 1 градус">◀</button>
+    <div style="text-align:center"><div style="display:flex;align-items:center;gap:3px"><input id="hsiCourseInput" type="number" inputmode="numeric" min="0" max="359" step="1" onchange="enterHSICourse(this.value)" aria-label="ЗМПУ OBS в градусах"><span style="font-size:20px;color:#ffffff">°</span></div><div style="font-size:10px;color:#becfda">ЗМПУ</div></div>
+    <button type="button" onclick="stepHSICourse(1)" aria-label="Увеличить ЗМПУ на 1 градус">▶</button>
+  </div>
+  <div class="hsi-course" id="hsiCourseAuto"><div style="text-align:center"><div id="hsiCourseRead">—°</div><div style="font-size:10px;color:#becfda">ЗМПУ (авто)</div></div></div>
+  <div class="hsi-row"><label for="hsiScaleSelect">Шкала ЛБУ</label><select id="hsiScaleSelect" onchange="setHSIScale(this.value)"><option value="0.5">±0,5 км</option><option value="1" selected>±1 км</option><option value="2">±2 км</option><option value="5">±5 км</option></select></div>
+  <div id="hsiStatus" role="status">Задайте цель или выберите маршрут.</div>
+</section>
+<!-- === КОНЕЦ БЛОКА 8-B === -->
+
 <!-- === БЛОК 9: BODY: КАРТА === -->
 <div id="map"></div>
 <!-- === КОНЕЦ БЛОКА 9 === -->
@@ -647,6 +744,8 @@ const WIND_SPEED_UNIT_KEY = 'naebacia_wind_speed_unit_v1';
 const HUD_HEADING_KEY = 'naebacia_hud_heading_v1';
 const MENU_SIDE_KEY = 'naebacia_menu_side_v1';
 const FLIGHT_SAVE_INTERVAL_MS = 5000;
+const WIND_NAV_KEY = 'naebacia_wind_nav_v1';
+const HSI_SETTINGS_KEY = 'naebacia_hsi_state_v1';
 
 const MAX_DIST_KM = 300;
 const ANGLE_ERROR_DEG = 10;
@@ -695,6 +794,7 @@ function switchTab(name) {
   updateNavUI();
   updateRTUI();
   updateSpeedHudVisibility();
+  refreshHSIPanel();
 
   if (name === 'rtnav' && followMode && rtCurrentPosition) {
     map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(), { animate: false });
@@ -744,7 +844,7 @@ const PRESET = [
   { name: 'Ямское',         lat: 50.9683333, lon: 47.2205556, freq: '1245 кГц',  type: 'NDB', color: 'red' },
   { name: 'Комсомольское',  lat: 50.8000000, lon: 47.0477778, freq: '310 кГц',   type: 'NDB', color: 'orange' },
   { name: 'Красноармейск',  lat: 51.0313889, lon: 45.6444444, freq: '932 кГц', type: 'NDB', color: 'green' },
-  { name: 'Саратов VOR',    lat: 51.5628, lon: 46.0458, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
+  { name: 'Гагарин VOR/DME (RK)', lat: 51.7105556, lon: 46.1847222, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
 ];
 
 // Индекс VOR в PRESET (после добавления 4-го NDB стал 4)
@@ -796,13 +896,13 @@ const ROUTES = {
       { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
       { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
       { name: 'MAKEM',            lat: 51.8145, lon: 46.3970 },
-      { name: 'UWSG (Гагарин)',   lat: 51.7128, lon: 46.3878 }
+      { name: 'UWSG (Гагарин)',   lat: 51.7127778, lon: 46.1711111 }
     ]
   },
   GAGARIN_BACK: {
     name: 'Гагарин (обратно)', color: '#e6a',
     points: [
-      { name: 'UWSG (Гагарин)',   lat: 51.7128, lon: 46.3878 },
+      { name: 'UWSG (Гагарин)',   lat: 51.7127778, lon: 46.1711111 },
       { name: 'MAKEM',            lat: 51.8145, lon: 46.3970 },
       { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
       { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
@@ -865,6 +965,11 @@ let navTarget = null;
 let navLineStart = null;
 let navTargetMarker = null;
 let navLine = null;
+let hsiGuideLine = null;
+let hsiState = { mode:'direct', routeKey:'', legIndex:0, obsCourse:0,
+  obsRef:'target', obsAnchor:null, scaleKm:1, awaitingRouteFix:0 };
+let hsiLastRouteAdvanceAt = 0;
+let windChangeDebounce = null;
 let targetEditMode = false;
 
 let rtTracking = false;
@@ -1190,6 +1295,8 @@ function updateSpeedHudVisibility() {
     hud.classList.add('hidden');
     hideHudSettings();
   }
+  const hsi=document.getElementById('hsiPanel');
+  if(hsi)hsi.classList.toggle('no-hud',hud.classList.contains('hidden'));
 }
 
 map.on('dragstart', () => {
@@ -1376,6 +1483,8 @@ function changeWindSpeedUnit() {
   try { localStorage.setItem(WIND_SPEED_UNIT_KEY, document.getElementById('windSpeedUnit').checked ? 'ms' : 'kmh'); } catch (e) {}
   updateNavUI();
   updateRTUI();
+  saveWindNavPreference();
+  recordConfigurationEvent('wind-unit');
   refreshOpenPopup();
 }
 
@@ -2118,9 +2227,12 @@ function startTargetEdit() {
 
 function setNavTarget(lat, lon) {
   navTarget = { lat, lon };
+  hsiState.mode = 'direct';
+  persistHSISettings();
   const cur = getCurrentPosition();
   if (cur) navLineStart = { lat: cur.lat, lon: cur.lon };
   else navLineStart = null;
+  recordConfigurationEvent('target-changed');
   targetEditMode = false;
   updateMapInteractivity();
   updateNavUI();
@@ -2132,6 +2244,7 @@ function clearNavTarget() {
   navLineStart = null;
   targetEditMode = false;
   updateMapInteractivity();
+  recordConfigurationEvent('target-cleared');
   updateNavUI();
   updateRTUI();
 }
@@ -2141,6 +2254,7 @@ function refreshRoute() {
   const cur = getCurrentPosition();
   if (!cur) { alert('Нет текущего положения. Включите GPS или посчитайте по ОПРС.'); return; }
   navLineStart = { lat: cur.lat, lon: cur.lon };
+  recordConfigurationEvent('direct-route-refreshed');
   updateNavUI();
   updateRTUI();
 }
@@ -2151,7 +2265,7 @@ function computeNav() {
   const distKm = distance(cur, navTarget) / 1000;
   const ipu = trueBearing(cur, navTarget);
   const decl = parseFloat(document.getElementById('decl').value) || 0;
-  const mpu = norm360(ipu - decl);
+  const mpu = norm360((navLineStart ? trueBearing(navLineStart, navTarget) : ipu) - decl);
 
   const wdRaw = document.getElementById('windDir').value.trim();
   const wsRaw = document.getElementById('windSpd').value.trim();
@@ -2230,12 +2344,16 @@ function updateNavUI() {
   if (navLine) { navLine.forEach(l => map.removeLayer(l)); navLine = null; }
   if (navTargetMarker) { map.removeLayer(navTargetMarker); navTargetMarker = null; }
   const cur = getCurrentPosition();
+  if (navTarget && !navLineStart && hsiState.mode === 'direct' && cur) {
+    navLineStart = { lat:cur.lat, lon:cur.lon };
+    recordConfigurationEvent('direct-start-fixed');
+  }
 
   if (navTarget) {
     const popupFn = () => buildNavPopupHtml();
     navTargetMarker = L.marker([navTarget.lat, navTarget.lon], { icon: targetIcon() }).addTo(map);
     bindLivePopup(navTargetMarker, popupFn, { autoPan: true });
-    if (navLineStart) {
+    if (navLineStart && hsiState.mode === 'direct') {
       navLine = makeClickableLine(
         [[navLineStart.lat, navLineStart.lon], [navTarget.lat, navTarget.lon]],
         { color: '#e67e22', weight: 3, opacity: 0.85, dashArray: '8,4' },
@@ -2273,6 +2391,12 @@ function updateNavUI() {
   const resEl = document.getElementById('nav-result');
   resEl.classList.remove('error');
   if (!cur) { resEl.innerHTML = 'Сначала определите своё местоположение (GPS или расчёт ОПРС).'; return; }
+  if (hsiState.mode !== 'direct') {
+    resEl.innerHTML = guidanceSummaryHtml(cur);
+    renderHSIGuideLine();
+    refreshHSIPanel();
+    return;
+  }
   if (!navTarget) {
     resEl.innerHTML = targetEditMode
       ? 'Кликните по карте — там будет цель.'
@@ -2320,6 +2444,8 @@ function updateNavUI() {
     html += '<span style="color:#888;font-size:11px">Заполните поля ветра и скорости, чтобы рассчитать УС и МК</span>';
   }
   resEl.innerHTML = html;
+  renderHSIGuideLine();
+  refreshHSIPanel();
 }
 
 map.on('click', e => {
@@ -2329,6 +2455,362 @@ map.on('click', e => {
 });
 <!-- === КОНЕЦ БЛОКА 34 === -->
 
+<!-- === БЛОК 34-B: HSI / OBS / ROUTE === -->
+// HSI использует магнитные ЗМПУ и GPS-координаты. ФМПУ GPS не является курсом самолёта.
+function hsiValidPoint(p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); }
+function hsiCurrentFix() {
+  if (rtTracking && rtCurrentPosition) {
+    const age = Date.now() - rtCurrentPosition.t;
+    return age >= 0 && age <= GPS_STALE_SEC * 1000 ? rtCurrentPosition : null;
+  }
+  const p = getCurrentPosition();
+  if (!hsiValidPoint(p)) return null;
+  if (Number.isFinite(p.t) && Date.now() - p.t > GPS_STALE_SEC * 1000) return null;
+  return p;
+}
+function hsiDecl() { return getDecl(); }
+function hsiCourseBetween(a,b) { return norm360(trueBearing(a,b) - hsiDecl()); }
+function hsiPointAlong(anchor, trueCourse, meters) {
+  const R=6371000, d=meters/R, lat=toRad(anchor.lat), lon=toRad(anchor.lon), c=toRad(trueCourse);
+  const newLat=Math.asin(Math.sin(lat)*Math.cos(d)+Math.cos(lat)*Math.sin(d)*Math.cos(c));
+  const newLon=lon+Math.atan2(Math.sin(c)*Math.sin(d)*Math.cos(lat),Math.cos(d)-Math.sin(lat)*Math.sin(newLat));
+  return {lat:toDeg(newLat),lon:((toDeg(newLon)+540)%360)-180};
+}
+function hsiRouteInfo() {
+  const route = ROUTES[hsiState.routeKey];
+  if (!route || route.points.length < 2) return null;
+  const idx=Math.max(0,Math.min(route.points.length-2,hsiState.legIndex));
+  return {route,idx,A:route.points[idx],B:route.points[idx+1]};
+}
+function getHSIGuidance() {
+  if (hsiState.mode === 'route') {
+    const leg=hsiRouteInfo();
+    if (!leg) return null;
+    return {mode:'route',from:leg.A,to:leg.B,reference:leg.B,
+      courseMag:hsiCourseBetween(leg.A,leg.B), name:leg.route.name+': '+leg.A.name+' → '+leg.B.name,
+      index:leg.idx, routeKey:hsiState.routeKey};
+  }
+  if (hsiState.mode === 'obs') {
+    if (!hsiValidPoint(hsiState.obsAnchor)) return null;
+    const c=norm360(hsiState.obsCourse);
+    const bearingTrue=norm360(c+hsiDecl());
+    return {mode:'obs',from:hsiPointAlong(hsiState.obsAnchor,bearingTrue+180,45000),
+      to:hsiPointAlong(hsiState.obsAnchor,bearingTrue,45000),reference:hsiState.obsAnchor,
+      courseMag:c,name:'OBS · '+String(Math.round(c)).padStart(3,'0')+'°'};
+  }
+  if (!hsiValidPoint(navTarget)) return null;
+  const start=navLineStart || hsiCurrentFix();
+  if (!start) return null;
+  return {mode:'direct',from:start,to:navTarget,reference:navTarget,
+    courseMag:hsiCourseBetween(start,navTarget),name:'DIRECT · Цель'};
+}
+function hsiDeviation(p,g) {
+  if (!hsiValidPoint(p) || !g) return null;
+  const off=computeOffset(p,g.from,g.to);
+  if (!off) return null;
+  const signedKm=(off.side==='left'?1:off.side==='right'?-1:0)*(off.lbu/1000);
+  let toFrom='—';
+  if (g.mode==='obs') {
+    // Отношение к выбранной опорной точке вдоль выбранного курса.
+    const targetT=computeOffset(g.reference,g.from,g.to)?.t;
+    toFrom=Number.isFinite(targetT) && off.t <= targetT ? 'TO' : 'FROM';
+  } else {
+    toFrom=off.t > 1 ? 'FROM' : 'TO';
+  }
+  return {signedKm,absKm:Math.abs(signedKm),side:off.side,toFrom,t:off.t};
+}
+function hsiRouteBestLeg(route,p) {
+  if (!route || !hsiValidPoint(p)) return 0;
+  let best=0,score=Infinity;
+  for(let i=0;i<route.points.length-1;i++){
+    const A=route.points[i],B=route.points[i+1];
+    const o=computeOffset(p,A,B); if(!o) continue;
+    const d=distance(A,B);
+    const beyond=(o.t<0?-o.t:o.t>1?o.t-1:0)*d;
+    const current=o.lbu+1.25*beyond;
+    if(current<score){score=current;best=i;}
+  }
+  return best;
+}
+function maybeAdvanceHSIRoute(p) {
+  if(hsiState.mode!=='route' || !rtTracking || !hsiValidPoint(p)) return;
+  const leg=hsiRouteInfo(); if(!leg || leg.idx>=leg.route.points.length-2) return;
+  const o=computeOffset(p,leg.A,leg.B);
+  if(!o) return;
+  // Два последовательных GPS-отсчёта около плоскости прохождения ППМ,
+  // только в пределах коридора, чтобы не скакать по маршруту при GPS-шумах.
+  const moving = Number.isFinite(p.speed) && p.speed > 5; // м/с; без достоверной скорости автопереключение запрещено
+  const near = moving && o.lbu <= 2500 && (o.t >= .985) && distance(p,leg.B) <= 3500;
+  if(!near) { hsiState.awaitingRouteFix=0;return; }
+  hsiState.awaitingRouteFix++;
+  if(hsiState.awaitingRouteFix<2 || Date.now()-hsiLastRouteAdvanceAt<7000) return;
+  hsiState.legIndex=leg.idx+1;
+  hsiState.awaitingRouteFix=0;
+  hsiLastRouteAdvanceAt=Date.now();
+  persistHSISettings();
+  recordConfigurationEvent('route-leg-auto');
+  renderHSIGuideLine();
+  updateNavUI();
+}
+function setHSIMode(next) {
+  if(!['direct','route','obs'].includes(next)) return;
+  if(next==='obs' && hsiState.mode!=='obs') {
+    const guidance=getHSIGuidance();
+    if(guidance){
+      hsiState.obsCourse=guidance.courseMag;
+      if(guidance.mode==='route')hsiState.obsRef='route:'+hsiState.routeKey+':'+(hsiState.legIndex+1);
+      else hsiState.obsRef='target';
+      hsiState.obsAnchor={lat:guidance.reference.lat,lon:guidance.reference.lon};
+    } else if(!hsiValidPoint(hsiState.obsAnchor)) {
+      const p=hsiCurrentFix();
+      if(p){hsiState.obsRef='position';hsiState.obsAnchor={lat:p.lat,lon:p.lon};}
+    }
+  }
+  hsiState.mode=next;
+  hsiState.awaitingRouteFix=0;
+  persistHSISettings();
+  recordConfigurationEvent('hsi-mode');
+  updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
+}
+function selectHSIRoute(key) {
+  if(!Object.prototype.hasOwnProperty.call(ROUTES,key)){hsiState.routeKey='';hsiState.legIndex=0;}
+  else {
+    hsiState.routeKey=key;
+    hsiState.legIndex=hsiRouteBestLeg(ROUTES[key],hsiCurrentFix());
+    const toggle=document.getElementById('route'+key);
+    if(toggle && !toggle.checked){toggle.checked=true;renderRoutes();}
+  }
+  hsiState.awaitingRouteFix=0;
+  persistHSISettings();recordConfigurationEvent('route-selected');
+  updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
+}
+function selectHSILeg(value) {
+  const route=ROUTES[hsiState.routeKey];if(!route)return;
+  const n=Number(value);
+  if(!Number.isInteger(n)||n<0||n>=route.points.length-1)return;
+  hsiState.legIndex=n;hsiState.awaitingRouteFix=0;
+  persistHSISettings();recordConfigurationEvent('route-leg-manual');
+  updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
+}
+function makeHSIReferenceOptions() {
+  const items=[{key:'target',name:'Выбранная цель'}, {key:'position',name:'Положение при установке'}];
+  PRESET.forEach((p,i)=>items.push({key:'station:'+i,name:p.name}));
+  Object.entries(ROUTES).forEach(([key,r])=>r.points.slice(0,-1).forEach((p,i)=>
+    items.push({key:'route:'+key+':'+i,name:r.name+' · '+(i+1)+' '+p.name})));
+  return items;
+}
+function hsiResolveRef(spec) {
+  if(spec==='position'){
+    const p=hsiCurrentFix();return hsiValidPoint(p)?{lat:p.lat,lon:p.lon}:null;
+  }
+  if(spec==='target')return hsiValidPoint(navTarget)?{...navTarget}:null;
+  let m=/^station:(\d+)$/.exec(spec);
+  if(m){const p=PRESET[+m[1]];return p?{lat:p.lat,lon:p.lon}:null;}
+  m=/^route:([A-Z0-9_]+):(\d+)$/.exec(spec);
+  if(m){const p=ROUTES[m[1]]?.points[+m[2]];return p?{lat:p.lat,lon:p.lon}:null;}
+  return null;
+}
+function setHSIReference(spec) {
+  const p=hsiResolveRef(spec);
+  if(!p){alert('Для выбранной опорной точки пока нет координат. Сначала задайте цель или получите GPS.'); refreshHSIPanel();return;}
+  hsiState.obsRef=spec;hsiState.obsAnchor=p;
+  persistHSISettings();recordConfigurationEvent('obs-anchor');
+  updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
+}
+function stepHSICourse(n) { enterHSICourse(norm360(Math.round(hsiState.obsCourse)+n)); }
+function enterHSICourse(v) {
+  const c=Number(v);
+  if(!Number.isFinite(c) || c<0 || c>359){refreshHSIPanel();return;}
+  if(hsiState.mode!=='obs')return;
+  hsiState.obsCourse=c;
+  persistHSISettings();recordConfigurationEvent('obs-course');
+  updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
+}
+function setHSIScale(v) {
+  const n=Number(v);if(![.5,1,2,5].includes(n))return;
+  hsiState.scaleKm=n;persistHSISettings();refreshHSIPanel();
+}
+function persistHSISettings() {
+  try {localStorage.setItem(HSI_SETTINGS_KEY,JSON.stringify({mode:hsiState.mode,
+    routeKey:hsiState.routeKey,legIndex:hsiState.legIndex,obsCourse:hsiState.obsCourse,
+    obsRef:hsiState.obsRef,obsAnchor:hsiState.obsAnchor,scaleKm:hsiState.scaleKm}));}catch(e){}
+}
+function loadHSISettings() {
+  try {
+    const o=JSON.parse(localStorage.getItem(HSI_SETTINGS_KEY)||'null');if(!o)return;
+    if(['direct','route','obs'].includes(o.mode))hsiState.mode=o.mode;
+    if(Object.prototype.hasOwnProperty.call(ROUTES,o.routeKey))hsiState.routeKey=o.routeKey;
+    if(Number.isInteger(o.legIndex)&&o.legIndex>=0)hsiState.legIndex=o.legIndex;
+    if(Number.isFinite(o.obsCourse))hsiState.obsCourse=norm360(o.obsCourse);
+    if(typeof o.obsRef==='string')hsiState.obsRef=o.obsRef;
+    if(hsiValidPoint(o.obsAnchor))hsiState.obsAnchor=o.obsAnchor;
+    if([.5,1,2,5].includes(o.scaleKm))hsiState.scaleKm=o.scaleKm;
+  }catch(e){console.warn('HSI settings:',e);}
+}
+function renderHSIGuideLine() {
+  if(hsiGuideLine){map.removeLayer(hsiGuideLine);hsiGuideLine=null;}
+  if(hsiState.mode==='direct')return;
+  const g=getHSIGuidance();if(!g)return;
+  hsiGuideLine=L.polyline([[g.from.lat,g.from.lon],[g.to.lat,g.to.lon]],{
+    color:g.mode==='obs'?'#bd6fe5':'#ffb94a',weight:4,opacity:.92,
+    dashArray:g.mode==='obs'?'11,7':null, interactive:false
+  }).addTo(map);
+}
+function guidanceSummaryHtml(p) {
+  const g=getHSIGuidance();
+  if(!g)return hsiState.mode==='route'
+    ? 'ROUTE: выберите маршрут в HSI.'
+    : 'OBS: выберите опорную точку или получите GPS.';
+  const dev=hsiDeviation(p,g);
+  let html='<b>'+g.mode.toUpperCase()+'</b>: '+g.name+'<br>'+
+    '<b>ЗМПУ:</b> '+g.courseMag.toFixed(0)+'°';
+  if(dev){html+='<br><b>ЛБУ:</b> '+fmtDist(dev.absKm*1000)+
+    (dev.side==='left'?' влево':dev.side==='right'?' вправо':' на линии')+
+    ' · <b>'+dev.toFrom+'</b>';}
+  if(g.reference && p) html+='<br><b>До точки:</b> '+(distance(p,g.reference)/1000).toFixed(1)+' км';
+  if(p)html+=freshnessWarning(p);
+  return html;
+}
+function buildHSISelects() {
+  const r=document.getElementById('hsiRouteSelect');
+  if(r.options.length<=1){Object.entries(ROUTES).forEach(([key,route])=>r.add(new Option(route.name,key)));}
+  const ref=document.getElementById('hsiObsReference');
+  if(ref.options.length===0){makeHSIReferenceOptions().forEach(x=>ref.add(new Option(x.name,x.key)));}
+}
+function refreshHSIPanel() {
+  const panel=document.getElementById('hsiPanel'); if(!panel)return;
+  document.querySelectorAll('[data-hsi-mode]').forEach(btn=>{
+    const active=btn.dataset.hsiMode===hsiState.mode;
+    btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',active?'true':'false');
+  });
+  const navSummary=document.getElementById('hsiNavSummary');
+  if(navSummary)navSummary.textContent=hsiState.mode==='route'
+    ?'ROUTE · '+(hsiRouteInfo()?.route.name||'выберите маршрут')
+    :hsiState.mode==='obs'?'OBS · '+Math.round(hsiState.obsCourse)+'°':'DIRECT · цель на карте';
+  buildHSISelects();
+  const routeControls=document.getElementById('hsiRouteControls');
+  const obsControls=document.getElementById('hsiObsControls');
+  routeControls.hidden=hsiState.mode!=='route';obsControls.hidden=hsiState.mode!=='obs';
+  const routeSelect=document.getElementById('hsiRouteSelect');routeSelect.value=hsiState.routeKey;
+  const legSelect=document.getElementById('hsiLegSelect');
+  const route=ROUTES[hsiState.routeKey];
+  const legKey=hsiState.routeKey;
+  if (legSelect.dataset.routeKey !== legKey) {
+    legSelect.replaceChildren();
+    if(route)route.points.slice(0,-1).forEach((p,i)=>legSelect.add(new Option((i+1)+'. '+p.name+' → '+route.points[i+1].name,String(i))));
+    legSelect.dataset.routeKey=legKey;
+  }
+  legSelect.value=String(hsiState.legIndex);legSelect.disabled=!route;
+  const obsRefSelect=document.getElementById('hsiObsReference');
+  if([...obsRefSelect.options].some(o=>o.value===hsiState.obsRef))obsRefSelect.value=hsiState.obsRef;
+  document.getElementById('hsiCourseManual').hidden=hsiState.mode!=='obs';
+  document.getElementById('hsiCourseAuto').hidden=hsiState.mode==='obs';
+  const input=document.getElementById('hsiCourseInput');
+  if(document.activeElement!==input)input.value=String(Math.round(hsiState.obsCourse));
+  const scale=document.getElementById('hsiScaleSelect');scale.value=String(hsiState.scaleKm);
+  const g=getHSIGuidance(), p=hsiCurrentFix();
+  const d=hsiDeviation(p,g);
+  const txt=document.getElementById('hsiXtk');
+  const courseTxt=document.getElementById('hsiCourseRead');
+  courseTxt.textContent=g?String(Math.round(g.courseMag)).padStart(3,'0')+'°':'—°';
+  document.getElementById('hsiFromToName').textContent=g?g.name:'Нет активной ЛЗП';
+  document.getElementById('hsiToFrom').textContent=d?d.toFrom:'—';
+  const label=d?(d.absKm<1?(d.absKm*1000).toFixed(0)+' м':d.absKm.toFixed(2)+' км'):'—';
+  txt.textContent='ЛБУ '+label+(d?(d.side==='left'?' · СЛЕВА':d.side==='right'?' · СПРАВА':' · НА ЛИНИИ'):'');
+  const x=d?Math.max(-116,Math.min(116,d.signedKm/hsiState.scaleKm*116)):0;
+  document.getElementById('hsiCdiNeedle').setAttribute('transform','translate('+x.toFixed(1)+' 0)');
+  // CDI-планка отклоняется к ЛЗП: самолёт левее линии => планка справа.
+  document.getElementById('hsiScaleLeft').textContent='−'+hsiState.scaleKm+' км';
+  document.getElementById('hsiScaleRight').textContent='+'+hsiState.scaleKm+' км';
+  document.getElementById('hsiStatus').textContent=!g
+    ? 'Для DIRECT нужна цель; для ROUTE — выбранный маршрут; для OBS — опорная точка.'
+    : !p?'Нет свежей GPS-позиции или другого определения места.'
+    : 'GPS ФМПУ не является магнитным курсом. HSI показывает геометрическое уклонение.';
+}
+function openHSI() {
+  hideHudSettings();
+  const el=document.getElementById('hsiPanel');
+  const hud=document.getElementById('hudContainer');
+  el.classList.toggle('no-hud',hud.classList.contains('hidden'));
+  el.classList.remove('hidden');refreshHSIPanel();
+  document.getElementById('hsiClose').focus();
+}
+function closeHSI() { document.getElementById('hsiPanel').classList.add('hidden'); }
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHSI();});
+<!-- === КОНЕЦ БЛОКА 34-B === -->
+
+// Запись настроек, которые действительно действовали на каждом участке полёта.
+// Используются для последующего восстановления расчётных МК, УС и заданной TAS.
+function getWindNavConfiguration() {
+  const num=id=>{const x=document.getElementById(id).value.trim().replace(',','.');return x!==''&&Number.isFinite(Number(x))?Number(x):null;};
+  const g=getHSIGuidance();
+  const delta=num('windDir'), u=getWindSpeedKmh(), tasNav=num('airspeed');
+  const tasRT=getTASKmh();
+  const rtCourse=num('courseRT');
+  let planned=null;
+  if(g&&delta!==null&&Number.isFinite(u)&&tasNav!==null&&tasNav>0){
+    const uv=norm180(g.courseMag-delta);
+    const sinUS=(u/tasNav)*Math.sin(toRad(uv));
+    if(Math.abs(sinUS)<=1){
+      const us=toDeg(Math.asin(sinUS));
+      planned={desiredTrackMagDeg:g.courseMag,windCorrectionDeg:us,
+        projectedMagHeadingDeg:norm360(g.courseMag-us),
+        projectedGroundspeedKmh:tasNav*Math.cos(toRad(us))+u*Math.cos(toRad(uv))};
+    } else planned={desiredTrackMagDeg:g.courseMag,unachievableCrosswind:true};
+  }
+  return {
+    windFromMagDeg:delta,windSpeedKmh:Number.isFinite(u)?u:null,
+    displayedWindUnit:document.getElementById('windSpeedUnit').checked?'ms':'kmh',
+    navTrueAirspeedKmh:tasNav,rtTrueAirspeedKmh:Number.isFinite(tasRT)?tasRT:null,
+    enteredMagCourseDeg:rtCourse,magneticDeclinationDeg:getDecl(),
+    guidance:g?{mode:g.mode,desiredTrackMagDeg:g.courseMag,
+      from:{lat:g.from.lat,lon:g.from.lon},to:{lat:g.to.lat,lon:g.to.lon},
+      reference:{lat:g.reference.lat,lon:g.reference.lon},
+      routeKey:g.routeKey||null,legIndex:Number.isInteger(g.index)?g.index:null}:null,
+    calculated:planned
+  };
+}
+function recordConfigurationEvent(reason) {
+  const flight=getActiveFlight();
+  if(!rtTracking||!flight)return;
+  const config=getWindNavConfiguration();
+  const events=flight.settingsEvents||(flight.settingsEvents=[]);
+  if(events.length&&JSON.stringify(events[events.length-1].config)===JSON.stringify(config))return;
+  events.push({t:Date.now(),reason,config});
+  rtFlightLog.downloaded=false;
+  saveFlightLog(true);
+}
+function saveWindNavPreference() {
+  try {localStorage.setItem(WIND_NAV_KEY,JSON.stringify({
+    windDir:document.getElementById('windDir').value,
+    windSpd:document.getElementById('windSpd').value,
+    windSpeedUnit:document.getElementById('windSpeedUnit').checked?'ms':'kmh',
+    airspeed:document.getElementById('airspeed').value
+  }));}catch(e){}
+}
+function loadWindNavPreference() {
+  try {const o=JSON.parse(localStorage.getItem(WIND_NAV_KEY)||'null');if(!o)return;
+    for(const key of ['windDir','windSpd','airspeed'])if(typeof o[key]==='string')document.getElementById(key).value=o[key];
+    if(['ms','kmh'].includes(o.windSpeedUnit))document.getElementById('windSpeedUnit').checked=o.windSpeedUnit==='ms';
+  }catch(e){}
+}
+function navConfigurationChanged(reason) {
+  saveWindNavPreference();
+  // Не пишем незаконченные числа после каждой клавиши. При потере фокуса — сразу,
+  // иначе после короткой паузы. Изменение применённых данных попадёт в журнал.
+  if(windChangeDebounce)clearTimeout(windChangeDebounce);
+  if(reason==='change')recordConfigurationEvent('settings-edited');
+  else windChangeDebounce=setTimeout(()=>recordConfigurationEvent('settings-edited'),900);
+}
+function setupConfigurationTracking() {
+  for(const id of ['windDir','windSpd','airspeed','courseRT','windTAS']){
+    const el=document.getElementById(id);
+    el.addEventListener('input',()=>navConfigurationChanged('input'));
+    el.addEventListener('change',()=>navConfigurationChanged('change'));
+  }
+  document.getElementById('tasUnit').addEventListener('change',()=>navConfigurationChanged('change'));
+}
+
 <!-- === БЛОК 35: RTNAV === -->
 function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
@@ -2336,7 +2818,7 @@ function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 // Дата создания журнала не меняется, пока не выполнена «Очистить трек РВ».
 function makeNewFlightLog() {
   return {
-    format: 'naebacia-flight-log', version: 2,
+    format: 'naebacia-flight-log', version: 3,
     createdAt: Date.now(), nextFlightId: 1,
     downloaded: false, flights: []
   };
@@ -2351,7 +2833,7 @@ function beginFlightSegment() {
   if (!rtFlightLog) rtFlightLog = makeNewFlightLog();
   const flight = {
     id: rtFlightLog.nextFlightId++, startedAt: Date.now(),
-    endedAt: null, status: 'recording', points: []
+    endedAt: null, status: 'recording', points: [], settingsEvents: []
   };
   rtFlightLog.flights.push(flight);
   rtSessionId = flight.id;
@@ -2409,6 +2891,7 @@ function startRT() {
   requestWakeLock();
   updateRTUI();
   updateSpeedHudVisibility();
+  recordConfigurationEvent('flight-start');
   updateFlightLogUI();
 }
 
@@ -2472,12 +2955,22 @@ function onRTPosition(pos) {
     renderRTTrack();
   }
   rtCurrentPosition = { lat, lon, t, speed, heading, acc };
+  // Если цель была поставлена без определения места, начало DIRECT фиксируется
+  // на первом полученном положении и затем больше не перемещается.
+  if (hsiState.mode === 'direct' && navTarget && !navLineStart) {
+    navLineStart = { lat, lon };
+    recordConfigurationEvent('direct-start-fixed');
+    updateNavUI();
+  }
+  // GPS даёт новые навигационные значения; следующий ППМ определяется по геометрии участка.
+  if (receivedAt - t < GPS_STALE_SEC * 1000) maybeAdvanceHSIRoute(rtCurrentPosition);
   if (windMeasuring) windMeasureData.push({ lat, lon, t });
 
   renderRTMarker();
   updateRTUI();
   updateFlightLogUI();
   refreshOpenPopup();
+  refreshHSIPanel();
   if (isFollowOn() && currentTab === 'rtnav') {
     map.setView([lat, lon], map.getZoom(), { animate: false });
   }
@@ -2522,15 +3015,16 @@ function normalizeStoredPoint(p) {
 
 function migrateOldFlightLog(parsed) {
   // Сохраняем точки v1.56, где весь журнал был одним массивом points.
-  if (parsed.version === 2 && Array.isArray(parsed.flights)) {
+  if (parsed.version >= 2 && Array.isArray(parsed.flights)) {
     const flights = parsed.flights.map((f, index) => ({
       id: Number.isInteger(f.id) ? f.id : index + 1,
       startedAt: f.startedAt, endedAt: f.endedAt ?? null,
       status: f.status || 'completed',
-      points: Array.isArray(f.points) ? f.points.map(normalizeStoredPoint).filter(Boolean) : []
+      points: Array.isArray(f.points) ? f.points.map(normalizeStoredPoint).filter(Boolean) : [],
+      settingsEvents: Array.isArray(f.settingsEvents) ? f.settingsEvents.filter(e => e && Number.isFinite(e.t)).map(e => ({t:e.t,reason:e.reason,config:e.config})) : []
     }));
     return {
-      format: 'naebacia-flight-log', version: 2,
+      format: 'naebacia-flight-log', version: 3,
       createdAt: parsed.createdAt || (flights[0] && flights[0].startedAt) || Date.now(),
       nextFlightId: Math.max(0, ...flights.map(f => f.id)) + 1,
       downloaded: !!parsed.downloaded, flights
@@ -2540,11 +3034,11 @@ function migrateOldFlightLog(parsed) {
     const points = parsed.points.map(normalizeStoredPoint).filter(Boolean);
     const startedAt = parsed.startedAt || (points[0] && points[0].t) || Date.now();
     return {
-      format: 'naebacia-flight-log', version: 2,
+      format: 'naebacia-flight-log', version: 3,
       createdAt: startedAt, nextFlightId: 2,
       downloaded: !!parsed.downloaded,
       flights: [{ id: 1, startedAt, endedAt: parsed.endedAt ?? null,
-        status: parsed.status || 'completed', points }]
+        status: parsed.status || 'completed', points, settingsEvents: [] }]
     };
   }
   return null;
@@ -2558,7 +3052,7 @@ function loadRTTrack() {
       if (!parsed || parsed.format !== 'naebacia-flight-log') throw new Error('Неподдерживаемый формат журнала');
       rtFlightLog = migrateOldFlightLog(parsed);
       if (!rtFlightLog) throw new Error('Не удалось прочитать журнал');
-      let interrupted = parsed.version !== 2;
+      let interrupted = parsed.version !== 3;
       for (const flight of rtFlightLog.flights) {
         if (flight.status === 'recording') {
           flight.status = 'interrupted';
@@ -2581,7 +3075,7 @@ function loadRTTrack() {
           rtFlightLog.createdAt = valid[0].t;
           rtFlightLog.nextFlightId = 2;
           rtFlightLog.flights.push({ id: 1, startedAt: valid[0].t,
-            endedAt: valid[valid.length-1].t, status: 'imported', points: valid });
+            endedAt: valid[valid.length-1].t, status: 'imported', points: valid, settingsEvents: [] });
           rebuildVisibleTrack();
           saveFlightLog(true);
         }
@@ -2626,7 +3120,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 2, appVersion: '1.57',
+    version: 3, appVersion: '1.58',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -2640,6 +3134,9 @@ function flightLogExportObject() {
       startedAt: toIso(f.startedAt),
       endedAt: f.status === 'recording' ? null : toIso(f.endedAt),
       status: rtTracking && f.id === rtSessionId ? 'recording' : f.status,
+      settingsHistory: (f.settingsEvents || []).map(e => ({
+        timestamp: toIso(e.t), reason: e.reason, configuration: e.config
+      })),
       points: f.points.map(p => ({
         timestamp: toIso(p.t),
         latitude: p.lat, longitude: p.lon,
@@ -2838,7 +3335,9 @@ function updateRTUI() {
   avEl.textContent = totalSec > 0 ? (totalDist*3600/totalSec).toFixed(0)+' км/ч' : '—';
 
   const tgtEl = document.getElementById('rt-target');
-  if (navTarget) tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
+  const guide=getHSIGuidance();
+  if (guide && hsiState.mode !== 'direct') tgtEl.textContent = guide.name;
+  else if (navTarget) tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
   else tgtEl.innerHTML = '<span style="color:#888">Задайте цель на вкладке Навигация</span>';
 
   if (rtCurrentPosition && rtCurrentPosition.speed !== null) {
@@ -2854,6 +3353,7 @@ function updateRTUI() {
   resEl.classList.remove('error');
   if (!rtTracking && !rtCurrentPosition) { resEl.innerHTML = 'Нажмите «Старт РВ», чтобы начать.'; return; }
   if (!rtCurrentPosition) { resEl.innerHTML = 'Ожидание первой позиции GPS...'; return; }
+  if (hsiState.mode !== 'direct') { resEl.innerHTML = guidanceSummaryHtml(rtCurrentPosition); return; }
   if (!navTarget) { resEl.innerHTML = 'Задайте цель на вкладке Навигация.'; return; }
 
   const n = computeNav();
@@ -2990,6 +3490,8 @@ function applyWindToFields(delta, uKmh) {
   document.getElementById('windDir').value = delta.toFixed(0);
   const showMs = document.getElementById('windSpeedUnit').checked;
   document.getElementById('windSpd').value = (showMs ? uKmh / 3.6 : uKmh).toFixed(showMs ? 1 : 0);
+  saveWindNavPreference();
+  recordConfigurationEvent('wind-measurement-applied');
   updateNavUI();
   document.getElementById('windResult').innerHTML += '<br><span style="color:#2a7">✓ Применено к полям ветра на вкладке Навигация</span>';
 }
@@ -3346,9 +3848,13 @@ loadPreset();
 loadTrack();
 loadTrackGps();
 loadRTTrack();
+loadHSISettings();
+buildHSISelects();
 changeMenuSide(localStorage.getItem(MENU_SIDE_KEY) === 'right');
 document.getElementById('windSpeedUnit').checked = localStorage.getItem(WIND_SPEED_UNIT_KEY) === 'ms';
 setHudHeadingVisible(localStorage.getItem(HUD_HEADING_KEY) === '1');
+loadWindNavPreference();
+setupConfigurationTracking();
 updateTasHint();
 // Автономный запрос разрешения при загрузке не включает РВ и не записывает трек.
 requestGpsPermissionAtStartup();
@@ -3365,6 +3871,8 @@ toggleAltitudeView();
 updateNavUI();
 updateRTUI();
 updateFlightLogUI();
+renderHSIGuideLine();
+refreshHSIPanel();
 
 // Браузер сам решает, показать ли диалог повторно для разрешения «только сейчас».
 function requestGpsPermissionAtStartup() {
