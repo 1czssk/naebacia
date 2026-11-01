@@ -135,7 +135,7 @@
   .hsi-mini-modes { display:flex; gap:4px; margin:6px 0; }
   .hsi-mini-modes button { flex:1; min-width:0; border:1px solid #b6c9ce; border-radius:5px; padding:9px 4px; background:#f8fafb; color:#26363c; font-size:12px; }
   .hsi-mini-modes button.active { background:#0b7c91; color:white; border-color:#0b7c91; font-weight:700; }
-  #hsiPanel { position:fixed; left:50%; bottom:152px; transform:translateX(-50%); width:min(382px,calc(100vw - 18px)); max-height:calc(100dvh - 174px); overflow:auto; box-sizing:border-box; border-radius:15px; z-index:1320; padding:12px 13px 13px; box-shadow:0 8px 30px rgba(0,0,0,.48); background:rgba(15,27,37,.97); color:#f4f8fc; font:13px -apple-system,'Segoe UI',sans-serif; }
+  #hsiPanel { position:fixed; left:50%; bottom:152px; transform:translateX(-50%); width:min(382px,calc(100vw - 18px)); max-height:calc(100dvh - 174px); overflow:auto; box-sizing:border-box; border-radius:15px; z-index:1320; padding:12px 13px 13px; box-shadow:0 8px 30px rgba(0,0,0,.48); background:rgba(15,27,37,.50); color:#f4f8fc; font:13px -apple-system,'Segoe UI',sans-serif; }
   #hsiPanel.hidden { display:none; }
   #hsiPanel.no-hud { bottom:14px; max-height:calc(100dvh - 30px); }
   #hsiPanel button { min-height:36px; padding:6px; border-radius:6px; }
@@ -150,7 +150,9 @@
   .hsi-row label { color:#c0d5e1; font-size:12px; }
   #hsiPanel select, #hsiPanel input[type=number] { font-size:13px; font-family:inherit; color:#12252c; background:white; border:1px solid #7d9dad; border-radius:5px; padding:7px 4px; min-height:34px; box-sizing:border-box; max-width:70%; }
   #hsiPanel select { flex:1; min-width:0; }
-  #hsiPanel .hsi-details { padding:7px 9px; border:1px solid #3f586b; border-radius:7px; background:#243643; }
+  #hsiPanel .hsi-details { padding:7px 9px; border:1px solid #3f586b; border-radius:7px; background:rgba(36,54,67,.80); }
+  #hsiPanel .hsi-leg-label { color:#c0d5e1; font-size:12px; flex-shrink:0; }
+  #hsiLegRead { font-size:12px; text-align:right; color:#f2f8fb; font-weight:650; overflow-wrap:anywhere; }
   #hsiPanel .hsi-details[hidden], #hsiPanel [hidden] { display:none !important; }
   #hsiPanel .hsi-scale { width:100%; display:block; height:105px; }
   #hsiCdiNeedle { transition:transform .16s linear; }
@@ -159,7 +161,7 @@
   #hsiCourseInput { max-width:78px !important; width:78px; font-size:24px !important; font-weight:750; text-align:center; }
   #hsiCourseRead { font-size:27px; font-weight:750; font-variant-numeric:tabular-nums; }
   #hsiCourseManual { display:flex; flex-direction:row; align-items:center; justify-content:center; gap:9px; }
-  #hsiStatus { font-size:11px; color:#bed4df; margin:7px 0 0; min-height:12px; line-height:1.35; }
+  #hsiDistance { text-align:center; font-size:14px; font-weight:650; color:#c8e5f5; margin:6px 0 1px; font-variant-numeric:tabular-nums; }
   #hsiXtk { text-align:center; font-size:15px; font-weight:700; color:#f7d37a; }
   #hsiToFrom { color:#88d9f6; font-weight:700; font-size:12px; }
   #hsiSpeedOpen { width:100%; margin-top:9px; padding:9px; background:#1c6f8d; color:white; border:0; border-radius:6px; }
@@ -671,26 +673,12 @@
 <!-- === БЛОК 8-B: ПЛАНОВЫЙ НАВИГАЦИОННЫЙ ИНДИКАТОР === -->
 <section id="hsiPanel" class="hidden" role="dialog" aria-modal="false" aria-label="HSI / OBS">
   <div class="hsi-head"><strong>🧭 HSI / OBS</strong><button type="button" id="hsiClose" onclick="closeHSI()" aria-label="Закрыть HSI">×</button></div>
-  <div class="hsi-mode-row" aria-label="Режим HSI">
-    <button type="button" data-hsi-mode="direct" onclick="setHSIMode('direct')">DIRECT</button>
-    <button type="button" data-hsi-mode="route" onclick="setHSIMode('route')">ROUTE</button>
-    <button type="button" data-hsi-mode="obs" onclick="setHSIMode('obs')">OBS</button>
-  </div>
-  <div id="hsiRouteControls" class="hsi-details" hidden>
-    <div class="hsi-row"><label for="hsiRouteSelect">Маршрут</label><select id="hsiRouteSelect" onchange="selectHSIRoute(this.value)"><option value="">Выберите маршрут</option></select></div>
-    <div class="hsi-row"><label for="hsiLegSelect">Участок</label><select id="hsiLegSelect" onchange="selectHSILeg(this.value)"></select></div>
-    <div class="hint" style="color:#c3d6de">ППМ переключается автоматически после его прохождения. Можно выбрать участок вручную.</div>
-  </div>
-  <div id="hsiObsControls" class="hsi-details" hidden>
-    <div class="hsi-row"><label for="hsiObsReference">Линия через</label><select id="hsiObsReference" onchange="setHSIReference(this.value)"></select></div>
-    <div class="hint" style="color:#c3d6de">Курс задаётся магнитный. Точка остаётся неподвижной после выбора.</div>
-  </div>
   <div class="hsi-row" style="justify-content:center; margin:9px 0 0;">
     <span id="hsiFromToName" style="font-size:12px;color:#c9dce6">—</span>
     <span id="hsiToFrom">—</span>
   </div>
   <svg class="hsi-scale" viewBox="0 0 320 105" role="img" aria-label="Индикатор бокового уклонения от ЛЗП">
-    <rect x="5" y="8" width="310" height="88" rx="9" fill="#213542" stroke="#4a6677"/>
+    <rect x="5" y="8" width="310" height="88" rx="9" fill="#213542" fill-opacity="0.72" stroke="#4a6677"/>
     <path d="M21 52 H299" stroke="#889eaa" stroke-width="2"/>
     <g stroke="#829aa7" stroke-width="2">
       <path d="M44 40 V64 M73 40 V64 M102 40 V64 M131 40 V64 M189 40 V64 M218 40 V64 M247 40 V64 M276 40 V64"/>
@@ -698,18 +686,30 @@
     <path d="M160 20 V84" stroke="#ffffff" stroke-width="3"/>
     <path d="M152 24 L160 14 L168 24" stroke="#f0f6f8" stroke-width="2" fill="none"/>
     <g id="hsiCdiNeedle"><rect x="154" y="33" width="12" height="39" rx="5" fill="#ffbf50" stroke="#ffe7af" stroke-width="1"/></g>
-    <text id="hsiScaleLeft" x="17" y="92" fill="#bcd0dd" font-size="10">−1</text>
-    <text id="hsiScaleRight" x="302" y="92" text-anchor="end" fill="#bcd0dd" font-size="10">+1</text>
+    <text id="hsiScaleLeft" x="17" y="92" fill="#bcd0dd" font-size="10">−5 км</text>
+    <text id="hsiScaleRight" x="302" y="92" text-anchor="end" fill="#bcd0dd" font-size="10">+5 км</text>
   </svg>
   <div id="hsiXtk">ЛБУ —</div>
+  <div id="hsiDistance" aria-live="off">До точки —</div>
   <div class="hsi-course" id="hsiCourseManual" hidden>
     <button type="button" onclick="stepHSICourse(-1)" aria-label="Уменьшить ЗМПУ на 1 градус">◀</button>
     <div style="text-align:center"><div style="display:flex;align-items:center;gap:3px"><input id="hsiCourseInput" type="number" inputmode="numeric" min="0" max="359" step="1" onchange="enterHSICourse(this.value)" aria-label="ЗМПУ OBS в градусах"><span style="font-size:20px;color:#ffffff">°</span></div><div style="font-size:10px;color:#becfda">ЗМПУ</div></div>
     <button type="button" onclick="stepHSICourse(1)" aria-label="Увеличить ЗМПУ на 1 градус">▶</button>
   </div>
   <div class="hsi-course" id="hsiCourseAuto"><div style="text-align:center"><div id="hsiCourseRead">—°</div><div style="font-size:10px;color:#becfda">ЗМПУ (авто)</div></div></div>
-  <div class="hsi-row"><label for="hsiScaleSelect">Шкала ЛБУ</label><select id="hsiScaleSelect" onchange="setHSIScale(this.value)"><option value="0.5">±0,5 км</option><option value="1" selected>±1 км</option><option value="2">±2 км</option><option value="5">±5 км</option></select></div>
-  <div id="hsiStatus" role="status">Задайте цель или выберите маршрут.</div>
+  <div class="hsi-mode-row" aria-label="Режим HSI">
+    <button type="button" data-hsi-mode="direct" onclick="setHSIMode('direct')">DIRECT</button>
+    <button type="button" data-hsi-mode="route" onclick="setHSIMode('route')">ROUTE</button>
+    <button type="button" data-hsi-mode="obs" onclick="setHSIMode('obs')">OBS</button>
+  </div>
+  <div id="hsiRouteControls" class="hsi-details" hidden>
+    <div class="hsi-row"><label for="hsiRouteSelect">Маршрут</label><select id="hsiRouteSelect" onchange="selectHSIRoute(this.value)"><option value="">Выберите маршрут</option></select></div>
+    <div class="hsi-row"><span class="hsi-leg-label">Текущий участок (авто)</span><span id="hsiLegRead" aria-live="off">—</span></div>
+  </div>
+  <div id="hsiObsControls" class="hsi-details" hidden>
+    <div class="hsi-row"><label for="hsiObsReference">Линия через</label><select id="hsiObsReference" onchange="setHSIReference(this.value)"></select></div>
+    <div class="hint" style="color:#c3d6de">Курс задаётся магнитный. Точка остаётся неподвижной после выбора.</div>
+  </div>
 </section>
 <!-- === КОНЕЦ БЛОКА 8-B === -->
 
@@ -796,9 +796,7 @@ function switchTab(name) {
   updateSpeedHudVisibility();
   refreshHSIPanel();
 
-  if (name === 'rtnav' && followMode && rtCurrentPosition) {
-    map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(), { animate: false });
-  }
+  if (name === 'rtnav') centerFollowedAircraft(false);
 }
 
 function changeMenuSide(right) {
@@ -967,8 +965,9 @@ let navTargetMarker = null;
 let navLine = null;
 let hsiGuideLine = null;
 let hsiState = { mode:'direct', routeKey:'', legIndex:0, obsCourse:0,
-  obsRef:'target', obsAnchor:null, scaleKm:1, awaitingRouteFix:0 };
+  obsRef:'target', obsAnchor:null, scaleKm:5, awaitingRouteFix:0 };
 let hsiLastRouteAdvanceAt = 0;
+let hsiNeedsInitialLegFix = false;
 let windChangeDebounce = null;
 let targetEditMode = false;
 
@@ -1226,14 +1225,37 @@ let followMode = localStorage.getItem(FOLLOW_KEY) !== '0';
 
 function isFollowOn() { return followMode; }
 
+// Когда HSI открыт, центрирование приходится на свободную область НАД прибором,
+// а не на геометрический центр всей карты, который скрыт панелью HSI.
+function centerFollowedAircraft(animate = false) {
+  if (!followMode || !rtTracking || currentTab !== 'rtnav' || !rtCurrentPosition) return;
+  const latlng = [rtCurrentPosition.lat, rtCurrentPosition.lon];
+  const hsi = document.getElementById('hsiPanel');
+  const z = map.getZoom();
+  if (!hsi || hsi.classList.contains('hidden')) {
+    map.setView(latlng, z, { animate });
+    return;
+  }
+
+  const mapRect = document.getElementById('map').getBoundingClientRect();
+  const hsiRect = hsi.getBoundingClientRect();
+  const size = map.getSize();
+  // Координата верхнего края HSI относительно контейнера карты.
+  // Центр свободного пространства берём с запасом 14 px перед панелью.
+  const freeHeight = Math.max(0, Math.min(size.y, hsiRect.top - mapRect.top - 14));
+  const targetY = Math.max(20, Math.min(size.y - 20, freeHeight / 2));
+  const targetX = size.x / 2;
+  // Смещаем ЦЕНТР карты, а не маркер: вся геометрия Leaflet остаётся привязана к GPS.
+  const aircraftPoint = map.project(latlng, z);
+  const centerPoint = aircraftPoint.add(L.point(size.x / 2 - targetX, size.y / 2 - targetY));
+  map.setView(map.unproject(centerPoint, z), z, { animate });
+}
+
 function toggleFollowMode() {
   followMode = !followMode;
   localStorage.setItem(FOLLOW_KEY, followMode ? '1' : '0');
   updateFollowBtn();
-  if (followMode && rtCurrentPosition && currentTab === 'rtnav') {
-    map.setView([rtCurrentPosition.lat, rtCurrentPosition.lon], map.getZoom(),
-                { animate: true, duration: 0.5 });
-  }
+  if (followMode) centerFollowedAircraft(true);
 }
 
 function updateFollowBtn() {
@@ -2456,7 +2478,7 @@ map.on('click', e => {
 <!-- === КОНЕЦ БЛОКА 34 === -->
 
 <!-- === БЛОК 34-B: HSI / OBS / ROUTE === -->
-// HSI использует магнитные ЗМПУ и GPS-координаты. ФМПУ GPS не является курсом самолёта.
+// HSI: маршрут ROUTE выбирается вручную, активный участок выбирается и сменяется автоматически по GPS.
 function hsiValidPoint(p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); }
 function hsiCurrentFix() {
   if (rtTracking && rtCurrentPosition) {
@@ -2519,31 +2541,35 @@ function hsiDeviation(p,g) {
   }
   return {signedKm,absKm:Math.abs(signedKm),side:off.side,toFrom,t:off.t};
 }
+// При ручном выборе маршрута выбираем наиболее близкий участок,
+// затем переключаем только вперёд по порядку при достижении конечного ППМ.
 function hsiRouteBestLeg(route,p) {
   if (!route || !hsiValidPoint(p)) return 0;
   let best=0,score=Infinity;
-  for(let i=0;i<route.points.length-1;i++){
+  for (let i=0;i<route.points.length-1;i++) {
     const A=route.points[i],B=route.points[i+1];
-    const o=computeOffset(p,A,B); if(!o) continue;
-    const d=distance(A,B);
-    const beyond=(o.t<0?-o.t:o.t>1?o.t-1:0)*d;
-    const current=o.lbu+1.25*beyond;
-    if(current<score){score=current;best=i;}
+    const off=computeOffset(p,A,B);
+    if (!off) continue;
+    const len=distance(A,B);
+    const beyond=(off.t<0?-off.t:off.t>1?off.t-1:0)*len;
+    const current=off.lbu+1.25*beyond;
+    if (current<score) {score=current;best=i;}
   }
   return best;
 }
 function maybeAdvanceHSIRoute(p) {
-  if(hsiState.mode!=='route' || !rtTracking || !hsiValidPoint(p)) return;
-  const leg=hsiRouteInfo(); if(!leg || leg.idx>=leg.route.points.length-2) return;
-  const o=computeOffset(p,leg.A,leg.B);
-  if(!o) return;
-  // Два последовательных GPS-отсчёта около плоскости прохождения ППМ,
-  // только в пределах коридора, чтобы не скакать по маршруту при GPS-шумах.
-  const moving = Number.isFinite(p.speed) && p.speed > 5; // м/с; без достоверной скорости автопереключение запрещено
-  const near = moving && o.lbu <= 2500 && (o.t >= .985) && distance(p,leg.B) <= 3500;
-  if(!near) { hsiState.awaitingRouteFix=0;return; }
+  if (hsiState.mode!=='route' || !rtTracking || !hsiValidPoint(p) || hsiNeedsInitialLegFix) return;
+  const leg=hsiRouteInfo();
+  if (!leg || leg.idx>=leg.route.points.length-2) return;
+  const off=computeOffset(p,leg.A,leg.B);
+  if (!off) return;
+  // Защита от случайного переключения при стоянке или скачке GPS.
+  const moving=Number.isFinite(p.speed) && p.speed>5;
+  const accurate=!Number.isFinite(p.acc) || p.acc<=300;
+  const near=moving && accurate && off.lbu<=2500 && off.t>=.985 && distance(p,leg.B)<=3500;
+  if (!near) { hsiState.awaitingRouteFix=0; return; }
   hsiState.awaitingRouteFix++;
-  if(hsiState.awaitingRouteFix<2 || Date.now()-hsiLastRouteAdvanceAt<7000) return;
+  if (hsiState.awaitingRouteFix<2 || Date.now()-hsiLastRouteAdvanceAt<7000) return;
   hsiState.legIndex=leg.idx+1;
   hsiState.awaitingRouteFix=0;
   hsiLastRouteAdvanceAt=Date.now();
@@ -2568,28 +2594,29 @@ function setHSIMode(next) {
   }
   hsiState.mode=next;
   hsiState.awaitingRouteFix=0;
+  if (next==='route' && hsiState.routeKey) {
+    const fix=hsiCurrentFix();
+    if (fix) hsiState.legIndex=hsiRouteBestLeg(ROUTES[hsiState.routeKey],fix);
+    hsiNeedsInitialLegFix=!fix;
+  }
   persistHSISettings();
   recordConfigurationEvent('hsi-mode');
   updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
 }
 function selectHSIRoute(key) {
-  if(!Object.prototype.hasOwnProperty.call(ROUTES,key)){hsiState.routeKey='';hsiState.legIndex=0;}
-  else {
+  if(!Object.prototype.hasOwnProperty.call(ROUTES,key)) {
+    hsiState.routeKey=''; hsiState.legIndex=0; hsiNeedsInitialLegFix=false;
+  } else {
     hsiState.routeKey=key;
-    hsiState.legIndex=hsiRouteBestLeg(ROUTES[key],hsiCurrentFix());
+    const fix=hsiCurrentFix();
+    hsiState.legIndex=fix?hsiRouteBestLeg(ROUTES[key],fix):0;
+    hsiNeedsInitialLegFix=!fix;
     const toggle=document.getElementById('route'+key);
     if(toggle && !toggle.checked){toggle.checked=true;renderRoutes();}
   }
   hsiState.awaitingRouteFix=0;
+  hsiLastRouteAdvanceAt=0;
   persistHSISettings();recordConfigurationEvent('route-selected');
-  updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
-}
-function selectHSILeg(value) {
-  const route=ROUTES[hsiState.routeKey];if(!route)return;
-  const n=Number(value);
-  if(!Number.isInteger(n)||n<0||n>=route.points.length-1)return;
-  hsiState.legIndex=n;hsiState.awaitingRouteFix=0;
-  persistHSISettings();recordConfigurationEvent('route-leg-manual');
   updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
 }
 function makeHSIReferenceOptions() {
@@ -2626,14 +2653,10 @@ function enterHSICourse(v) {
   persistHSISettings();recordConfigurationEvent('obs-course');
   updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
 }
-function setHSIScale(v) {
-  const n=Number(v);if(![.5,1,2,5].includes(n))return;
-  hsiState.scaleKm=n;persistHSISettings();refreshHSIPanel();
-}
 function persistHSISettings() {
   try {localStorage.setItem(HSI_SETTINGS_KEY,JSON.stringify({mode:hsiState.mode,
     routeKey:hsiState.routeKey,legIndex:hsiState.legIndex,obsCourse:hsiState.obsCourse,
-    obsRef:hsiState.obsRef,obsAnchor:hsiState.obsAnchor,scaleKm:hsiState.scaleKm}));}catch(e){}
+    obsRef:hsiState.obsRef,obsAnchor:hsiState.obsAnchor}));}catch(e){}
 }
 function loadHSISettings() {
   try {
@@ -2644,7 +2667,8 @@ function loadHSISettings() {
     if(Number.isFinite(o.obsCourse))hsiState.obsCourse=norm360(o.obsCourse);
     if(typeof o.obsRef==='string')hsiState.obsRef=o.obsRef;
     if(hsiValidPoint(o.obsAnchor))hsiState.obsAnchor=o.obsAnchor;
-    if([.5,1,2,5].includes(o.scaleKm))hsiState.scaleKm=o.scaleKm;
+    hsiNeedsInitialLegFix=hsiState.mode==='route' && !!hsiState.routeKey;
+    hsiState.scaleKm=5; // Предыдущие настройки масштаба больше не применяются.
   }catch(e){console.warn('HSI settings:',e);}
 }
 function renderHSIGuideLine() {
@@ -2692,22 +2716,17 @@ function refreshHSIPanel() {
   const obsControls=document.getElementById('hsiObsControls');
   routeControls.hidden=hsiState.mode!=='route';obsControls.hidden=hsiState.mode!=='obs';
   const routeSelect=document.getElementById('hsiRouteSelect');routeSelect.value=hsiState.routeKey;
-  const legSelect=document.getElementById('hsiLegSelect');
-  const route=ROUTES[hsiState.routeKey];
-  const legKey=hsiState.routeKey;
-  if (legSelect.dataset.routeKey !== legKey) {
-    legSelect.replaceChildren();
-    if(route)route.points.slice(0,-1).forEach((p,i)=>legSelect.add(new Option((i+1)+'. '+p.name+' → '+route.points[i+1].name,String(i))));
-    legSelect.dataset.routeKey=legKey;
-  }
-  legSelect.value=String(hsiState.legIndex);legSelect.disabled=!route;
+  const leg=hsiRouteInfo();
+  document.getElementById('hsiLegRead').textContent=leg
+    ? (leg.idx+1)+'. '+leg.A.name+' → '+leg.B.name
+    : '—';
   const obsRefSelect=document.getElementById('hsiObsReference');
   if([...obsRefSelect.options].some(o=>o.value===hsiState.obsRef))obsRefSelect.value=hsiState.obsRef;
   document.getElementById('hsiCourseManual').hidden=hsiState.mode!=='obs';
   document.getElementById('hsiCourseAuto').hidden=hsiState.mode==='obs';
   const input=document.getElementById('hsiCourseInput');
   if(document.activeElement!==input)input.value=String(Math.round(hsiState.obsCourse));
-  const scale=document.getElementById('hsiScaleSelect');scale.value=String(hsiState.scaleKm);
+  // Масштаб ЛБУ постоянный: от −5 до +5 км.
   const g=getHSIGuidance(), p=hsiCurrentFix();
   const d=hsiDeviation(p,g);
   const txt=document.getElementById('hsiXtk');
@@ -2720,12 +2739,12 @@ function refreshHSIPanel() {
   const x=d?Math.max(-116,Math.min(116,d.signedKm/hsiState.scaleKm*116)):0;
   document.getElementById('hsiCdiNeedle').setAttribute('transform','translate('+x.toFixed(1)+' 0)');
   // CDI-планка отклоняется к ЛЗП: самолёт левее линии => планка справа.
-  document.getElementById('hsiScaleLeft').textContent='−'+hsiState.scaleKm+' км';
-  document.getElementById('hsiScaleRight').textContent='+'+hsiState.scaleKm+' км';
-  document.getElementById('hsiStatus').textContent=!g
-    ? 'Для DIRECT нужна цель; для ROUTE — выбранный маршрут; для OBS — опорная точка.'
-    : !p?'Нет свежей GPS-позиции или другого определения места.'
-    : 'GPS ФМПУ не является магнитным курсом. HSI показывает геометрическое уклонение.';
+  document.getElementById('hsiScaleLeft').textContent='−5 км';
+  document.getElementById('hsiScaleRight').textContent='+5 км';
+  const distanceEl=document.getElementById('hsiDistance');
+  const distanceLabel=g?.mode==='route'?'До ППМ':g?.mode==='direct'?'До цели':'До точки';
+  const distM=(g&&p&&hsiValidPoint(g.reference))?distance(p,g.reference):null;
+  distanceEl.textContent=distanceLabel+' '+(distM===null?'—':fmtDist(distM));
 }
 function openHSI() {
   hideHudSettings();
@@ -2733,9 +2752,25 @@ function openHSI() {
   const hud=document.getElementById('hudContainer');
   el.classList.toggle('no-hud',hud.classList.contains('hidden'));
   el.classList.remove('hidden');refreshHSIPanel();
+  // Дождаться размеров панели после открытия и поднять самолёт над ней.
+  requestAnimationFrame(() => centerFollowedAircraft(false));
   document.getElementById('hsiClose').focus();
 }
-function closeHSI() { document.getElementById('hsiPanel').classList.add('hidden'); }
+function closeHSI() {
+  document.getElementById('hsiPanel').classList.add('hidden');
+  // После закрытия HSI возвращаем обычное центрирование на самолёт.
+  centerFollowedAircraft(false);
+}
+// Подстраиваем положение при повороте телефона и изменении высоты панели HSI.
+window.addEventListener('resize', () => requestAnimationFrame(() => centerFollowedAircraft(false)));
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(() => {
+    const panel = document.getElementById('hsiPanel');
+    if (panel && !panel.classList.contains('hidden')) {
+      requestAnimationFrame(() => centerFollowedAircraft(false));
+    }
+  }).observe(document.getElementById('hsiPanel'));
+}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHSI();});
 <!-- === КОНЕЦ БЛОКА 34-B === -->
 
@@ -2962,8 +2997,20 @@ function onRTPosition(pos) {
     recordConfigurationEvent('direct-start-fixed');
     updateNavUI();
   }
-  // GPS даёт новые навигационные значения; следующий ППМ определяется по геометрии участка.
-  if (receivedAt - t < GPS_STALE_SEC * 1000) maybeAdvanceHSIRoute(rtCurrentPosition);
+  // Маршрут выбирается вручную; GPS определяет текущий участок при первом
+  // позиционировании и затем переключает его при прохождении ППМ.
+  if (hsiState.mode==='route' && hsiNeedsInitialLegFix && hsiState.routeKey &&
+      receivedAt>=t && receivedAt-t<=GPS_STALE_SEC*1000 &&
+      (!Number.isFinite(acc) || acc<=300)) {
+    hsiState.legIndex=hsiRouteBestLeg(ROUTES[hsiState.routeKey],rtCurrentPosition);
+    hsiNeedsInitialLegFix=false;
+    hsiState.awaitingRouteFix=0;
+    persistHSISettings();
+    recordConfigurationEvent('route-leg-initial');
+    renderHSIGuideLine();
+  } else if (receivedAt>=t && receivedAt-t<=GPS_STALE_SEC*1000) {
+    maybeAdvanceHSIRoute(rtCurrentPosition);
+  }
   if (windMeasuring) windMeasureData.push({ lat, lon, t });
 
   renderRTMarker();
@@ -2971,9 +3018,7 @@ function onRTPosition(pos) {
   updateFlightLogUI();
   refreshOpenPopup();
   refreshHSIPanel();
-  if (isFollowOn() && currentTab === 'rtnav') {
-    map.setView([lat, lon], map.getZoom(), { animate: false });
-  }
+  if (isFollowOn() && currentTab === 'rtnav') centerFollowedAircraft(false);
 }
 
 function onRTError(err) {
