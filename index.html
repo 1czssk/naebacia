@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.56</title>
+<title>НАЕБАЦИЯ v1.57 🎃 — журнал полётов</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -33,6 +33,8 @@
     min-width:44px; min-height:44px;
   }
   #toggleBtn:active { background:#185; }
+  #toggleBtn.menu-right { left:auto; right:10px; }
+
 
   #panel {
     position:absolute; top:10px; left:10px; z-index:1000;
@@ -81,10 +83,27 @@
     padding: 8px 22px; border-radius: 40px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.5);
     text-shadow: 0 0 6px rgba(0,0,0,0.8);
-    display: flex; align-items: baseline; gap: 8px;
+    display: flex; flex-direction:column; align-items:center; gap: 3px;
     border: 2px solid rgba(255,255,255,0.15);
+    pointer-events:auto; cursor:pointer; user-select:none;
+    -webkit-tap-highlight-color: transparent;
     font-family: -apple-system, "Segoe UI", sans-serif;
   }
+  #hudContainer #speedHudMain { display:flex; align-items:baseline; gap:8px; }
+  #hudContainer #speedHudHeading { font-size:17px; font-weight:600; line-height:1.1; color:#f1f5f9; font-variant-numeric:tabular-nums; }
+  #hudContainer #speedHud:focus-visible { outline:3px solid #08c; outline-offset:3px; }
+  #hudSettings {
+    position:fixed; bottom:154px; left:50%; transform:translateX(-50%);
+    z-index:1250; width:min(310px,calc(100vw - 30px)); padding:14px 16px;
+    box-sizing:border-box; background:white; border:1px solid #ddd;
+    border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,.32);
+    font-size:14px; color:#222;
+  }
+  #hudSettings.hidden { display:none; }
+  #hudSettings label { display:flex;align-items:center;gap:10px;min-height:42px;cursor:pointer; }
+  #hudSettings input[type="checkbox"] { width:20px;height:20px; }
+  #hudSettings .hud-units-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px; }
+  #hudSettings .hud-units-row select { width:auto; min-width:130px; max-width:60%; font-size:14px; padding:7px 9px; margin:0; border:1px solid #bbb; border-radius:6px; background:white; color:#222; }
   #hudContainer #speedHudValue {
     font-size: 34px; font-weight: 700; min-width: 64px;
     text-align: right; font-variant-numeric: tabular-nums; line-height: 1;
@@ -213,6 +232,12 @@
   .altitude-legend-labels { display:flex; justify-content:space-between; font-size:11px; color:#555; margin-top:2px; }
   #rt-log-status { font-size:11px; color:#555; margin-top:6px; white-space:normal; }
   #rt-log-status.warning { color:#b00020; font-weight:bold; }
+  .compact-switch-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+  .compact-switch-row .circle-switch { flex:none; }
+  .compact-switch-row .unit-side { font-size:12px; white-space:nowrap; }
+  #windSpeedUnit { width:auto !important; }
+  .menu-side-control { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+
   .rt-stats { display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:12px; }
   .rt-stats > div { background:#f8f8f8; padding:4px 6px; border-radius:3px; }
 </style>
@@ -236,6 +261,8 @@
     #hudContainer #speedHud { padding: 6px 18px; }
     #hudContainer #speedHudValue { font-size: 30px; min-width: 56px; }
     #hudContainer #speedHudUnit { font-size: 13px; }
+    #hudContainer #speedHudHeading { font-size:15px; }
+    #hudSettings { bottom:150px; }
     #hudContainer #followBtn { width: 40px; height: 40px; font-size: 18px; }
   }
 </style>
@@ -250,13 +277,25 @@
 
 <!-- === БЛОК 7: BODY: HUD === -->
 <div id="hudContainer" class="hidden">
-  <div id="speedHud">
-    <span id="speedHudValue">0</span>
-    <span id="speedHudUnit">км/ч</span>
+  <div id="speedHud" role="button" tabindex="0" aria-label="Настройки индикатора скорости" aria-controls="hudSettings" aria-expanded="false" onclick="toggleHudSettings(event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHudSettings(event);}">
+    <div id="speedHudMain"><span id="speedHudValue">0</span><span id="speedHudUnit">км/ч</span></div>
+    <div id="speedHudHeading" hidden>—</div>
   </div>
   <button id="followBtn" onclick="toggleFollowMode()" title="Следить за позицией">
     <span id="followBtnIcon">🎯</span>
   </button>
+</div>
+<div id="hudSettings" class="hidden" aria-label="Настройки HUD">
+  <b>Индикатор РВ</b>
+  <label><input type="checkbox" id="hudShowHeading" onchange="setHudHeadingVisible(this.checked)"> ФМПУ</label>
+  <div class="hud-units-row">
+    <label for="hudSpeedUnit">Единицы скорости</label>
+    <select id="hudSpeedUnit" aria-label="Единицы скорости" onchange="setSpeedUnit(this.value)">
+      <option value="kmh">км/ч</option>
+      <option value="ms">м/с</option>
+      <option value="kt">узлы</option>
+    </select>
+  </div>
 </div>
 <!-- === КОНЕЦ БЛОКА 7 === -->
 
@@ -368,7 +407,15 @@
       </div>
       <div class="row">
         <label>U (скорость ветра):</label>
-        <input id="windSpd" placeholder="—" inputmode="decimal" oninput="updateNavUI()"> км/ч
+        <input id="windSpd" placeholder="—" inputmode="decimal" oninput="updateNavUI()" style="width:72px;">
+        <span class="compact-switch-row" style="display:inline-flex;vertical-align:middle;">
+          <span class="unit-side">км/ч</span>
+          <label class="circle-switch" title="Единицы скорости ветра: км/ч / м/с">
+            <input type="checkbox" id="windSpeedUnit" role="switch" aria-label="Скорость ветра в м/с" onchange="changeWindSpeedUnit()">
+            <span class="circle-switch-track" aria-hidden="true"></span>
+          </label>
+          <span class="unit-side">м/с</span>
+        </span>
       </div>
       <div class="row">
         <label>V (возд. скорость):</label>
@@ -412,7 +459,7 @@
       <div class="row">
         <label>V (истинная):</label>
         <input id="windTAS" placeholder="92" inputmode="decimal" style="width:60px;">
-        <select id="tasUnit" style="width:auto;display:inline-block;">
+        <select id="tasUnit" onchange="updateTasHint()" style="width:auto;display:inline-block;">
           <option value="kt" selected>узлы</option>
           <option value="kmh">км/ч</option>
         </select>
@@ -450,7 +497,7 @@
     <div id="rt-result">Нажмите «Старт РВ», чтобы начать.</div>
     <div class="oprs rt-box" style="margin-top:8px;">
       <b>Журнал полёта</b>
-      <div class="hint">Запись начинается со «Старт РВ» и завершается со «Стоп РВ». GPS-высота записывается, но не показывается числом.</div>
+      <div class="hint">Каждый запуск РВ — новый полёт в общем журнале. Журнал пополняется до очистки трека. GPS-высота записывается без числовой индикации.</div>
       <button class="gps big" id="downloadRTLogBtn" onclick="downloadRTLog()" disabled>⬇ Скачать трек (JSON)</button>
       <div id="rt-log-status" aria-live="polite">Нет записанного полёта.</div>
     </div>
@@ -459,7 +506,6 @@
   <!-- --- ВКЛАДКА СЛОИ --- -->
   <div class="tab-content" id="tab-layers">
     <div class="subhint">Управление отображением слоёв на карте.</div>
-
     <div class="row">
       <label>Карта:</label>
       <select id="mapStyle" onchange="switchMap()">
@@ -554,6 +600,18 @@
         <label for="toggleSectors">Сектора (ЗПП) — R 5 км</label>
       </div>
     </div>
+
+    <div class="oprs">
+      <b>Кнопка меню ☰</b>
+      <div class="menu-side-control">
+        <span>Слева</span>
+        <label class="circle-switch" title="Перенести кнопку меню вправо">
+          <input type="checkbox" id="menuButtonRight" role="switch" aria-label="Кнопка меню справа" onchange="changeMenuSide(this.checked)">
+          <span class="circle-switch-track" aria-hidden="true"></span>
+        </label>
+        <span>Справа</span>
+      </div>
+    </div>
   </div>
 </div>
 <!-- === КОНЕЦ БЛОКА 8 === -->
@@ -583,8 +641,11 @@ const SPEED_UNITS_ORDER = ['kmh', 'ms', 'kt'];
 const TRACK_KEY = 'oprs_nav_track_v1';
 const TRACK_GPS_KEY = 'oprs_nav_track_gps_v1';
 const RT_TRACK_KEY = 'oprs_nav_rt_track_v1'; // старый ключ: для совместимости
-const FLIGHT_LOG_KEY = 'naebacia_flight_session_v1';
+const FLIGHT_LOG_KEY = 'naebacia_flight_session_v1'; // сохраняем прежний ключ для миграции v1.56
 const ALT_COLORS_KEY = 'naebacia_alt_colors_v1';
+const WIND_SPEED_UNIT_KEY = 'naebacia_wind_speed_unit_v1';
+const HUD_HEADING_KEY = 'naebacia_hud_heading_v1';
+const MENU_SIDE_KEY = 'naebacia_menu_side_v1';
 const FLIGHT_SAVE_INTERVAL_MS = 5000;
 
 const MAX_DIST_KM = 300;
@@ -640,6 +701,13 @@ function switchTab(name) {
   }
 }
 
+function changeMenuSide(right) {
+  const btn = document.getElementById('toggleBtn');
+  btn.classList.toggle('menu-right', !!right);
+  document.getElementById('menuButtonRight').checked = !!right;
+  try { localStorage.setItem(MENU_SIDE_KEY, right ? 'right' : 'left'); } catch (e) {}
+}
+
 function togglePanel() {
   const p = document.getElementById('panel');
   p.classList.toggle('hidden');
@@ -673,8 +741,8 @@ switchMap();
 // Координаты Красноармейска: сборник маршрутов ОВД РФ от 03.12.2020 (исторический источник).
 const PRESET = [
   { name: 'Красный Кут',   lat: 50.9273333, lon: 46.9190000, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
-  { name: 'Ямское',         lat: 50.9675, lon: 47.2190, freq: '1245 кГц',  type: 'NDB', color: 'red' },
-  { name: 'Комсомольское',  lat: 50.8000, lon: 47.0445, freq: '310 кГц',   type: 'NDB', color: 'orange' },
+  { name: 'Ямское',         lat: 50.9683333, lon: 47.2205556, freq: '1245 кГц',  type: 'NDB', color: 'red' },
+  { name: 'Комсомольское',  lat: 50.8000000, lon: 47.0477778, freq: '310 кГц',   type: 'NDB', color: 'orange' },
   { name: 'Красноармейск',  lat: 51.0313889, lon: 45.6444444, freq: '932 кГц', type: 'NDB', color: 'green' },
   { name: 'Саратов VOR',    lat: 51.5628, lon: 46.0458, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
 ];
@@ -688,22 +756,22 @@ const ROUTES = {
   A4: {
     name: 'А4', color: '#c80',
     points: [
-      { name: 'Комсомольское (ДПРМ)', lat: 50.8000, lon: 47.0445 },
-      { name: 'Луговское',              lat: 50.6263, lon: 46.4725 },
-      { name: 'свх. Орловский',         lat: 50.5517, lon: 47.1590 },
+      { name: 'Комсомольское (ДПРМ)', lat: 50.8000000, lon: 47.0477778 },
+      { name: 'Луговское',              lat: 50.6327778, lon: 46.4763889 },
+      { name: 'Орошаемый',         lat: 50.5527778, lon: 47.1650000 },
       { name: 'Мироновка',              lat: 50.7518, lon: 47.4532 },
-      { name: 'Комсомольское (ДПРМ)', lat: 50.8000, lon: 47.0445 }
+      { name: 'Комсомольское (ДПРМ)', lat: 50.8000000, lon: 47.0477778 }
     ]
   },
   A5: {
     name: 'А5', color: '#08c',
     points: [
       { name: 'Красный Кут ДПРМ',      lat: 50.9273333, lon: 46.9190000 },
-      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9672, lon: 47.2190 },
-      { name: 'н.п. Трудовик',         lat: 50.7783, lon: 47.7117 },
-      { name: 'н.п. Орлов Гай',        lat: 50.9250, lon: 48.1875 },
-      { name: 'н.п. Солнечный',        lat: 51.1703, lon: 47.9217 },
-      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9672, lon: 47.2190 },
+      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9683333, lon: 47.2205556 },
+      { name: 'н.п. Трудовик',         lat: 50.7777778, lon: 47.7116667 },
+      { name: 'н.п. Орлов Гай',        lat: 50.9305556, lon: 48.1902778 },
+      { name: 'н.п. Солнечный',        lat: 51.1727778, lon: 47.9250000 },
+      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9683333, lon: 47.2205556 },
       { name: 'Красный Кут ДПРМ',      lat: 50.9273333, lon: 46.9190000 }
     ]
   },
@@ -711,10 +779,10 @@ const ROUTES = {
     name: 'Местный', color: '#a0a',
     points: [
       { name: 'Красный Кут ДПРМ', lat: 50.9273333,             lon: 46.9190000 },
-      { name: 'Ямское ОПРС',       lat: 50.9672,             lon: 47.2190 },
+      { name: 'Ямское ОПРС',       lat: 50.9683333, lon: 47.2205556 },
       { name: 'Новотулка',          lat: 50.83275914828956,  lon: 47.5577480772517 },
       { name: 'Мироновка',          lat: 50.7518,             lon: 47.4532 },
-      { name: 'Комсомольское',      lat: 50.8000,             lon: 47.0445 },
+      { name: 'Комсомольское',      lat: 50.8000000, lon: 47.0477778 },
       { name: 'Дьяковка',           lat: 50.72059455885705,  lon: 46.78232837723893 },
       { name: 'Кирово',             lat: 50.80502894486692,  lon: 46.70056913229126 },
       { name: 'Красный Кут ДПРМ', lat: 50.9273333,             lon: 46.9190000 }
@@ -803,9 +871,10 @@ let rtTracking = false;
 let rtWatchId = null;
 let rtCurrentPosition = null;
 let rtTrack = [];
-let rtFlightLog = null;  // отдельный журнал: весь полёт, а не только отображаемый трек
+let rtFlightLog = null;  // общий журнал с отдельными полётами; продолжается до очистки
 let rtLogSaveWarning = '';
 let lastFlightSaveAt = 0;
+let rtSessionId = null;
 let rtLineLayer = null;
 let rtStartMarker = null;
 let rtMarker = null;
@@ -1030,14 +1099,20 @@ function convertSpeed(mps) {
 function updateSpeedUnitLabel() {
   document.getElementById('speedUnitLabel').textContent = SPEED_UNITS[rtSpeedUnit].label;
   document.getElementById('speedHudUnit').textContent = SPEED_UNITS[rtSpeedUnit].label;
+  document.getElementById('hudSpeedUnit').value = rtSpeedUnit;
+}
+
+function setSpeedUnit(unit) {
+  if (!SPEED_UNITS[unit]) return;
+  rtSpeedUnit = unit;
+  localStorage.setItem(SPEED_UNIT_KEY, rtSpeedUnit);
+  updateSpeedUnitLabel();
+  updateRTUI();
 }
 
 function cycleSpeedUnit() {
   const idx = SPEED_UNITS_ORDER.indexOf(rtSpeedUnit);
-  rtSpeedUnit = SPEED_UNITS_ORDER[(idx + 1) % SPEED_UNITS_ORDER.length];
-  localStorage.setItem(SPEED_UNIT_KEY, rtSpeedUnit);
-  updateSpeedUnitLabel();
-  updateRTUI();
+  setSpeedUnit(SPEED_UNITS_ORDER[(idx + 1) % SPEED_UNITS_ORDER.length]);
 }
 <!-- === КОНЕЦ БЛОКА 21 === -->
 
@@ -1075,6 +1150,37 @@ function updateFollowBtn() {
 <!-- === КОНЕЦ БЛОКА 22 === -->
 
 <!-- === БЛОК 23: HUD === -->
+function setHudHeadingVisible(show) {
+  document.getElementById('hudShowHeading').checked = !!show;
+  document.getElementById('speedHudHeading').hidden = !show;
+  try { localStorage.setItem(HUD_HEADING_KEY, show ? '1' : '0'); } catch (e) {}
+  updateHudHeading();
+}
+function updateHudHeading() {
+  const el = document.getElementById('speedHudHeading');
+  if (!el || el.hidden) return;
+  // ФМПУ показываем только при свежем GPS, чтобы не вводить в заблуждение.
+  const good = rtTracking && rtCurrentPosition &&
+    Date.now() - rtCurrentPosition.t < GPS_STALE_SEC * 1000;
+  const heading = good ? getGPSHeadingMag() : null;
+  el.textContent = heading === null ? '—' : heading.toFixed(0) + '°';
+}
+function toggleHudSettings(event) {
+  if (event) event.stopPropagation();
+  const popup = document.getElementById('hudSettings');
+  const nextOpen = popup.classList.contains('hidden');
+  popup.classList.toggle('hidden', !nextOpen);
+  document.getElementById('speedHud').setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+}
+function hideHudSettings() {
+  document.getElementById('hudSettings').classList.add('hidden');
+  document.getElementById('speedHud').setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('pointerdown', e => {
+  if (!document.getElementById('hudSettings').contains(e.target) &&
+      !document.getElementById('speedHud').contains(e.target)) hideHudSettings();
+});
+
 function updateSpeedHudVisibility() {
   const hud = document.getElementById('hudContainer');
   if (currentTab === 'rtnav' && rtTracking) {
@@ -1082,6 +1188,7 @@ function updateSpeedHudVisibility() {
     updateFollowBtn();
   } else {
     hud.classList.add('hidden');
+    hideHudSettings();
   }
 }
 
@@ -1250,6 +1357,28 @@ function loadPreset() {
 <!-- === КОНЕЦ БЛОКА 26: STATION POPUPS === -->
 
 <!-- === БЛОК 27: ROUTES RENDER === -->
+// Поле U отображает выбранную единицу; расчёты всегда получают км/ч.
+function getWindSpeedKmh() {
+  const raw = document.getElementById('windSpd').value.trim().replace(',', '.');
+  if (!raw) return NaN;
+  const amount = Number(raw);
+  if (!Number.isFinite(amount)) return NaN;
+  return document.getElementById('windSpeedUnit').checked ? amount * 3.6 : amount;
+}
+function changeWindSpeedUnit() {
+  const input = document.getElementById('windSpd');
+  const current = Number(input.value.trim().replace(',', '.'));
+  if (input.value.trim() && Number.isFinite(current)) {
+    // При переводе в м/с делим на 3,6, обратно — умножаем.
+    const converted = document.getElementById('windSpeedUnit').checked ? current / 3.6 : current * 3.6;
+    input.value = String(Number(converted.toFixed(3)));
+  }
+  try { localStorage.setItem(WIND_SPEED_UNIT_KEY, document.getElementById('windSpeedUnit').checked ? 'ms' : 'kmh'); } catch (e) {}
+  updateNavUI();
+  updateRTUI();
+  refreshOpenPopup();
+}
+
 function dedupeRoutePoints(points, threshold = 20) {
   const unique = [];
   points.forEach((pt, idx) => {
@@ -1277,7 +1406,7 @@ function buildRouteSegmentPopup(routeKey, idx) {
   const wsRaw = document.getElementById('windSpd').value.trim();
   const asRaw = document.getElementById('airspeed').value.trim();
   const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
-  const ws = wsRaw === '' ? NaN : parseFloat(wsRaw.replace(',', '.'));
+  const ws = getWindSpeedKmh();
   const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
 
   if (!isNaN(wd) && !isNaN(ws) && !isNaN(as) && as > 0) {
@@ -1941,7 +2070,7 @@ function getGPSHeadingMag() {
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
       const b = rtTrack[rtTrack.length - 1];
-      if (distance(a, b) > 1) heading = trueBearing(a, b);
+      if (a.flightId === b.flightId && distance(a, b) > 1) heading = trueBearing(a, b);
     }
   }
   if (heading === null || heading === undefined || isNaN(heading)) return null;
@@ -1963,7 +2092,7 @@ function getCurrentSpeedKmh(targetPt) {
   const wsRaw = document.getElementById('windSpd').value.trim();
   const asRaw = document.getElementById('airspeed').value.trim();
   const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
-  const ws = wsRaw === '' ? NaN : parseFloat(wsRaw.replace(',', '.'));
+  const ws = getWindSpeedKmh();
   const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
   if (isNaN(wd) || isNaN(ws) || isNaN(as) || as <= 0) return null;
 
@@ -2028,7 +2157,7 @@ function computeNav() {
   const wsRaw = document.getElementById('windSpd').value.trim();
   const asRaw = document.getElementById('airspeed').value.trim();
   const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
-  const ws = wsRaw === '' ? NaN : parseFloat(wsRaw.replace(',', '.'));
+  const ws = getWindSpeedKmh();
   const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
 
   let wind = null;
@@ -2203,30 +2332,58 @@ map.on('click', e => {
 <!-- === БЛОК 35: RTNAV === -->
 function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
+// Формат v2: один журнал смены, отдельный массив точек для каждого запуска РВ.
+// Дата создания журнала не меняется, пока не выполнена «Очистить трек РВ».
 function makeNewFlightLog() {
   return {
-    format: 'naebacia-flight-log', version: 1,
-    startedAt: Date.now(), endedAt: null, status: 'recording',
-    downloaded: false, points: []
+    format: 'naebacia-flight-log', version: 2,
+    createdAt: Date.now(), nextFlightId: 1,
+    downloaded: false, flights: []
   };
+}
+
+function getActiveFlight() {
+  if (!rtFlightLog || rtSessionId === null) return null;
+  return rtFlightLog.flights.find(f => f.id === rtSessionId) || null;
+}
+
+function beginFlightSegment() {
+  if (!rtFlightLog) rtFlightLog = makeNewFlightLog();
+  const flight = {
+    id: rtFlightLog.nextFlightId++, startedAt: Date.now(),
+    endedAt: null, status: 'recording', points: []
+  };
+  rtFlightLog.flights.push(flight);
+  rtSessionId = flight.id;
+  rtFlightLog.downloaded = false;
+  return flight;
+}
+
+function getFlightPointCount() {
+  return rtFlightLog ? rtFlightLog.flights.reduce((n, f) => n + f.points.length, 0) : 0;
+}
+
+function rebuildVisibleTrack() {
+  rtTrack = [];
+  if (!rtFlightLog) return;
+  for (const flight of rtFlightLog.flights) {
+    for (const p of flight.points) rtTrack.push({ ...p, flightId: flight.id });
+  }
+  rtTrack = rtTrack.slice(-RT_MAX_POINTS);
 }
 
 function startRT() {
   if (!navigator.geolocation) { alert('Геолокация не поддерживается.'); return; }
   if (rtTracking) return;
-  // Новый запуск РВ — новый полёт; предыдущий не подменяем незаметно.
-  if (rtFlightLog && rtFlightLog.points.length) {
-    const warn = rtFlightLog.downloaded
-      ? 'Начать новый РВ? Предыдущий журнал будет заменён. Убедитесь, что JSON сохранился на телефоне.'
-      : 'Предыдущий полёт ещё не скачан. Новый РВ заменит его журнал. Сначала можно нажать «Скачать трек». Продолжить?';
-    if (!confirm(warn)) return;
+  if (rtLogSaveWarning && !rtFlightLog) {
+    alert('Прежний журнал не удалось прочитать. Новая запись может его перезаписать. Сначала сохраните резервную копию данных браузера.');
+    return;
   }
-  rtTrack = [];
+  // Новый старт — новый сегмент того же журнала. Старые полёты не удаляем.
   rtCurrentPosition = null;
-  rtFlightLog = makeNewFlightLog();
+  beginFlightSegment();
   rtLogSaveWarning = '';
   saveFlightLog(true);
-  // После начала новой записи старый трек больше не загружаем из предыдущего формата.
   try { localStorage.removeItem(RT_TRACK_KEY); } catch (e) {}
   renderRTTrack();
   renderRTMarker();
@@ -2261,16 +2418,19 @@ function stopRT() {
     rtWatchId = null;
   }
   rtTracking = false;
-  if (rtFlightLog && rtFlightLog.status === 'recording') {
-    rtFlightLog.endedAt = Date.now();
-    rtFlightLog.status = 'completed';
-    saveFlightLog(true);
+  if (windMeasuring) cancelWindMeasure();
+  const flight = getActiveFlight();
+  if (flight && flight.status === 'recording') {
+    flight.endedAt = Date.now();
+    flight.status = 'completed';
   }
+  rtSessionId = null;
+  saveFlightLog(true);
   document.getElementById('rtToggleBtn').innerHTML = '<b>▶ Старт РВ</b>';
   document.getElementById('rtToggleBtn').classList.remove('stop');
   document.getElementById('rtToggleBtn').classList.add('gps');
   releaseWakeLock();
-  renderRTMarker(); // После остановки РВ убрать текущий самолёт с карты.
+  renderRTMarker();
   updateRTUI();
   updateSpeedHudVisibility();
   updateFlightLogUI();
@@ -2282,6 +2442,8 @@ function finiteOrNull(v) {
 
 function onRTPosition(pos) {
   if (!rtTracking) return;
+  const flight = getActiveFlight();
+  if (!flight) return;
   const lat = pos.coords.latitude;
   const lon = pos.coords.longitude;
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
@@ -2292,22 +2454,21 @@ function onRTPosition(pos) {
   const altAcc = finiteOrNull(pos.coords.altitudeAccuracy);
   const receivedAt = Date.now();
   const t = Number.isFinite(pos.timestamp) && pos.timestamp > 0 ? pos.timestamp : receivedAt;
-  const last = rtFlightLog && rtFlightLog.points.length
-    ? rtFlightLog.points[rtFlightLog.points.length - 1] : null;
-  // Полученная со старой/дублированной меткой времени точка в журнал не добавляется.
+  const last = flight.points.length ? flight.points[flight.points.length - 1] : null;
+  // Каждый полёт начинается собственной первой точкой: предыдущий полёт не влияет на фильтр.
   const validNewTime = !last || t > last.t;
   let shouldAdd = false;
   if (validNewTime && !last) shouldAdd = true;
   else if (validNewTime && distance(last, { lat, lon }) >= RT_MIN_STEP_M) shouldAdd = true;
   else if (validNewTime && t - last.t >= 5000) shouldAdd = true;
 
-  if (shouldAdd && rtFlightLog) {
+  if (shouldAdd) {
     const sample = { lat, lon, t, speed, heading, acc, alt, altAcc };
-    rtFlightLog.points.push(sample);  // Журнал не обрезаем: полный полёт для воспроизводилки.
-    rtFlightLog.downloaded = false;   // После скачивания новые точки ещё не экспортированы.
-    rtTrack.push(sample);             // На карте держим только последние RT_MAX_POINTS.
+    flight.points.push(sample);
+    rtFlightLog.downloaded = false;
+    rtTrack.push({ ...sample, flightId: flight.id });
     if (rtTrack.length > RT_MAX_POINTS) rtTrack.shift();
-    saveFlightLog();
+    saveFlightLog(flight.points.length === 1);
     renderRTTrack();
   }
   rtCurrentPosition = { lat, lon, t, speed, heading, acc };
@@ -2317,7 +2478,6 @@ function onRTPosition(pos) {
   updateRTUI();
   updateFlightLogUI();
   refreshOpenPopup();
-
   if (isFollowOn() && currentTab === 'rtnav') {
     map.setView([lat, lon], map.getZoom(), { animate: false });
   }
@@ -2349,50 +2509,110 @@ function saveFlightLog(force) {
   }
 }
 
+function normalizeStoredPoint(p) {
+  const lat = Number(p.lat), lon = Number(p.lon);
+  const t = Number(p.t);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(t)) return null;
+  return {
+    lat, lon, t,
+    speed: finiteOrNull(p.speed), heading: finiteOrNull(p.heading),
+    acc: finiteOrNull(p.acc), alt: finiteOrNull(p.alt), altAcc: finiteOrNull(p.altAcc)
+  };
+}
+
+function migrateOldFlightLog(parsed) {
+  // Сохраняем точки v1.56, где весь журнал был одним массивом points.
+  if (parsed.version === 2 && Array.isArray(parsed.flights)) {
+    const flights = parsed.flights.map((f, index) => ({
+      id: Number.isInteger(f.id) ? f.id : index + 1,
+      startedAt: f.startedAt, endedAt: f.endedAt ?? null,
+      status: f.status || 'completed',
+      points: Array.isArray(f.points) ? f.points.map(normalizeStoredPoint).filter(Boolean) : []
+    }));
+    return {
+      format: 'naebacia-flight-log', version: 2,
+      createdAt: parsed.createdAt || (flights[0] && flights[0].startedAt) || Date.now(),
+      nextFlightId: Math.max(0, ...flights.map(f => f.id)) + 1,
+      downloaded: !!parsed.downloaded, flights
+    };
+  }
+  if (Array.isArray(parsed.points)) {
+    const points = parsed.points.map(normalizeStoredPoint).filter(Boolean);
+    const startedAt = parsed.startedAt || (points[0] && points[0].t) || Date.now();
+    return {
+      format: 'naebacia-flight-log', version: 2,
+      createdAt: startedAt, nextFlightId: 2,
+      downloaded: !!parsed.downloaded,
+      flights: [{ id: 1, startedAt, endedAt: parsed.endedAt ?? null,
+        status: parsed.status || 'completed', points }]
+    };
+  }
+  return null;
+}
+
 function loadRTTrack() {
   try {
     const raw = localStorage.getItem(FLIGHT_LOG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.format === 'naebacia-flight-log' && Array.isArray(parsed.points)) {
-        rtFlightLog = parsed;
-        // После перезапуска браузера запись не продолжается сама собой.
-        if (rtFlightLog.status === 'recording') {
-          rtFlightLog.status = 'interrupted';
-          rtFlightLog.endedAt = null;
-          saveFlightLog(true);
+      if (!parsed || parsed.format !== 'naebacia-flight-log') throw new Error('Неподдерживаемый формат журнала');
+      rtFlightLog = migrateOldFlightLog(parsed);
+      if (!rtFlightLog) throw new Error('Не удалось прочитать журнал');
+      let interrupted = parsed.version !== 2;
+      for (const flight of rtFlightLog.flights) {
+        if (flight.status === 'recording') {
+          flight.status = 'interrupted';
+          flight.endedAt = flight.points.length ? flight.points[flight.points.length-1].t : flight.startedAt;
+          interrupted = true;
         }
-        rtTrack = rtFlightLog.points.slice(-RT_MAX_POINTS);
-        return;
       }
+      rebuildVisibleTrack();
+      if (interrupted) saveFlightLog(true);
+      return;
     }
-    // Поддержка трека из v1.55: он виден на карте, но не считается новым логом.
+    // Совместимость со старым РВ до v1.56: переносим трек в первый сегмент.
     const old = localStorage.getItem(RT_TRACK_KEY);
     if (old) {
-      const parsed = JSON.parse(old);
-      if (Array.isArray(parsed)) rtTrack = parsed;
+      const points = JSON.parse(old);
+      if (Array.isArray(points) && points.length) {
+        const valid = points.map(normalizeStoredPoint).filter(Boolean);
+        if (valid.length) {
+          rtFlightLog = makeNewFlightLog();
+          rtFlightLog.createdAt = valid[0].t;
+          rtFlightLog.nextFlightId = 2;
+          rtFlightLog.flights.push({ id: 1, startedAt: valid[0].t,
+            endedAt: valid[valid.length-1].t, status: 'imported', points: valid });
+          rebuildVisibleTrack();
+          saveFlightLog(true);
+        }
+      }
     }
-  } catch (e) { rtTrack = []; rtFlightLog = null; }
+  } catch (e) {
+    // Не уничтожаем нечитаемые данные в localStorage и не перезаписываем их автоматически.
+    rtFlightLog = null; rtTrack = [];
+    rtLogSaveWarning = '⚠ Не удалось прочитать прежний журнал. Сохранённые данные не удалены; сначала сделайте резервную копию браузера.';
+  }
 }
 
-function saveRTTrack() {
-  // Сохранение исторического метода для других возможных вызовов.
-  saveFlightLog();
-}
+function saveRTTrack() { saveFlightLog(); }
 
 function clearRTTrack() {
-  if (rtFlightLog && rtFlightLog.points.length) {
-    if (!confirm('Очистить трек и удалить его журнал? Убедитесь, что нужный JSON сохранён.')) return;
+  if (getFlightPointCount() > 0) {
+    if (!confirm('Очистить весь трек и все полёты в журнале? Убедитесь, что нужный JSON сохранён.')) return;
   }
   rtTrack = [];
   rtCurrentPosition = null;
-  rtFlightLog = rtTracking ? makeNewFlightLog() : null;
+  rtSessionId = null;
+  rtFlightLog = null;
   rtLogSaveWarning = '';
   try {
     localStorage.removeItem(RT_TRACK_KEY);
     localStorage.removeItem(FLIGHT_LOG_KEY);
   } catch (e) {}
-  if (rtFlightLog) saveFlightLog(true);
+  if (rtTracking) {
+    beginFlightSegment(); // При активном РВ очистка начинает свежий пустой журнал.
+    saveFlightLog(true);
+  }
   renderRTTrack();
   renderRTMarker();
   updateRTUI();
@@ -2403,41 +2623,45 @@ function clearRTTrack() {
 
 function flightLogExportObject() {
   if (!rtFlightLog) return null;
+  const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 1,
-    appVersion: '1.56',
+    version: 2, appVersion: '1.57',
     source: 'browser-geolocation',
-    startedAt: new Date(rtFlightLog.startedAt).toISOString(),
-    endedAt: rtFlightLog.endedAt ? new Date(rtFlightLog.endedAt).toISOString() : null,
-    status: rtTracking ? 'recording' : rtFlightLog.status,
+    createdAt: toIso(rtFlightLog.createdAt),
+    exportedAt: new Date().toISOString(),
     units: {
       coordinates: 'WGS84 decimal degrees',
       altitude: 'meters above WGS84 ellipsoid (GPS, not barometric/QNH)',
       speed: 'm/s', heading: 'true degrees', accuracy: 'meters'
     },
-    points: rtFlightLog.points.map(p => ({
-      timestamp: new Date(p.t).toISOString(),
-      latitude: p.lat, longitude: p.lon,
-      groundSpeedMps: p.speed ?? null,
-      trueTrackDeg: p.heading ?? null,
-      horizontalAccuracyM: p.acc ?? null,
-      gpsAltitudeM: p.alt ?? null,
-      altitudeAccuracyM: p.altAcc ?? null
+    flights: rtFlightLog.flights.map(f => ({
+      id: f.id,
+      startedAt: toIso(f.startedAt),
+      endedAt: f.status === 'recording' ? null : toIso(f.endedAt),
+      status: rtTracking && f.id === rtSessionId ? 'recording' : f.status,
+      points: f.points.map(p => ({
+        timestamp: toIso(p.t),
+        latitude: p.lat, longitude: p.lon,
+        groundSpeedMps: p.speed ?? null,
+        trueTrackDeg: p.heading ?? null,
+        horizontalAccuracyM: p.acc ?? null,
+        gpsAltitudeM: p.alt ?? null,
+        altitudeAccuracyM: p.altAcc ?? null
+      }))
     }))
   };
 }
 
 function downloadRTLog() {
-  if (!rtFlightLog || rtFlightLog.points.length === 0) {
+  if (getFlightPointCount() === 0) {
     alert('Нет записанных GPS-точек. Включите РВ и дождитесь координат.');
     return;
   }
-  const data = flightLogExportObject();
-  const json = JSON.stringify(data, null, 2);
+  const json = JSON.stringify(flightLogExportObject(), null, 2);
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const d = new Date(rtFlightLog.startedAt);
+  const d = new Date(rtFlightLog.createdAt);
   const stamp = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' +
     String(d.getDate()).padStart(2,'0') + '_' + String(d.getHours()).padStart(2,'0') + '-' +
     String(d.getMinutes()).padStart(2,'0');
@@ -2445,10 +2669,8 @@ function downloadRTLog() {
   a.href = url;
   a.download = 'NAEBACIA_' + stamp + '.json';
   document.body.appendChild(a);
-  a.click();
-  a.remove();
+  a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
-  // Браузер не сообщает, завершилось ли сохранение: это лишь попытка скачивания.
   rtFlightLog.downloaded = true;
   saveFlightLog(true);
   updateFlightLogUI();
@@ -2458,17 +2680,17 @@ function updateFlightLogUI() {
   const btn = document.getElementById('downloadRTLogBtn');
   const el = document.getElementById('rt-log-status');
   if (!btn || !el) return;
-  const count = rtFlightLog ? rtFlightLog.points.length : 0;
+  const count = getFlightPointCount();
+  const flights = rtFlightLog ? rtFlightLog.flights.length : 0;
   btn.disabled = count === 0;
   if (rtLogSaveWarning) {
     el.textContent = rtLogSaveWarning;
     el.classList.add('warning');
   } else {
     el.classList.remove('warning');
-    if (!rtFlightLog) el.textContent = 'Нет записанного полёта.';
-    else if (rtTracking) el.textContent = 'Идёт запись РВ · точек: ' + count + '. Скачать можно в любой момент.';
-    else if (rtFlightLog.status === 'interrupted') el.textContent = 'После перезапуска восстановлен прерванный полёт · точек: ' + count + '.';
-    else el.textContent = 'Запись завершена · точек: ' + count + '. Файл доступен для скачивания.';
+    if (!rtFlightLog || !flights) el.textContent = 'Нет записанного полёта.';
+    else if (rtTracking) el.textContent = 'Запись РВ · полётов: ' + flights + ' · точек: ' + count + '.';
+    else el.textContent = 'Сохранено полётов: ' + flights + ' · точек: ' + count + '. Новый старт РВ добавит следующий полёт.';
   }
 }
 
@@ -2487,40 +2709,59 @@ function altitudeSegmentColor(a, b, min, max) {
   return ALTITUDE_PALETTE[Math.min(ALTITUDE_PALETTE.length-1, Math.floor(ratio*ALTITUDE_PALETTE.length))];
 }
 
+// Трек разбит на полёты: между разными запусками РВ линии не строятся.
+function splitRTTrack() {
+  const segments = [];
+  for (const p of rtTrack) {
+    const last = segments[segments.length - 1];
+    if (!last || last[0].flightId !== p.flightId) segments.push([p]);
+    else last.push(p);
+  }
+  return segments;
+}
+
 function renderRTTrack() {
   const show = currentTab === 'rtnav';
   if (rtLineLayer) { map.removeLayer(rtLineLayer); rtLineLayer = null; }
   if (rtStartMarker) { map.removeLayer(rtStartMarker); rtStartMarker = null; }
   if (!show || rtTrack.length === 0) return;
   const colored = document.getElementById('toggleAltitudeColors').checked;
-  if (!colored || rtTrack.length < 2) {
-    rtLineLayer = L.polyline(rtTrack.map(p => [p.lat, p.lon]), {
-      color: '#08c', weight: 3, opacity: 0.85, interactive: false
-    }).addTo(map);
-  } else {
-    const altitudes = rtTrack.map(p => p.alt).filter(v => Number.isFinite(v));
-    const min = altitudes.length ? Math.min(...altitudes) : 0;
-    const max = altitudes.length ? Math.max(...altitudes) : 0;
-    const layers = [];
-    let currentColor = null;
-    let coordinates = null;
+  const altitudes = rtTrack.map(p => p.alt).filter(v => Number.isFinite(v));
+  const min = altitudes.length ? Math.min(...altitudes) : 0;
+  const max = altitudes.length ? Math.max(...altitudes) : 0;
+  const lines = [], startMarkers = [];
+  for (const flightPts of splitRTTrack()) {
+    if (!flightPts.length) continue;
+    const first = flightPts[0];
+    const fullFlight = rtFlightLog && rtFlightLog.flights.find(f => f.id === first.flightId);
+    // Если первые точки очень длинного полёта уже вытеснены из карты, ложный «старт» не рисуем.
+    if (fullFlight && fullFlight.points.length && fullFlight.points[0].t === first.t) {
+      startMarkers.push(L.marker([first.lat, first.lon], { icon: rtStartIcon(), interactive: false }));
+    }
+    if (flightPts.length < 2) continue;
+    if (!colored) {
+      lines.push(L.polyline(flightPts.map(p => [p.lat,p.lon]), {
+        color: '#08c', weight: 3, opacity: 0.85, interactive: false
+      }));
+      continue;
+    }
+    let currentColor = null, coordinates = null;
     function emit() {
       if (coordinates && coordinates.length >= 2) {
-        layers.push(L.polyline(coordinates, { color: currentColor, weight: 4, opacity: 0.9, interactive: false }));
+        lines.push(L.polyline(coordinates, { color: currentColor, weight: 4, opacity: 0.9, interactive: false }));
       }
     }
-    for (let i=1; i<rtTrack.length; i++) {
-      const a=rtTrack[i-1], b=rtTrack[i];
+    for (let i=1; i<flightPts.length; i++) {
+      const a=flightPts[i-1], b=flightPts[i];
       const c=altitudeSegmentColor(a,b,min,max);
       if (c !== currentColor) {
         emit(); currentColor=c; coordinates=[[a.lat,a.lon],[b.lat,b.lon]];
       } else coordinates.push([b.lat,b.lon]);
     }
     emit();
-    rtLineLayer = L.layerGroup(layers).addTo(map);
   }
-  const start = rtTrack[0];
-  rtStartMarker = L.marker([start.lat, start.lon], { icon: rtStartIcon(), interactive: false }).addTo(map);
+  rtLineLayer = L.layerGroup(lines).addTo(map);
+  rtStartMarker = L.layerGroup(startMarkers).addTo(map);
 }
 
 function renderRTMarker() {
@@ -2535,7 +2776,7 @@ function renderRTMarker() {
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
       const b = rtTrack[rtTrack.length - 1];
-      if (distance(a, b) > 1) course = trueBearing(a, b); else course = 0;
+      if (a.flightId === b.flightId && distance(a, b) > 1) course = trueBearing(a, b); else course = 0;
     } else course = 0;
   }
   const lat = rtCurrentPosition.lat;
@@ -2581,19 +2822,20 @@ function updateRTUI() {
     agEl.textContent = age.toFixed(1) + ' с';
   }
 
-  ptEl.textContent = rtTrack.length;
-  if (rtTrack.length >= 2) {
-    let totalDist = 0;
-    for (let i = 1; i < rtTrack.length; i++) totalDist += distance(rtTrack[i-1], rtTrack[i]);
-    totalDist /= 1000;
-    const durSec = (rtTrack[rtTrack.length-1].t - rtTrack[0].t) / 1000;
-    dsEl.textContent = totalDist.toFixed(2) + ' км';
-    tmEl.textContent = fmtDuration(durSec);
-    if (durSec > 0) avEl.textContent = (totalDist * 3600 / durSec).toFixed(0) + ' км/ч';
-    else avEl.textContent = '—';
-  } else {
-    dsEl.textContent = '0 км'; tmEl.textContent = '0:00'; avEl.textContent = '—';
+  ptEl.textContent = getFlightPointCount();
+  let totalDist = 0, totalSec = 0;
+  // Статистика учитывает весь журнал, а не только последние 10 000 видимых на карте точек.
+  const allFlights = rtFlightLog ? rtFlightLog.flights : [];
+  for (const flight of allFlights) {
+    const points = flight.points;
+    if (points.length < 2) continue;
+    for (let i=1; i<points.length; i++) totalDist += distance(points[i-1], points[i]);
+    totalSec += Math.max(0, (points[points.length-1].t-points[0].t)/1000);
   }
+  totalDist /= 1000;
+  dsEl.textContent = totalDist.toFixed(2) + ' км';
+  tmEl.textContent = fmtDuration(totalSec);
+  avEl.textContent = totalSec > 0 ? (totalDist*3600/totalSec).toFixed(0)+' км/ч' : '—';
 
   const tgtEl = document.getElementById('rt-target');
   if (navTarget) tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
@@ -2605,6 +2847,7 @@ function updateRTUI() {
   } else {
     document.getElementById('speedHudValue').textContent = '—';
   }
+  updateHudHeading();
 
   const resEl = document.getElementById('rt-result');
   if (!resEl) return;
@@ -2652,9 +2895,16 @@ function updateRTUI() {
 // ============== РАСЧЁТ ВЕТРА ПО ФАКТУ ПОЛЁТА ====================
 // ================================================================
 
+function updateTasHint() {
+  const unit = document.getElementById('tasUnit').value;
+  document.getElementById('windTAS').placeholder = unit === 'kt' ? '92' : '170.4';
+}
 function getTASKmh() {
-  const v = parseFloat(document.getElementById('windTAS').value);
-  if (isNaN(v) || v <= 0) return null;
+  const raw = document.getElementById('windTAS').value.trim().replace(',', '.');
+  // Пустое поле всегда означает 92 узла независимо от выбранных единиц.
+  if (!raw) return 92 * 1.852;
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v <= 0) return null;
   const unit = document.getElementById('tasUnit').value;
   return unit === 'kt' ? v * 1.852 : v;
 }
@@ -2738,7 +2988,8 @@ function doWindCalc(pts) {
 
 function applyWindToFields(delta, uKmh) {
   document.getElementById('windDir').value = delta.toFixed(0);
-  document.getElementById('windSpd').value = uKmh.toFixed(0);
+  const showMs = document.getElementById('windSpeedUnit').checked;
+  document.getElementById('windSpd').value = (showMs ? uKmh / 3.6 : uKmh).toFixed(showMs ? 1 : 0);
   updateNavUI();
   document.getElementById('windResult').innerHTML += '<br><span style="color:#2a7">✓ Применено к полям ветра на вкладке Навигация</span>';
 }
@@ -2750,7 +3001,7 @@ function calcWindInstant() {
     return;
   }
   const cutoff = Date.now() - 60000;
-  const seg = rtTrack.filter(p => p.t >= cutoff);
+  const seg = rtTrack.filter(p => p.flightId === rtSessionId && p.t >= cutoff);
   if (seg.length < 5) {
     resultEl.innerHTML = '<span class="warn">Мало данных за последнюю минуту. Полетайте ещё.</span>';
     return;
@@ -3095,6 +3346,10 @@ loadPreset();
 loadTrack();
 loadTrackGps();
 loadRTTrack();
+changeMenuSide(localStorage.getItem(MENU_SIDE_KEY) === 'right');
+document.getElementById('windSpeedUnit').checked = localStorage.getItem(WIND_SPEED_UNIT_KEY) === 'ms';
+setHudHeadingVisible(localStorage.getItem(HUD_HEADING_KEY) === '1');
+updateTasHint();
 // Автономный запрос разрешения при загрузке не включает РВ и не записывает трек.
 requestGpsPermissionAtStartup();
 
