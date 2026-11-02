@@ -141,14 +141,19 @@
   #hsiPanel button { min-height:36px; padding:6px; border-radius:6px; }
   #hsiPanel button:focus-visible, #hsiPanel select:focus-visible, #hsiPanel input:focus-visible { outline:3px solid #53bfea; outline-offset:2px; }
   .hsi-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .hsi-head-actions { display:flex; align-items:center; gap:5px; margin-left:auto; }
+  /* Порядок кнопок HSI: закрыть слева, свернуть/развернуть справа. */
+  .hsi-head-actions #hsiClose { order:0; }
+  .hsi-head-actions #hsiCompactToggle { order:1; }
   .hsi-head strong { font-size:15px; letter-spacing:1px; }
   #hsiClose { width:42px;height:40px; background:#3b4b58;color:white;border:1px solid #6e7b87; font-size:24px; line-height:1; margin:0; }
+  #hsiCompactToggle { width:42px;height:40px; background:#3b4b58;color:white;border:1px solid #6e7b87; font-size:23px; line-height:1; margin:0; font-weight:600; }
   .hsi-mode-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:8px; }
   .hsi-mode-row button { border:1px solid #677b89; background:#293b48; color:#f0f4f6; font-weight:650; margin:0; }
   .hsi-mode-row button.active { background:#137f99; border-color:#51b8da; }
   .hsi-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:7px 0; }
   .hsi-row label { color:#c0d5e1; font-size:12px; }
-  #hsiPanel select, #hsiPanel input[type=number] { font-size:13px; font-family:inherit; color:#12252c; background:white; border:1px solid #7d9dad; border-radius:5px; padding:7px 4px; min-height:34px; box-sizing:border-box; max-width:70%; }
+  #hsiPanel select, #hsiPanel input[type=number], #hsiPanel #hsiCourseInput { font-size:13px; font-family:inherit; color:#12252c; background:white; border:1px solid #7d9dad; border-radius:5px; padding:7px 4px; min-height:34px; box-sizing:border-box; max-width:70%; }
   #hsiPanel select { flex:1; min-width:0; }
   #hsiPanel .hsi-details { padding:7px 9px; border:1px solid #3f586b; border-radius:7px; background:rgba(36,54,67,.80); }
   #hsiPanel .hsi-leg-label { color:#c0d5e1; font-size:12px; flex-shrink:0; }
@@ -165,6 +170,21 @@
   #hsiXtk { text-align:center; font-size:15px; font-weight:700; color:#f7d37a; }
   #hsiToFrom { color:#88d9f6; font-weight:700; font-size:12px; }
   #hsiSpeedOpen { width:100%; margin-top:9px; padding:9px; background:#1c6f8d; color:white; border:0; border-radius:6px; }
+  /* Свернутый HSI: только CDI, ЛБУ, дистанция и ЗМПУ, без настроек. */
+  #hsiPanel.compact { width:min(330px,calc(100vw - 18px)); padding:7px 9px 9px; }
+  #hsiPanel.compact .hsi-head { margin-bottom:1px; }
+  #hsiPanel.compact .hsi-head strong,
+  #hsiPanel.compact #hsiNameRow,
+  #hsiPanel.compact .hsi-mode-row,
+  #hsiPanel.compact .hsi-details,
+  #hsiPanel.compact #hsiCourseManual { display:none !important; }
+  #hsiPanel.compact #hsiCourseAuto { display:flex !important; }
+  #hsiPanel.compact .hsi-scale { height:92px; }
+  #hsiPanel.compact #hsiClose,
+  #hsiPanel.compact #hsiCompactToggle { min-height:31px; height:31px; width:37px; }
+  #hsiPanel.compact #hsiXtk { font-size:14px; }
+  #hsiPanel.compact #hsiDistance { margin:4px 0 1px; }
+  #hsiPanel.compact #hsiCourseRead { font-size:24px; }
   @media (max-width:600px) { #hsiPanel { bottom:145px; max-height:calc(100dvh - 155px); } }
 </style>
 <!-- === КОНЕЦ БЛОКА 3-B === -->
@@ -672,8 +692,8 @@
 
 <!-- === БЛОК 8-B: ПЛАНОВЫЙ НАВИГАЦИОННЫЙ ИНДИКАТОР === -->
 <section id="hsiPanel" class="hidden" role="dialog" aria-modal="false" aria-label="HSI / OBS">
-  <div class="hsi-head"><strong>🧭 HSI / OBS</strong><button type="button" id="hsiClose" onclick="closeHSI()" aria-label="Закрыть HSI">×</button></div>
-  <div class="hsi-row" style="justify-content:center; margin:9px 0 0;">
+  <div class="hsi-head"><strong>🧭 HSI / OBS</strong><div class="hsi-head-actions"><button type="button" id="hsiClose" onclick="closeHSI()" aria-label="Закрыть HSI">×</button><button type="button" id="hsiCompactToggle" onclick="toggleHSICompact()" aria-label="Свернуть HSI" title="Компактный HSI" aria-pressed="false">▁</button></div></div>
+  <div class="hsi-row" id="hsiNameRow" style="justify-content:center; margin:9px 0 0;">
     <span id="hsiFromToName" style="font-size:12px;color:#c9dce6">—</span>
     <span id="hsiToFrom">—</span>
   </div>
@@ -693,7 +713,7 @@
   <div id="hsiDistance" aria-live="off">До точки —</div>
   <div class="hsi-course" id="hsiCourseManual" hidden>
     <button type="button" onclick="stepHSICourse(-1)" aria-label="Уменьшить ЗМПУ на 1 градус">◀</button>
-    <div style="text-align:center"><div style="display:flex;align-items:center;gap:3px"><input id="hsiCourseInput" type="number" inputmode="numeric" min="0" max="359" step="1" onchange="enterHSICourse(this.value)" aria-label="ЗМПУ OBS в градусах"><span style="font-size:20px;color:#ffffff">°</span></div><div style="font-size:10px;color:#becfda">ЗМПУ</div></div>
+    <div style="text-align:center"><div style="display:flex;align-items:center;gap:3px"><input id="hsiCourseInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" onfocus="this.select()" onclick="this.select()" onchange="enterHSICourse(this.value)" aria-label="ЗМПУ OBS в градусах"><span style="font-size:20px;color:#ffffff">°</span></div><div style="font-size:10px;color:#becfda">ЗМПУ</div></div>
     <button type="button" onclick="stepHSICourse(1)" aria-label="Увеличить ЗМПУ на 1 градус">▶</button>
   </div>
   <div class="hsi-course" id="hsiCourseAuto"><div style="text-align:center"><div id="hsiCourseRead">—°</div><div style="font-size:10px;color:#becfda">ЗМПУ (авто)</div></div></div>
@@ -2646,8 +2666,12 @@ function setHSIReference(spec) {
 }
 function stepHSICourse(n) { enterHSICourse(norm360(Math.round(hsiState.obsCourse)+n)); }
 function enterHSICourse(v) {
-  const c=Number(v);
-  if(!Number.isFinite(c) || c<0 || c>359){refreshHSIPanel();return;}
+  const text=String(v).trim();
+  const c=Number(text);
+  if(!/^\d{1,3}$/.test(text) || !Number.isFinite(c) || c<0 || c>359){
+    document.getElementById('hsiCourseInput').value=String(Math.round(hsiState.obsCourse));
+    refreshHSIPanel();return;
+  }
   if(hsiState.mode!=='obs')return;
   hsiState.obsCourse=c;
   persistHSISettings();recordConfigurationEvent('obs-course');
@@ -2726,6 +2750,8 @@ function refreshHSIPanel() {
   document.getElementById('hsiCourseAuto').hidden=hsiState.mode==='obs';
   const input=document.getElementById('hsiCourseInput');
   if(document.activeElement!==input)input.value=String(Math.round(hsiState.obsCourse));
+  document.getElementById('hsiCourseAuto').querySelector('div div:last-child').textContent=
+    hsiState.mode==='obs'?'ЗМПУ':'ЗМПУ (авто)';
   // Масштаб ЛБУ постоянный: от −5 до +5 км.
   const g=getHSIGuidance(), p=hsiCurrentFix();
   const d=hsiDeviation(p,g);
@@ -2745,6 +2771,17 @@ function refreshHSIPanel() {
   const distanceLabel=g?.mode==='route'?'До ППМ':g?.mode==='direct'?'До цели':'До точки';
   const distM=(g&&p&&hsiValidPoint(g.reference))?distance(p,g.reference):null;
   distanceEl.textContent=distanceLabel+' '+(distM===null?'—':fmtDist(distM));
+}
+// Режим компактного индикатора не меняет расчет ЛБУ/курса и выбор маршрута.
+function toggleHSICompact() {
+  const panel=document.getElementById('hsiPanel');
+  const compact=panel.classList.toggle('compact');
+  const btn=document.getElementById('hsiCompactToggle');
+  btn.textContent=compact?'▢':'▁';
+  btn.setAttribute('aria-label',compact?'Развернуть HSI':'Свернуть HSI');
+  btn.setAttribute('title',compact?'Развернуть HSI':'Компактный HSI');
+  btn.setAttribute('aria-pressed',compact?'true':'false');
+  requestAnimationFrame(()=>centerFollowedAircraft(false));
 }
 function openHSI() {
   hideHudSettings();
