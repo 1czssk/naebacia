@@ -4,8 +4,15 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.58 🎃 — HSI / OBS</title>
+<title>НАЕБАЦИЯ v1.60 🎃 — PWA · Мой маршрут</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#101820">
+<meta name="application-name" content="НАЕБАЦИЯ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="НАЕБАЦИЯ">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
 <!-- === БЛОК 2: STYLE: БАЗА === -->
@@ -328,9 +335,38 @@
   }
 </style>
 <!-- === КОНЕЦ БЛОКА 5: STYLE: МОБИЛЬНАЯ === -->
+
+<style>
+  /* Редактор ППМ в основном меню; ничего не меняет в навигации до сохранения. */
+  #myRouteEditor[hidden],#myRouteDraft[hidden],#routeEditorBanner[hidden] { display:none!important; }
+  #myRouteEditor { margin-top:8px; }
+  #myRouteEditor button { border-radius:5px; padding:7px 9px; min-height:35px; }
+  .my-route-buttons { display:flex; gap:3px; flex-wrap:wrap; margin:5px 0; }
+  .my-route-buttons button { margin:0; background:#f5f5f5; border:1px solid #bfc8cd; color:#283d42; }
+  .my-route-buttons button.selected { background:#197e90; color:white; border-color:#197e90; }
+  .my-route-buttons .danger { color:#ae2929; background:#fff1f1; border-color:#e7baba; }
+  .my-route-saved { border-top:1px solid #d9e2e5; padding:7px 0; }
+  .my-route-saved>div:first-child { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .my-route-saved>div:first-child span { color:#667; white-space:nowrap; font-size:11px; }
+  .my-route-point { padding:7px 5px; border:1px solid #d7d7d7; background:#fff; border-radius:6px; margin:7px 0; }
+  .my-route-point-head { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:11px; }
+  .my-route-point-head span { color:#697379; font-size:10px; }
+  #myRouteEditor input[type=text] { box-sizing:border-box; width:100%; font-size:13px; padding:7px; }
+  #routeEditorBanner { position:fixed; top:64px; right:9px; max-width:min(270px,calc(100vw - 115px)); z-index:1250;
+    background:rgba(24,53,63,.91); color:white; padding:9px 11px; border-radius:9px;
+    box-shadow:0 3px 14px #0005; font:12px/1.35 sans-serif; pointer-events:auto; }
+  #routeEditorBanner button { background:#f39128; border:0; color:#111; font-weight:bold; border-radius:6px; margin-top:6px; }
+  .route-editor-dot { width:30px; height:30px; border:3px solid white; background:#ef871e; border-radius:50%;
+    color:white; font:bold 14px/30px sans-serif; text-align:center; box-shadow:0 2px 10px #0009; margin:4px; touch-action:none; }
+  .joke-caption { width:160px;height:110px;position:relative;pointer-events:none; }
+  .joke-caption span { color:#ff8b16;font:bold 30px/1 sans-serif;display:block;position:absolute;top:5px;left:5px;
+    text-shadow:-1px -1px #151515,1px 1px #151515,0 2px 4px #000;white-space:nowrap; }
+  .joke-caption svg { position:absolute;top:33px;left:0;filter:drop-shadow(0 1px 2px #0009); }
+</style>
 </head>
 
 <body>
+<div id="naebaciaStartup" role="status" style="position:fixed;z-index:2500;left:50%;top:45%;transform:translate(-50%,-50%);background:#122b38;color:#fff;padding:13px 18px;border-radius:9px;box-shadow:0 2px 12px #0005;font:14px sans-serif;max-width:85vw;text-align:center;pointer-events:none">Загрузка профиля Красного Кута…</div>
 
 <!-- === БЛОК 6: BODY: КНОПКА МЕНЮ === -->
 <button id="toggleBtn" onclick="togglePanel()">☰</button>
@@ -459,6 +495,43 @@
       </div>
       <button class="refresh" onclick="refreshRoute()" style="width:100%; margin-top:6px;">↻ Обновить маршрут</button>
       <div id="targetEditHint" class="hint" style="display:none; color:#e67e22; font-weight:bold; margin-top:4px;">Кликните по карте — цель будет поставлена здесь</div>
+    </div>
+
+
+    <div class="oprs nav-box" id="myRouteNavBox">
+      <b>Мой маршрут</b>
+      <div class="hint">Свои ППМ на карте: касание линии вставляет новую точку между существующими.</div>
+      <div class="my-route-buttons">
+        <button type="button" class="primary" onclick="editorOpen()">🗺️ Мои маршруты / редактор</button>
+      </div>
+      <div id="myRouteEditor" hidden>
+        <div class="my-route-buttons">
+          <button type="button" onclick="editorCreate()">➕ Новый маршрут</button>
+          <button type="button" onclick="editorExportAll()">⬇ Все JSON</button>
+        </div>
+        <label style="display:block;margin:6px 0">Импорт JSON <input id="importUserRouteFile" type="file" accept=".json,application/json" onchange="editorImportFile(this)" style="max-width:100%"></label>
+        <div id="myRouteStatus" class="hint"></div>
+        <div id="mySavedRoutes"></div>
+        <div id="myRouteDraft" hidden>
+          <hr style="border:0;border-top:1px solid #d2dadb;margin:10px 0">
+          <b>Редактирование маршрута</b>
+          <input id="routeDraftName" type="text" maxlength="65" placeholder="Название маршрута" onchange="editorNameChanged(this.value)">
+          <div class="my-route-buttons">
+            <button id="routeAddMode" type="button" onclick="editorSetMapMode('add')">＋ ППМ с карты</button>
+            <button id="routeStopMode" type="button" onclick="editorSetMapMode('none')">✋ Перемещать карту</button>
+          </div>
+          <div id="myRoutePoints"></div>
+          <div class="my-route-buttons">
+            <button id="routeUndo" type="button" onclick="editorUndo()">↶ Отменить</button>
+            <button id="routeRedo" type="button" onclick="editorRedo()">↷ Вернуть</button>
+          </div>
+          <div id="routeDraftState" class="hint"></div>
+          <div class="my-route-buttons">
+            <button type="button" class="primary" onclick="editorSave()">💾 Сохранить</button>
+            <button type="button" onclick="editorClose()">✕ Закрыть</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="oprs nav-box">
@@ -621,6 +694,8 @@
       </div>
     </div>
 
+    <div class="oprs routes-box"><b>Мои маршруты</b><div id="userRouteLayerToggles" class="hint">Своих маршрутов пока нет</div></div>
+
     <div class="oprs rt-box">
       <b>GPS-высота</b>
       <div class="route-toggle">
@@ -686,7 +761,16 @@
         <span>Справа</span>
       </div>
     </div>
+    <div class="oprs"><b>🎃 Пасхалка</b>
+      <label class="route-toggle"><input type="checkbox" id="toggleJokeArrow" onchange="toggleJokeArrow()"> Для геев 😂</label>
+      <div class="hint">Оранжевая надпись и стрелка к самолёту при активном РВ. По умолчанию выключено.</div>
+    </div>
   </div>
+</div>
+<div id="routeEditorBanner" hidden><div id="routeEditorBannerText"></div>
+  <button type="button" onclick="editorSetMapMode('none')">✋ Карта</button>
+  <button type="button" onclick="editorSetMapMode('add')">＋ ППМ</button>
+  <button type="button" onclick="{const p=document.getElementById('panel');if(p.classList.contains('hidden'))togglePanel();}">☰ Меню</button>
 </div>
 <!-- === КОНЕЦ БЛОКА 8 === -->
 
@@ -712,9 +796,9 @@
   <div id="hsiXtk">ЛБУ —</div>
   <div id="hsiDistance" aria-live="off">До точки —</div>
   <div class="hsi-course" id="hsiCourseManual" hidden>
-    <button type="button" onclick="stepHSICourse(-1)" aria-label="Уменьшить ЗМПУ на 1 градус">◀</button>
+    <button type="button" onpointerdown="startHSICourseHold(event,-1)" onpointerup="stopHSICourseHold()" onpointercancel="stopHSICourseHold()" onlostpointercapture="stopHSICourseHold()" onclick="clickHSICourse(event,-1)" aria-label="Уменьшить ЗМПУ; удерживать для вращения">◀</button>
     <div style="text-align:center"><div style="display:flex;align-items:center;gap:3px"><input id="hsiCourseInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" onfocus="this.select()" onclick="this.select()" onchange="enterHSICourse(this.value)" aria-label="ЗМПУ OBS в градусах"><span style="font-size:20px;color:#ffffff">°</span></div><div style="font-size:10px;color:#becfda">ЗМПУ</div></div>
-    <button type="button" onclick="stepHSICourse(1)" aria-label="Увеличить ЗМПУ на 1 градус">▶</button>
+    <button type="button" onpointerdown="startHSICourseHold(event,1)" onpointerup="stopHSICourseHold()" onpointercancel="stopHSICourseHold()" onlostpointercapture="stopHSICourseHold()" onclick="clickHSICourse(event,1)" aria-label="Увеличить ЗМПУ; удерживать для вращения">▶</button>
   </div>
   <div class="hsi-course" id="hsiCourseAuto"><div style="text-align:center"><div id="hsiCourseRead">—°</div><div style="font-size:10px;color:#becfda">ЗМПУ (авто)</div></div></div>
   <div class="hsi-mode-row" aria-label="Режим HSI">
@@ -737,13 +821,18 @@
 <div id="map"></div>
 <!-- === КОНЕЦ БЛОКА 9 === -->
 
-<!-- === БЛОК 10: SCRIPT: ПОДКЛЮЧЕНИЯ === -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
-<script>
-<!-- === КОНЕЦ БЛОКА 10 === -->
+<!-- === БЛОК 10: SCRIPT: ПОДКЛЮЧЕНИЯ И АВАРИЙНЫЙ ЗАПУСК === -->
+<!-- Профиль Красного Кута продублирован как резерв: при 404 приложение запускается. -->
+<script id="naebaciaEmbeddedProfile" type="application/json">{"id":"krasny-kut","name":"Красный Кут","status":"historical-unverified","dataNotice":"Учебные/исторические данные из v1.58. Не сверены с действующими АИП и NOTAM; не использовать как основной источник навигации.","revision":"2026-11-02-v1.58-migration","magneticDeclinationDeg":11,"airfield":{"name":"Красный Кут","kta":{"lat":50.960278,"lon":46.945556},"dprm":{"lat":50.9273333,"lon":46.919},"initialCenter":[51.1,46.7],"initialZoom":10},"stations":[{"name":"Красный Кут","lat":50.9273333,"lon":46.919,"freq":"1155 кГц","type":"NDB","color":"blue"},{"name":"Ямское","lat":50.9683333,"lon":47.2205556,"freq":"1245 кГц","type":"NDB","color":"red"},{"name":"Комсомольское","lat":50.8,"lon":47.0477778,"freq":"310 кГц","type":"NDB","color":"orange"},{"name":"Красноармейск","lat":51.0313889,"lon":45.6444444,"freq":"932 кГц","type":"NDB","color":"green"},{"name":"Гагарин VOR/DME (RK)","lat":51.7105556,"lon":46.1847222,"freq":"113.0 МГц","type":"VOR","color":"purple"}],"vorIndex":4,"routes":{"A4":{"name":"А4","color":"#c80","points":[{"name":"Комсомольское (ДПРМ)","lat":50.8,"lon":47.0477778},{"name":"Луговское","lat":50.6327778,"lon":46.4763889},{"name":"Орошаемый","lat":50.5527778,"lon":47.165},{"name":"Мироновка","lat":50.7518,"lon":47.4532},{"name":"Комсомольское (ДПРМ)","lat":50.8,"lon":47.0477778}]},"A5":{"name":"А5","color":"#08c","points":[{"name":"Красный Кут ДПРМ","lat":50.9273333,"lon":46.919},{"name":"н.п. Ямское (ОПРС)","lat":50.9683333,"lon":47.2205556},{"name":"н.п. Трудовик","lat":50.7777778,"lon":47.7116667},{"name":"н.п. Орлов Гай","lat":50.9305556,"lon":48.1902778},{"name":"н.п. Солнечный","lat":51.1727778,"lon":47.925},{"name":"н.п. Ямское (ОПРС)","lat":50.9683333,"lon":47.2205556},{"name":"Красный Кут ДПРМ","lat":50.9273333,"lon":46.919}]},"LOCAL":{"name":"Местный","color":"#a0a","points":[{"name":"Красный Кут ДПРМ","lat":50.9273333,"lon":46.919},{"name":"Ямское ОПРС","lat":50.9683333,"lon":47.2205556},{"name":"Новотулка","lat":50.83275914828956,"lon":47.5577480772517},{"name":"Мироновка","lat":50.7518,"lon":47.4532},{"name":"Комсомольское","lat":50.8,"lon":47.0477778},{"name":"Дьяковка","lat":50.72059455885705,"lon":46.78232837723893},{"name":"Кирово","lat":50.80502894486692,"lon":46.70056913229126},{"name":"Красный Кут ДПРМ","lat":50.9273333,"lon":46.919}]},"GAGARIN_FWD":{"name":"Гагарин (туда)","color":"#e33","points":[{"name":"UWSK (ДПРМ)","lat":50.9273333,"lon":46.919},{"name":"тр. Зорино","lat":51.1167,"lon":46.9667},{"name":"Мечетное","lat":51.4333,"lon":47.0167},{"name":"OKLAL","lat":51.7988,"lon":46.9272},{"name":"MAKEM","lat":51.8145,"lon":46.397},{"name":"UWSG (Гагарин)","lat":51.7127778,"lon":46.1711111}]},"GAGARIN_BACK":{"name":"Гагарин (обратно)","color":"#e6a","points":[{"name":"UWSG (Гагарин)","lat":51.7127778,"lon":46.1711111},{"name":"MAKEM","lat":51.8145,"lon":46.397},{"name":"OKLAL","lat":51.7988,"lon":46.9272},{"name":"Мечетное","lat":51.4333,"lon":47.0167},{"name":"тр. Зорино","lat":51.1167,"lon":46.9667},{"name":"UWSK (ДПРМ)","lat":50.9273333,"lon":46.919}]}},"zones":[{"id":"ПЗ №1","name":"пруд Орлов","lat":51.08667,"lon":47.055,"zmpu":17,"s":16},{"id":"ПЗ №2","name":"с.з. н.п. Рудня 2 км","lat":51.01667,"lon":47.07167,"zmpu":44,"s":11},{"id":"ПЗ №3","name":"юж. развилки ж.д. 3 км","lat":50.90167,"lon":46.98833,"zmpu":145,"s":7},{"id":"ПЗ №4","name":"н.п. Усатово","lat":50.8,"lon":46.9,"zmpu":179,"s":18},{"id":"ПЗ №5","name":"юж. н.п. Чкалово","lat":50.6705,"lon":47.04,"zmpu":157,"s":33},{"id":"ПЗ №6","name":"с.в. ж/д ст. Тимофеево","lat":50.825,"lon":47.06667,"zmpu":139,"s":17},{"id":"ПЗ №7","name":"н.п. Журавлевка","lat":50.88333,"lon":47.16667,"zmpu":108,"s":18},{"id":"ПЗ №8","name":"н.п. Первое Мая","lat":50.86667,"lon":47.33333,"zmpu":100,"s":29},{"id":"ПЗ №9","name":"с.з. н.п. Придорожное","lat":51.02,"lon":47.23333,"zmpu":61,"s":21}],"sectors":[{"id":"ЗПП №1","name":"н.п. Мухино","lat":51.05833,"lon":46.905,"zmpu":345,"s":16},{"id":"ЗПП №2","name":"н.п. Первомайское","lat":50.93333,"lon":46.7,"zmpu":262,"s":15},{"id":"ЗПП №3","name":"н.п. Лепехинка","lat":50.675,"lon":46.87333,"zmpu":176,"s":29},{"id":"ЗПП №4","name":"н.п. Доронкин","lat":50.71667,"lon":47.23333,"zmpu":125,"s":32},{"id":"ЗПП №5","name":"пр. Таловский","lat":50.93333,"lon":47.5,"zmpu":78,"s":41},{"id":"ЗПП №6","name":"пр. Новый","lat":51.09167,"lon":47.4,"zmpu":50,"s":38}],"circleModel":"krasny-kut-v1.58"}</script>
+<!-- Аварийная копия программной логики: позволяет запускаться даже если app.js не загрузился.
+     В штатном режиме выполняется внешний app.js из того же репозитория. -->
+<script id="naebaciaEmbeddedApp" type="text/plain">
+/* НАЕБАЦИЯ v1.60 🎃. Исходная навигационная логика v1.58 сохранена. */
+// === КОНЕЦ БЛОКА 10 ===
 
-<!-- === БЛОК 11: CONFIG === -->
+// === БЛОК 11: CONFIG ===
+const ACTIVE_PROFILE = window.NAEBACIA_ACTIVE_PROFILE;
+if (!ACTIVE_PROFILE || ACTIVE_PROFILE.id !== 'krasny-kut') throw new Error('Не загружен профиль Красного Кута');
 const FOLLOW_KEY = 'oprs_rt_follow';
 const SPEED_UNIT_KEY = 'oprs_speed_unit';
 
@@ -780,11 +869,11 @@ const GPS_STALE_SEC = 60;
 
 // Опорные точки п.п. Красный Кут
 // ДПРМ: АИП УВСК AD 2.19 (14.11.2013), координаты исторические; актуальность не подтверждена.
-const KTA_POINT  = { lat: 50.960278,  lon: 46.945556  };
-const DPRM_POINT = { lat: 50.9273333, lon: 46.9190000 };
-<!-- === КОНЕЦ БЛОКА 11 === -->
+const KTA_POINT = ACTIVE_PROFILE.airfield.kta;
+const DPRM_POINT = ACTIVE_PROFILE.airfield.dprm;
+// === КОНЕЦ БЛОКА 11 ===
 
-<!-- === БЛОК 12: TABS === -->
+// === БЛОК 12: TABS ===
 let currentTab = 'place';
 
 function updateMapInteractivity() {
@@ -806,7 +895,8 @@ function switchTab(name) {
   document.getElementById('tab-layers').classList.toggle('active', name === 'layers');
 
   map.closePopup();
-  if (name !== 'nav') targetEditMode = false;
+  if (name !== 'nav') { targetEditMode = false; if(routeEditorDraft) routeEditorMapMode = 'none'; }
+  updateRouteEditorUI();
   updateMapInteractivity();
 
   renderRTTrack();
@@ -835,10 +925,10 @@ if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
   document.getElementById('toggleBtn').textContent = '☰';
 }
-<!-- === КОНЕЦ БЛОКА 12 === -->
+// === КОНЕЦ БЛОКА 12 ===
 
-<!-- === БЛОК 13: MAP === -->
-const map = L.map('map').setView([51.1, 46.7], 10);
+// === БЛОК 13: MAP ===
+const map = L.map('map').setView(ACTIVE_PROFILE.airfield.initialCenter, ACTIVE_PROFILE.airfield.initialZoom);
 let currentLayer = null;
 
 function switchMap() {
@@ -853,121 +943,50 @@ function switchMap() {
   }
 }
 switchMap();
-<!-- === КОНЕЦ БЛОКА 13 === -->
+// === КОНЕЦ БЛОКА 13 ===
 
-<!-- === БЛОК 14: DATA: ОПРС === -->
+// === БЛОК 14: DATA: ОПРС ===
 // Координаты Красноармейска: сборник маршрутов ОВД РФ от 03.12.2020 (исторический источник).
-const PRESET = [
-  { name: 'Красный Кут',   lat: 50.9273333, lon: 46.9190000, freq: '1155 кГц',  type: 'NDB', color: 'blue' },
-  { name: 'Ямское',         lat: 50.9683333, lon: 47.2205556, freq: '1245 кГц',  type: 'NDB', color: 'red' },
-  { name: 'Комсомольское',  lat: 50.8000000, lon: 47.0477778, freq: '310 кГц',   type: 'NDB', color: 'orange' },
-  { name: 'Красноармейск',  lat: 51.0313889, lon: 45.6444444, freq: '932 кГц', type: 'NDB', color: 'green' },
-  { name: 'Гагарин VOR/DME (RK)', lat: 51.7105556, lon: 46.1847222, freq: '113.0 МГц', type: 'VOR', color: 'purple' }
-];
-
+const PRESET = ACTIVE_PROFILE.stations;
 // Индекс VOR в PRESET (после добавления 4-го NDB стал 4)
-const VOR_IDX = 4;
-<!-- === КОНЕЦ БЛОКА 14 === -->
+const VOR_IDX = ACTIVE_PROFILE.vorIndex;
+// === КОНЕЦ БЛОКА 14 ===
 
-<!-- === БЛОК 15: DATA: ROUTES === -->
-const ROUTES = {
-  A4: {
-    name: 'А4', color: '#c80',
-    points: [
-      { name: 'Комсомольское (ДПРМ)', lat: 50.8000000, lon: 47.0477778 },
-      { name: 'Луговское',              lat: 50.6327778, lon: 46.4763889 },
-      { name: 'Орошаемый',         lat: 50.5527778, lon: 47.1650000 },
-      { name: 'Мироновка',              lat: 50.7518, lon: 47.4532 },
-      { name: 'Комсомольское (ДПРМ)', lat: 50.8000000, lon: 47.0477778 }
-    ]
-  },
-  A5: {
-    name: 'А5', color: '#08c',
-    points: [
-      { name: 'Красный Кут ДПРМ',      lat: 50.9273333, lon: 46.9190000 },
-      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9683333, lon: 47.2205556 },
-      { name: 'н.п. Трудовик',         lat: 50.7777778, lon: 47.7116667 },
-      { name: 'н.п. Орлов Гай',        lat: 50.9305556, lon: 48.1902778 },
-      { name: 'н.п. Солнечный',        lat: 51.1727778, lon: 47.9250000 },
-      { name: 'н.п. Ямское (ОПРС)',    lat: 50.9683333, lon: 47.2205556 },
-      { name: 'Красный Кут ДПРМ',      lat: 50.9273333, lon: 46.9190000 }
-    ]
-  },
-  LOCAL: {
-    name: 'Местный', color: '#a0a',
-    points: [
-      { name: 'Красный Кут ДПРМ', lat: 50.9273333,             lon: 46.9190000 },
-      { name: 'Ямское ОПРС',       lat: 50.9683333, lon: 47.2205556 },
-      { name: 'Новотулка',          lat: 50.83275914828956,  lon: 47.5577480772517 },
-      { name: 'Мироновка',          lat: 50.7518,             lon: 47.4532 },
-      { name: 'Комсомольское',      lat: 50.8000000, lon: 47.0477778 },
-      { name: 'Дьяковка',           lat: 50.72059455885705,  lon: 46.78232837723893 },
-      { name: 'Кирово',             lat: 50.80502894486692,  lon: 46.70056913229126 },
-      { name: 'Красный Кут ДПРМ', lat: 50.9273333,             lon: 46.9190000 }
-    ]
-  },
-  GAGARIN_FWD: {
-    name: 'Гагарин (туда)', color: '#e33',
-    points: [
-      { name: 'UWSK (ДПРМ)',      lat: 50.9273333, lon: 46.9190000 },
-      { name: 'тр. Зорино',       lat: 51.1167, lon: 46.9667 },
-      { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
-      { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
-      { name: 'MAKEM',            lat: 51.8145, lon: 46.3970 },
-      { name: 'UWSG (Гагарин)',   lat: 51.7127778, lon: 46.1711111 }
-    ]
-  },
-  GAGARIN_BACK: {
-    name: 'Гагарин (обратно)', color: '#e6a',
-    points: [
-      { name: 'UWSG (Гагарин)',   lat: 51.7127778, lon: 46.1711111 },
-      { name: 'MAKEM',            lat: 51.8145, lon: 46.3970 },
-      { name: 'OKLAL',            lat: 51.7988, lon: 46.9272 },
-      { name: 'Мечетное',         lat: 51.4333, lon: 47.0167 },
-      { name: 'тр. Зорино',       lat: 51.1167, lon: 46.9667 },
-      { name: 'UWSK (ДПРМ)',      lat: 50.9273333, lon: 46.9190000 }
-    ]
-  }
-};
-
+// === БЛОК 15: DATA: ROUTES ===
+const ROUTES = ACTIVE_PROFILE.routes;
 let routeLayers = { A4: [], A5: [], LOCAL: [], GAGARIN_FWD: [], GAGARIN_BACK: [] };
-<!-- === КОНЕЦ БЛОКА 15 === -->
+const USER_ROUTES_KEY = 'naebacia_user_routes_v1';
+const USER_ROUTE_PREFIX = 'USER_';
+let userRoutes = [];
+let userRoutesLoadFailed = false;
+let routeEditorDraft = null;
+let routeEditorSavedId = null;
+let routeEditorSavedSnapshot = '';
+let routeEditorMapMode = 'none';
+let routeEditorMoveIndex = -1;
+let routeEditorHistory = [];
+let routeEditorHistoryIndex = -1;
+let routeEditorLayers = [];
+let jokeMarker = null;
+const JOKE_KEY = 'naebacia_joke_arrow_v1';
+// === КОНЕЦ БЛОКА 15 ===
 
-<!-- === БЛОК 16: DATA: ZONES / SECTORS === -->
+// === БЛОК 16: DATA: ZONES / SECTORS ===
 // Зоны (ПЗ) — данные из таблицы, R = 2,5 км.
 // zmpu — ЗМПУ в зону (магнитное), s — удаление от КТА в км.
-const ZONES = [
-  { id: 'ПЗ №1', name: 'пруд Орлов',             lat: 51.08667, lon: 47.05500, zmpu: 17,  s: 16 },
-  { id: 'ПЗ №2', name: 'с.з. н.п. Рудня 2 км',   lat: 51.01667, lon: 47.07167, zmpu: 44,  s: 11 },
-  { id: 'ПЗ №3', name: 'юж. развилки ж.д. 3 км', lat: 50.90167, lon: 46.98833, zmpu: 145, s: 7  },
-  { id: 'ПЗ №4', name: 'н.п. Усатово',           lat: 50.80000, lon: 46.90000, zmpu: 179, s: 18 },
-  { id: 'ПЗ №5', name: 'юж. н.п. Чкалово',       lat: 50.67050, lon: 47.04000, zmpu: 157, s: 33 },
-  { id: 'ПЗ №6', name: 'с.в. ж/д ст. Тимофеево', lat: 50.82500, lon: 47.06667, zmpu: 139, s: 17 },
-  { id: 'ПЗ №7', name: 'н.п. Журавлевка',        lat: 50.88333, lon: 47.16667, zmpu: 108, s: 18 },
-  { id: 'ПЗ №8', name: 'н.п. Первое Мая',        lat: 50.86667, lon: 47.33333, zmpu: 100, s: 29 },
-  { id: 'ПЗ №9', name: 'с.з. н.п. Придорожное',  lat: 51.02000, lon: 47.23333, zmpu: 61,  s: 21 }
-];
-
+const ZONES = ACTIVE_PROFILE.zones;
 // Сектора (ЗПП) — данные из таблицы, R = 5 км.
 // zmpu — ЗМПУ в зону (магнитное), s — удаление от ДПРМ в км.
-const SECTORS = [
-  { id: 'ЗПП №1', name: 'н.п. Мухино',        lat: 51.05833, lon: 46.90500, zmpu: 345, s: 16 },
-  { id: 'ЗПП №2', name: 'н.п. Первомайское',  lat: 50.93333, lon: 46.70000, zmpu: 262, s: 15 },
-  { id: 'ЗПП №3', name: 'н.п. Лепехинка',     lat: 50.67500, lon: 46.87333, zmpu: 176, s: 29 },
-  { id: 'ЗПП №4', name: 'н.п. Доронкин',      lat: 50.71667, lon: 47.23333, zmpu: 125, s: 32 },
-  { id: 'ЗПП №5', name: 'пр. Таловский',      lat: 50.93333, lon: 47.50000, zmpu: 78,  s: 41 },
-  { id: 'ЗПП №6', name: 'пр. Новый',          lat: 51.09167, lon: 47.40000, zmpu: 50,  s: 38 }
-];
-
+const SECTORS = ACTIVE_PROFILE.sectors;
 let areaLayers = { zones: [], sectors: [] };
 
 // Форматирование ЗМПУ как «017°» (три цифры с ведущим нулём, как в таблице)
 function fmtZmpu(v) {
   return String(Math.round(v)).padStart(3, '0') + '°';
 }
-<!-- === КОНЕЦ БЛОКА 16 === -->
+// === КОНЕЦ БЛОКА 16 ===
 
-<!-- === БЛОК 17: STATE === -->
+// === БЛОК 17: STATE ===
 let oprsMarkers = [null, null, null, null, null];
 let stationLines = [];
 let errorLines = [];
@@ -1014,9 +1033,9 @@ const popupContentFns = new WeakMap();
 
 // Слой круга полётов
 let circleLayer = [];
-<!-- === КОНЕЦ БЛОКА 17 === -->
+// === КОНЕЦ БЛОКА 17 ===
 
-<!-- === БЛОК 18: WAKELOCK === -->
+// === БЛОК 18: WAKELOCK ===
 let wakeLock = null;
 
 async function requestWakeLock() {
@@ -1040,9 +1059,9 @@ document.addEventListener('visibilitychange', async () => {
     await requestWakeLock();
   }
 });
-<!-- === КОНЕЦ БЛОКА 18 === -->
+// === КОНЕЦ БЛОКА 18 ===
 
-<!-- === БЛОК 19: MATH === -->
+// === БЛОК 19: MATH ===
 function toRad(d) { return d * Math.PI / 180; }
 function toDeg(r) { return r * 180 / Math.PI; }
 function norm360(d) { return ((d % 360) + 360) % 360; }
@@ -1164,9 +1183,9 @@ map.on('popupopen', (e) => {
 map.on('popupclose', () => {
   openPopupLayer = null;
 });
-<!-- === КОНЕЦ БЛОКА 19 === -->
+// === КОНЕЦ БЛОКА 19 ===
 
-<!-- === БЛОК 20: OFFSET === -->
+// === БЛОК 20: OFFSET ===
 function computeOffset(P, A, B) {
   const R = 6371000;
   const lat0 = (A.lat + B.lat + P.lat) / 3;
@@ -1212,9 +1231,9 @@ function fmtOffset(P, A, B) {
   html += '<br><b>Пройдено по линии:</b> ' + fmtDist(off.s_proj) + spNote;
   return html;
 }
-<!-- === КОНЕЦ БЛОКА 20 === -->
+// === КОНЕЦ БЛОКА 20 ===
 
-<!-- === БЛОК 21: SPEED === -->
+// === БЛОК 21: SPEED ===
 function convertSpeed(mps) {
   if (mps === null || mps === undefined || isNaN(mps)) return null;
   return mps * SPEED_UNITS[rtSpeedUnit].factor;
@@ -1238,9 +1257,9 @@ function cycleSpeedUnit() {
   const idx = SPEED_UNITS_ORDER.indexOf(rtSpeedUnit);
   setSpeedUnit(SPEED_UNITS_ORDER[(idx + 1) % SPEED_UNITS_ORDER.length]);
 }
-<!-- === КОНЕЦ БЛОКА 21 === -->
+// === КОНЕЦ БЛОКА 21 ===
 
-<!-- === БЛОК 22: FOLLOW === -->
+// === БЛОК 22: FOLLOW ===
 let followMode = localStorage.getItem(FOLLOW_KEY) !== '0';
 
 function isFollowOn() { return followMode; }
@@ -1294,9 +1313,9 @@ function updateFollowBtn() {
     btn.title = 'Свободный режим (нажмите — следить за позицией)';
   }
 }
-<!-- === КОНЕЦ БЛОКА 22 === -->
+// === КОНЕЦ БЛОКА 22 ===
 
-<!-- === БЛОК 23: HUD === -->
+// === БЛОК 23: HUD ===
 function setHudHeadingVisible(show) {
   document.getElementById('hudShowHeading').checked = !!show;
   document.getElementById('speedHudHeading').hidden = !show;
@@ -1348,9 +1367,9 @@ map.on('dragstart', () => {
     updateFollowBtn();
   }
 });
-<!-- === КОНЕЦ БЛОКА 23 === -->
+// === КОНЕЦ БЛОКА 23 ===
 
-<!-- === БЛОК 24: ICONS === -->
+// === БЛОК 24: ICONS ===
 function planeIconSvg(courseDeg, color) {
   // Одноцветный силуэт лёгкой высокопланной Cessna, вид сверху.
   // Нос направлен вверх, длинные почти прямые крылья, узкий фюзеляж,
@@ -1433,9 +1452,9 @@ function turnIcon(color) {
     iconSize: [22, 22], iconAnchor: [11, 11]
   });
 }
-<!-- === КОНЕЦ БЛОКА 24 === -->
+// === КОНЕЦ БЛОКА 24 ===
 
-<!-- === БЛОК 25: POSITION === -->
+// === БЛОК 25: POSITION ===
 function getCurrentPosition() {
   if (rtTracking && rtCurrentPosition) {
     return {
@@ -1460,9 +1479,9 @@ function getCurrentPosition() {
   }
   return null;
 }
-<!-- === КОНЕЦ БЛОКА 25 === -->
+// === КОНЕЦ БЛОКА 25 ===
 
-<!-- === БЛОК 26: STATION POPUPS === -->
+// === БЛОК 26: STATION POPUPS ===
 function buildStationPopup(idx) {
   const p = PRESET[idx];
   let html = '<b>' + p.name + '</b><br>' + p.freq + '<br>' +
@@ -1503,9 +1522,9 @@ function loadPreset() {
   });
   map.fitBounds(PRESET.slice(0, 3).map(p => [p.lat, p.lon]), { padding: [60, 60] });
 }
-<!-- === КОНЕЦ БЛОКА 26: STATION POPUPS === -->
+// === КОНЕЦ БЛОКА 26: STATION POPUPS ===
 
-<!-- === БЛОК 27: ROUTES RENDER === -->
+// === БЛОК 27: ROUTES RENDER ===
 // Поле U отображает выбранную единицу; расчёты всегда получают км/ч.
 function getWindSpeedKmh() {
   const raw = document.getElementById('windSpd').value.trim().replace(',', '.');
@@ -1657,10 +1676,11 @@ function renderRoutes() {
       routeLayers[key].push(m);
     });
   });
+  renderUserRoutes();
 }
-<!-- === КОНЕЦ БЛОКА 27 === -->
+// === КОНЕЦ БЛОКА 27 ===
 
-<!-- === БЛОК 28: AREAS RENDER === -->
+// === БЛОК 28: AREAS RENDER ===
 
 function metersPerPixel(lat, zoom) {
   return 156543.03392 * Math.cos(toRad(lat)) / Math.pow(2, zoom);
@@ -1771,9 +1791,9 @@ map.on('zoomend', () => {
     renderAreas();
   }
 });
-<!-- === КОНЕЦ БЛОКА 28 === -->
+// === КОНЕЦ БЛОКА 28 ===
 
-<!-- === БЛОК 28-B: CIRCLE RENDER === -->
+// === БЛОК 28-B: CIRCLE RENDER ===
 
 // Локальная плоская СК относительно КТА: x — восток, y — север (м)
 function ktaCosLat() { return Math.cos(toRad(KTA_POINT.lat)); }
@@ -2008,9 +2028,9 @@ function renderCircle() {
   }).addTo(map);
   circleLayer.push(ktaMark);
 }
-<!-- === КОНЕЦ БЛОКА 28-B === -->
+// === КОНЕЦ БЛОКА 28-B ===
 
-<!-- === БЛОК 29: ERROR LINES === -->
+// === БЛОК 29: ERROR LINES ===
 function drawErrorLines(sources) {
   errorLines.forEach(l => map.removeLayer(l));
   errorLines = [];
@@ -2036,9 +2056,9 @@ function clearErrorLines() {
   errorLines.forEach(l => map.removeLayer(l));
   errorLines = [];
 }
-<!-- === КОНЕЦ БЛОКА 29 === -->
+// === КОНЕЦ БЛОКА 29 ===
 
-<!-- === БЛОК 30: CLEAR === -->
+// === БЛОК 30: CLEAR ===
 function clearFields() {
   ['brg1','brg2','brg3','brg4','vorRadial','vorDist','course','courseRT'].forEach(id => {
     const el = document.getElementById(id);
@@ -2072,9 +2092,9 @@ function clearGps() {
   document.getElementById('result').classList.remove('error');
   updateNavUI();
 }
-<!-- === КОНЕЦ БЛОКА 30 === -->
+// === КОНЕЦ БЛОКА 30 ===
 
-<!-- === БЛОК 31: PREVIEW === -->
+// === БЛОК 31: PREVIEW ===
 function preview() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   for (let i = 0; i < 4; i++) {
@@ -2098,9 +2118,9 @@ function preview() {
     } else el5.innerHTML = '';
   } else el5.innerHTML = '';
 }
-<!-- === КОНЕЦ БЛОКА 31 === -->
+// === КОНЕЦ БЛОКА 31 ===
 
-<!-- === БЛОК 32: ALIGN GPS === -->
+// === БЛОК 32: ALIGN GPS ===
 function alignToGPS() {
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -2124,9 +2144,9 @@ function alignToGPS() {
     ddToDM(gpsPt.lat, true) + ' ' + ddToDM(gpsPt.lon, false) +
     '. Нажмите «Рассчитать» — результат должен совпасть с GPS-точкой.';
 }
-<!-- === КОНЕЦ БЛОКА 32 === -->
+// === КОНЕЦ БЛОКА 32 ===
 
-<!-- === БЛОК 33: TRACK === -->
+// === БЛОК 33: TRACK ===
 function saveTrack() {
   try { localStorage.setItem(TRACK_KEY, JSON.stringify(track)); } catch (e) {}
 }
@@ -2211,9 +2231,9 @@ function renderTrack() {
   updateNavUI();
   updateRTUI();
 }
-<!-- === КОНЕЦ БЛОКА 33 === -->
+// === КОНЕЦ БЛОКА 33 ===
 
-<!-- === БЛОК 34: NAV === -->
+// === БЛОК 34: NAV ===
 function getGPSHeadingMag() {
   if (!rtTracking || !rtCurrentPosition) return null;
   let heading = rtCurrentPosition.heading;
@@ -2263,6 +2283,14 @@ function getCurrentSpeedKmh(targetPt) {
 
 function startTargetEdit() {
   targetEditMode = !targetEditMode;
+  if(targetEditMode && routeEditorDraft) {routeEditorMapMode='none';routeEditorMoveIndex=-1;updateRouteEditorUI();}
+  // На телефоне сразу показываем карту: пользователь выбирает цель касанием.
+  // В режиме отмены меню остаётся открытым, а на десктопе поведение не меняется.
+  const touchScreen = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  if (targetEditMode && (window.innerWidth <= 600 || touchScreen)) {
+    const panel = document.getElementById('panel');
+    if (panel && !panel.classList.contains('hidden')) togglePanel();
+  }
   updateMapInteractivity();
   updateNavUI();
 }
@@ -2491,13 +2519,412 @@ function updateNavUI() {
 }
 
 map.on('click', e => {
-  if (currentTab === 'nav' && targetEditMode) {
-    setNavTarget(e.latlng.lat, e.latlng.lng);
+  if (currentTab !== 'nav') return;
+  if (routeEditorDraft && routeEditorMapMode === 'add') {
+    routeEditorAddPoint(e.latlng.lat,e.latlng.lng);
+    return;
   }
+  if (routeEditorDraft && routeEditorMapMode === 'move' && routeEditorMoveIndex >= 0) {
+    routeEditorPlaceMovedPoint(e.latlng.lat,e.latlng.lng);
+    return;
+  }
+  if (targetEditMode) setNavTarget(e.latlng.lat, e.latlng.lng);
 });
-<!-- === КОНЕЦ БЛОКА 34 === -->
+// === КОНЕЦ БЛОКА 34 ===
 
-<!-- === БЛОК 34-B: HSI / OBS / ROUTE === -->
+
+// === БЛОК 34-A: РЕДАКТОР ПОЛЬЗОВАТЕЛЬСКИХ МАРШРУТОВ ===
+// Исторические маршруты профиля не редактируем. В localStorage лежат только свои маршруты.
+function safeText(value) {
+  return String(value).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+function cloneRoute(v) { return JSON.parse(JSON.stringify(v)); }
+function validRoutePoint(p) {
+  return p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon)) &&
+    Number(p.lat)>=-90 && Number(p.lat)<=90 && Number(p.lon)>=-180 && Number(p.lon)<=180;
+}
+function parseImportedRoute(v) {
+  if (!v || !Array.isArray(v.points) || v.points.length < 2 || v.points.length > 150)
+    throw new Error('В маршруте должно быть от 2 до 150 ППМ');
+  const points = v.points.map((p,i)=> {
+    if (!validRoutePoint(p)) throw new Error('Некорректные координаты ППМ №'+(i+1));
+    return {name: String(p.name||'ППМ '+(i+1)).slice(0,65),lat:Number(p.lat),lon:Number(p.lon)};
+  });
+  if (points.some((p,i)=>i>0 && distance(p,points[i-1])<5))
+    throw new Error('Соседние ППМ совпадают (или ближе 5 м)');
+  return {name:String(v.name||'Мой маршрут').trim().slice(0,65)||'Мой маршрут',points};
+}
+function newUserRouteId() {
+  let id;
+  do { id=USER_ROUTE_PREFIX+Date.now().toString()+'_'+Math.floor(Math.random()*10000); }
+  while (userRoutes.some(r=>r.id===id));
+  return id;
+}
+function persistUserRoutes(next) {
+  if(userRoutesLoadFailed)throw new Error('Нечитаемая прежняя база маршрутов: данные не перезаписаны');
+  if (next.length>60) throw new Error('Не более 60 сохранённых маршрутов');
+  // Сначала подтверждаем запись в хранилище, только потом меняем активные данные.
+  localStorage.setItem(USER_ROUTES_KEY,JSON.stringify({format:'naebacia-user-routes',version:1,routes:next}));
+  userRoutes=next;
+  syncUserRouteCatalog();
+}
+function loadUserRoutes() {
+  try {
+    const raw=localStorage.getItem(USER_ROUTES_KEY);
+    if(!raw) return;
+    const parsed=JSON.parse(raw);
+    if(!parsed || parsed.format!=='naebacia-user-routes' || !Array.isArray(parsed.routes))
+      throw new Error('Неподдерживаемый формат');
+    userRoutes=parsed.routes.slice(0,60).map(r=>{
+      const clean=parseImportedRoute(r);
+      const id=typeof r.id==='string' && /^USER_\d+_\d+$/.test(r.id)?r.id:newUserRouteId();
+      return {id,name:clean.name,points:clean.points,createdAt:Number(r.createdAt)||Date.now(),updatedAt:Number(r.updatedAt)||Date.now()};
+    });
+    syncUserRouteCatalog();
+  } catch(e) {
+    userRoutesLoadFailed=true;
+    console.warn('Свои маршруты не прочитаны; старые данные НЕ удалены:',e);
+    const status=document.getElementById('myRouteStatus');
+    if(status) status.textContent='⚠ Не удалось прочитать маршруты: данные в памяти браузера не удалены. Не перезаписывайте их до резервного копирования.';
+  }
+}
+function syncUserRouteCatalog() {
+  Object.keys(ROUTES).filter(k=>k.startsWith(USER_ROUTE_PREFIX)).forEach(k=>delete ROUTES[k]);
+  for(const route of userRoutes) ROUTES[route.id]={name:route.name,color:'#ef871e',points:cloneRoute(route.points),custom:true};
+  if (hsiState && hsiState.routeKey && !ROUTES[hsiState.routeKey]) {
+    hsiState.routeKey=''; hsiState.legIndex=0; hsiState.awaitingRouteFix=0;
+    hsiNeedsInitialLegFix=false; persistHSISettings();
+  }
+  renderUserRoutes();
+  if (document.getElementById('hsiRouteSelect')) {
+    buildHSISelects();refreshHSIPanel();
+  }
+  updateRouteEditorUI();
+}
+function renderUserRoutes() {
+  const container=document.getElementById('userRouteLayerToggles');
+  if(!container)return;
+  const previous=Array.from(container.querySelectorAll('input')).filter(e=>e.checked).map(e=>e.value);
+  const enabled=new Set(previous);
+  // Сохраняем ранее включённые слои при переключении других штатных маршрутов.
+  for(const route of userRoutes) {
+    const layers=routeLayers[route.id]||[];
+    layers.forEach(l=>map.removeLayer(l));routeLayers[route.id]=[];
+  }
+  Object.keys(routeLayers).filter(k=>k.startsWith(USER_ROUTE_PREFIX) && !userRoutes.some(r=>r.id===k))
+    .forEach(k=>{routeLayers[k].forEach(l=>map.removeLayer(l));delete routeLayers[k];});
+  container.innerHTML=userRoutes.map(r=>'<div class="route-toggle"><input type="checkbox" value="'+r.id+'" id="route'+r.id+'" onchange="renderUserRoutes()" '+(enabled.has(r.id)?'checked':'')+'><span class="route-swatch" style="background:#ef871e"></span><label for="route'+r.id+'">'+safeText(r.name)+'</label></div>').join('') || '<div class="hint">Своих маршрутов пока нет</div>';
+  for(const r of userRoutes){
+    if(!enabled.has(r.id)) continue;
+    const route=ROUTES[r.id];
+    const layers=routeLayers[r.id];
+    for(let i=0;i<r.points.length-1;i++){
+      const a=r.points[i], b=r.points[i+1];
+      const pair=makeClickableLine([[a.lat,a.lon],[b.lat,b.lon]],
+        {color:'#ef871e',weight:3,opacity:.8},()=>buildRouteSegmentPopup(r.id,i));
+      layers.push(...pair);
+    }
+    r.points.forEach((p,i)=>{
+      const marker=L.marker([p.lat,p.lon],{icon:routeDotIcon('#ef871e')}).addTo(map);
+      bindLivePopup(marker,()=>buildRoutePointPopup(r.id,i,[i]),{autoPan:true});layers.push(marker);
+    });
+  }
+}
+function editorOpen() {
+  const section=document.getElementById('myRouteEditor');
+  section.hidden=!section.hidden;
+  updateRouteEditorUI();
+}
+function editorStartDraft(draft, savedId) {
+  if(routeEditorDraft && editorIsDirty() && !confirm('Закрыть текущий несохранённый черновик?'))return;
+  targetEditMode=false;
+  routeEditorDraft=cloneRoute(draft);
+  routeEditorSavedId=savedId||null;
+  routeEditorSavedSnapshot=savedId?JSON.stringify(draft):'';
+  routeEditorHistory=[cloneRoute(routeEditorDraft)];routeEditorHistoryIndex=0;
+  routeEditorMoveIndex=-1;routeEditorMapMode='add';
+  document.getElementById('myRouteEditor').hidden=false;
+  updateMapInteractivity(); updateNavUI();updateRouteEditorUI();renderRouteEditorOnMap();
+}
+function editorCreate() {
+  editorStartDraft({name:'Мой маршрут '+(userRoutes.length+1),points:[]},null);
+}
+function editorEdit(id) {
+  const found=userRoutes.find(r=>r.id===id);
+  if(!found)return;
+  editorStartDraft({name:found.name,points:found.points},id);
+}
+function editorIsDirty() {
+  if(!routeEditorDraft)return false;
+  return JSON.stringify(routeEditorDraft)!==routeEditorSavedSnapshot;
+}
+function editorCommit(change) {
+  if(!routeEditorDraft)return;
+  const next=cloneRoute(routeEditorDraft);
+  change(next);
+  if(JSON.stringify(next)===JSON.stringify(routeEditorDraft))return;
+  routeEditorDraft=next;
+  routeEditorHistory=routeEditorHistory.slice(0,routeEditorHistoryIndex+1);
+  routeEditorHistory.push(cloneRoute(next));
+  if(routeEditorHistory.length>80)routeEditorHistory.shift();
+  routeEditorHistoryIndex=routeEditorHistory.length-1;
+  renderRouteEditorOnMap();updateRouteEditorUI();
+}
+function editorUndo() {
+  if(routeEditorHistoryIndex<=0)return;
+  routeEditorDraft=cloneRoute(routeEditorHistory[--routeEditorHistoryIndex]);
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;
+  renderRouteEditorOnMap();updateRouteEditorUI();
+}
+function editorRedo() {
+  if(routeEditorHistoryIndex>=routeEditorHistory.length-1)return;
+  routeEditorDraft=cloneRoute(routeEditorHistory[++routeEditorHistoryIndex]);
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;
+  renderRouteEditorOnMap();updateRouteEditorUI();
+}
+function editorSetMapMode(mode,index=-1) {
+  if(!routeEditorDraft)return;
+  routeEditorMapMode=mode;routeEditorMoveIndex=mode==='move'?index:-1;
+  if(mode==='add'||mode==='move'){
+    // На телефоне сразу раскрываем карту, как для постановки обычной цели.
+    if(window.innerWidth<=600 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)){
+      const p=document.getElementById('panel'); if(p&&!p.classList.contains('hidden'))togglePanel();
+    }
+  }
+  updateRouteEditorUI();
+}
+function renumberDefaultRoutePoints(points) {
+  points.forEach((p,i)=>{if(/^ППМ \d+$/.test(p.name))p.name='ППМ '+(i+1);});
+}
+function editorAddCoordinate(lat,lon,index) {
+  if(!validRoutePoint({lat,lon}))return;
+  if(routeEditorDraft.points.length>=150){alert('Максимум 150 ППМ в маршруте');return;}
+  editorCommit(d=>{d.points.splice(index,0,{name:'ППМ '+(index+1),lat,lon});renumberDefaultRoutePoints(d.points);});
+}
+function routeEditorAddPoint(lat,lon) {
+  editorAddCoordinate(lat,lon,routeEditorDraft.points.length);
+}
+function editorShowInsert(index,lat,lon) {
+  if(!routeEditorDraft)return;
+  const popup=L.popup({closeButton:true,maxWidth:220}).setLatLng([lat,lon])
+    .setContent('<div style="font:14px sans-serif"><b>Участок '+(index+1)+'–'+(index+2)+'</b><br><button style="margin-top:8px;padding:9px" onclick="editorInsertPoint('+index+','+lat+','+lon+')">➕ Добавить ППМ здесь</button></div>');
+  popup.openOn(map);
+}
+function editorInsertPoint(index,lat,lon) {
+  map.closePopup();editorAddCoordinate(lat,lon,index+1);
+}
+function routeEditorPlaceMovedPoint(lat,lon) {
+  const i=routeEditorMoveIndex;
+  if(i<0||i>=routeEditorDraft.points.length)return;
+  editorCommit(d=>{d.points[i].lat=lat;d.points[i].lon=lon;});
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;updateRouteEditorUI();
+}
+function editorNameChanged(value) {
+  editorCommit(d=>{d.name=String(value).trim().slice(0,65)||'Мой маршрут';});
+}
+function editorRenamePoint(index,value) {
+  editorCommit(d=>{if(d.points[index])d.points[index].name=String(value).trim().slice(0,65)||'ППМ '+(index+1);});
+}
+function editorShiftPoint(index,dir) {
+  const newIndex=index+dir;
+  if(newIndex<0||newIndex>=routeEditorDraft.points.length)return;
+  editorCommit(d=>{const p=d.points.splice(index,1)[0];d.points.splice(newIndex,0,p);renumberDefaultRoutePoints(d.points);});
+}
+function editorDeletePoint(index) {
+  if(!routeEditorDraft || !routeEditorDraft.points[index])return;
+  editorCommit(d=>{d.points.splice(index,1);renumberDefaultRoutePoints(d.points);});
+}
+function editorCoordinates(index) {
+  const p=routeEditorDraft?.points[index];if(!p)return;
+  const raw=prompt('Координаты ППМ (широта; долгота), десятичные градусы:',p.lat.toFixed(6)+'; '+p.lon.toFixed(6));
+  if(raw===null)return;
+  const parts=raw.trim().split(/\s*[; ]\s*/).filter(Boolean);
+  if(parts.length!==2){alert('Формат: 50.123456; 46.123456');return;}
+  const lat=Number(parts[0].replace(',','.')),lon=Number(parts[1].replace(',','.'));
+  if(!validRoutePoint({lat,lon})){alert('Неверные координаты');return;}
+  editorCommit(d=>{d.points[index].lat=lat;d.points[index].lon=lon;});
+}
+function editorPointGo(index) {
+  const p=routeEditorDraft?.points[index];if(p)map.panTo([p.lat,p.lon]);
+}
+function clearRouteEditorOnMap(){routeEditorLayers.forEach(l=>map.removeLayer(l));routeEditorLayers=[];}
+function renderRouteEditorOnMap() {
+  clearRouteEditorOnMap();
+  if(!routeEditorDraft)return;
+  const pts=routeEditorDraft.points;
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1];
+    const coords=[[a.lat,a.lon],[b.lat,b.lon]];
+    const line=L.polyline(coords,{color:'#ff8b16',weight:5,opacity:.96,interactive:false,dashArray:'10,5'}).addTo(map);
+    const hit=L.polyline(coords,{color:'#ff8b16',weight:28,opacity:0.01,bubblingMouseEvents:false}).addTo(map);
+    hit.on('click',(e)=>{
+      if(currentTab!=='nav')return;
+      if(e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+      editorShowInsert(i,e.latlng.lat,e.latlng.lng);
+    });
+    routeEditorLayers.push(line,hit);
+  }
+  pts.forEach((p,i)=>{
+    const marker=L.marker([p.lat,p.lon],{draggable:true,autoPan:true,
+      icon:L.divIcon({className:'',html:'<div class="route-editor-dot">'+(i+1)+'</div>',iconSize:[44,44],iconAnchor:[22,22]})}).addTo(map);
+    marker.on('dragend',()=>{const ll=marker.getLatLng();editorCommit(d=>{d.points[i].lat=ll.lat;d.points[i].lon=ll.lng;});});
+    marker.on('click',()=>{editorSetMapMode('none');const p=routeEditorDraft.points[i];
+      marker.bindPopup('<b>'+safeText(p.name)+'</b><br><button onclick="editorSetMapMode(\'move\','+i+')">Перенести касанием карты</button>').openPopup();});
+    routeEditorLayers.push(marker);
+  });
+}
+function editorSave() {
+  if(!routeEditorDraft)return false;
+  let clean;
+  try {clean=parseImportedRoute(routeEditorDraft);}catch(e){alert('Маршрут не сохранён: '+e.message);return false;}
+  const id=routeEditorSavedId||newUserRouteId();
+  const old=userRoutes.find(r=>r.id===id);
+  const now=Date.now();
+  const item={id,name:clean.name,points:clean.points,createdAt:old?.createdAt||now,updatedAt:now};
+  const next=userRoutes.filter(r=>r.id!==id).concat(item);
+  try {persistUserRoutes(next);}catch(e){alert('Не удалось записать маршрут на телефоне: '+e.message+' — экспортируйте его.');return false;}
+  routeEditorSavedId=id;
+  routeEditorDraft={name:clean.name,points:clean.points};
+  routeEditorSavedSnapshot=JSON.stringify(routeEditorDraft);
+  routeEditorHistory=[cloneRoute(routeEditorDraft)];routeEditorHistoryIndex=0;
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;
+  if(hsiState.routeKey===id){
+    const fix=hsiCurrentFix();hsiState.legIndex=fix?hsiRouteBestLeg(ROUTES[id],fix):0;
+    hsiNeedsInitialLegFix=!fix;persistHSISettings();renderHSIGuideLine();
+  }
+  const shown=document.getElementById('route'+id);if(shown)shown.checked=true;
+  renderRoutes();renderRouteEditorOnMap();updateRouteEditorUI();
+  recordConfigurationEvent('custom-route-saved');
+  return true;
+}
+function editorClose() {
+  if(routeEditorDraft && editorIsDirty()&&!confirm('Закрыть черновик без сохранения?'))return;
+  clearRouteEditorOnMap();routeEditorDraft=null;routeEditorSavedId=null;
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;
+  updateRouteEditorUI();
+}
+function editorDeleteSaved(id) {
+  const r=userRoutes.find(x=>x.id===id);if(!r)return;
+  if(!confirm('Удалить маршрут «'+r.name+'»? Это действие нельзя отменить.'))return;
+  if(routeEditorSavedId===id){clearRouteEditorOnMap();routeEditorDraft=null;routeEditorSavedId=null;routeEditorMapMode='none';}
+  try {persistUserRoutes(userRoutes.filter(x=>x.id!==id));}catch(e){alert('Не удалось удалить маршрут: '+e.message);}
+}
+function editorToHSI(id) {
+  if(!ROUTES[id])return;
+  if(routeEditorDraft && editorIsDirty()){
+    if(!confirm('В HSI будет загружен СОХРАНЁННЫЙ маршрут. Продолжить без сохранения черновика?'))return;
+  }
+  setHSIMode('route');selectHSIRoute(id);
+  const show=document.getElementById('route'+id);if(show){show.checked=true;renderUserRoutes();}
+  updateRouteEditorUI();
+}
+function editorDownload(data,name) {
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),20000);
+}
+function editorExport(id) {
+  const r=userRoutes.find(x=>x.id===id);if(!r)return;
+  editorDownload({format:'naebacia-custom-route',version:1,name:r.name,points:r.points},'naebacia_route_'+id+'.json');
+}
+function editorExportAll() {
+  if(!userRoutes.length){alert('Сохранённых маршрутов нет');return;}
+  editorDownload({format:'naebacia-user-routes',version:1,routes:userRoutes},'naebacia_all_routes.json');
+}
+async function editorImportFile(input) {
+  const file=input.files?.[0];if(!file)return;
+  try {
+    if(file.size>1000000)throw new Error('Файл слишком большой');
+    const obj=JSON.parse(await file.text());
+    let candidates;
+    if(obj.format==='naebacia-custom-route')candidates=[obj];
+    else if(obj.format==='naebacia-user-routes' && Array.isArray(obj.routes))candidates=obj.routes;
+    else throw new Error('Неизвестный формат маршрута');
+    if(!candidates.length||candidates.length>60)throw new Error('Некорректное число маршрутов');
+    const clean=candidates.map(parseImportedRoute);
+    if(userRoutes.length+clean.length>60)throw new Error('Недостаточно места для новых маршрутов (максимум 60)');
+    const now=Date.now();
+    const used=new Set(userRoutes.map(r=>r.id));
+    const additional=clean.map(r=>{
+      let id;
+      do{id=USER_ROUTE_PREFIX+Date.now()+'_'+Math.floor(Math.random()*1000000000);}while(used.has(id));
+      used.add(id);
+      return {id,name:r.name,points:r.points,createdAt:now,updatedAt:now};
+    });
+    persistUserRoutes(userRoutes.concat(additional));
+    alert('Импортировано маршрутов: '+additional.length+'; их можно проверить и открыть в редакторе.');
+  } catch(e){alert('Импорт не выполнен: '+e.message);}
+  finally {input.value='';}
+}
+function updateRouteEditorUI() {
+  const section=document.getElementById('myRouteEditor');if(!section)return;
+  const editing=!!routeEditorDraft;
+  const banner=document.getElementById('routeEditorBanner');
+  if(banner){
+    banner.hidden=!editing||currentTab!=='nav';
+    if(!banner.hidden){
+      const instruction=routeEditorMapMode==='move'?'Коснись нового положения ППМ №'+(routeEditorMoveIndex+1):
+        routeEditorMapMode==='add'?'Коснись карты для нового ППМ. Нажми на участок, чтобы вставить ППМ между точками.':'Перетаскивай ППМ или выбери действие в меню.';
+      document.getElementById('routeEditorBannerText').textContent=instruction;
+    }
+  }
+  const list=document.getElementById('mySavedRoutes');
+  if(list)list.innerHTML=userRoutes.length?userRoutes.map(r=>
+    '<div class="my-route-saved"><div><b>'+safeText(r.name)+'</b><span>'+r.points.length+' ППМ</span></div><div class="my-route-buttons">'+
+    '<button type="button" onclick="editorEdit(\''+r.id+'\')">✎ Править</button>'+ 
+    '<button type="button" onclick="editorToHSI(\''+r.id+'\')">🧭 HSI</button>'+ 
+    '<button type="button" onclick="editorExport(\''+r.id+'\')">⬇ JSON</button>'+ 
+    '<button type="button" class="danger" onclick="editorDeleteSaved(\''+r.id+'\')">×</button></div></div>'
+  ).join(''):'<div class="hint">Сохранённых маршрутов нет</div>';
+  const draftEl=document.getElementById('myRouteDraft');
+  if(!draftEl)return;
+  draftEl.hidden=!editing;
+  if(!editing) return;
+  const name=document.getElementById('routeDraftName');
+  if(name && document.activeElement!==name)name.value=routeEditorDraft.name;
+  const points=document.getElementById('myRoutePoints');
+  points.innerHTML=routeEditorDraft.points.map((p,i)=>
+    '<div class="my-route-point"><div class="my-route-point-head"><b>ППМ '+(i+1)+'</b>'+ 
+    '<span>'+p.lat.toFixed(5)+'; '+p.lon.toFixed(5)+'</span></div>'+ 
+    '<input aria-label="Название ППМ '+(i+1)+'" maxlength="65" value="'+safeText(p.name)+'" onchange="editorRenamePoint('+i+',this.value)">'+
+    '<div class="my-route-buttons">'+
+    '<button onclick="editorPointGo('+i+')">⌖</button>'+ 
+    '<button onclick="editorShiftPoint('+i+',-1)" '+(i===0?'disabled':'')+'>↑</button>'+ 
+    '<button onclick="editorShiftPoint('+i+',1)" '+(i===routeEditorDraft.points.length-1?'disabled':'')+'>↓</button>'+ 
+    '<button onclick="editorSetMapMode(\'move\','+i+')">Перенести</button>'+ 
+    '<button onclick="editorCoordinates('+i+')">Коорд.</button>'+ 
+    '<button class="danger" onclick="editorDeletePoint('+i+')">×</button>'+ 
+    '</div></div>').join('')||'<div class="hint">Коснись карты, чтобы добавить первый ППМ.</div>';
+  document.getElementById('routeUndo').disabled=routeEditorHistoryIndex<=0;
+  document.getElementById('routeRedo').disabled=routeEditorHistoryIndex>=routeEditorHistory.length-1;
+  document.getElementById('routeDraftState').textContent=editorIsDirty()?'● Несохранённый черновик':'✓ Сохранено';
+  document.getElementById('routeAddMode').classList.toggle('selected',routeEditorMapMode==='add');
+  document.getElementById('routeStopMode').classList.toggle('selected',routeEditorMapMode==='none');
+}
+// === КОНЕЦ БЛОКА 34-A ===
+
+// === БЛОК 34-C: НЕОБЯЗАТЕЛЬНАЯ ПАСХАЛКА ===
+function initJokePreference(){
+  const el=document.getElementById('toggleJokeArrow');
+  if(el)el.checked=localStorage.getItem(JOKE_KEY)==='1';
+  updateJokeMarker();
+}
+function toggleJokeArrow(){
+  try {localStorage.setItem(JOKE_KEY,document.getElementById('toggleJokeArrow').checked?'1':'0');}catch(_){ }
+  updateJokeMarker();
+}
+function updateJokeMarker(){
+  if(jokeMarker){map.removeLayer(jokeMarker);jokeMarker=null;}
+  if(!document.getElementById('toggleJokeArrow')?.checked||!rtTracking||!rtCurrentPosition)return;
+  const html='<div class="joke-caption"><span>Гей</span><svg width="143" height="62" viewBox="0 0 143 62" aria-hidden="true"><path d="M10 8 Q68 10 134 54" fill="none" stroke="#ff8b16" stroke-width="6" stroke-linecap="round"/><path d="M111 51 L135 55 L129 31" fill="none" stroke="#ff8b16" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  jokeMarker=L.marker([rtCurrentPosition.lat,rtCurrentPosition.lon],{
+    icon:L.divIcon({className:'',html,iconSize:[160,110],iconAnchor:[144,96]}),
+    interactive:false,keyboard:false,zIndexOffset:1150
+  }).addTo(map);
+}
+// === КОНЕЦ БЛОКА 34-C ===
+
+// === БЛОК 34-B: HSI / OBS / ROUTE ===
 // HSI: маршрут ROUTE выбирается вручную, активный участок выбирается и сменяется автоматически по GPS.
 function hsiValidPoint(p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); }
 function hsiCurrentFix() {
@@ -2599,6 +3026,7 @@ function maybeAdvanceHSIRoute(p) {
   updateNavUI();
 }
 function setHSIMode(next) {
+  stopHSICourseHold();
   if(!['direct','route','obs'].includes(next)) return;
   if(next==='obs' && hsiState.mode!=='obs') {
     const guidance=getHSIGuidance();
@@ -2642,7 +3070,7 @@ function selectHSIRoute(key) {
 function makeHSIReferenceOptions() {
   const items=[{key:'target',name:'Выбранная цель'}, {key:'position',name:'Положение при установке'}];
   PRESET.forEach((p,i)=>items.push({key:'station:'+i,name:p.name}));
-  Object.entries(ROUTES).forEach(([key,r])=>r.points.slice(0,-1).forEach((p,i)=>
+  Object.entries(ROUTES).forEach(([key,r])=>(r.custom?r.points:r.points.slice(0,-1)).forEach((p,i)=>
     items.push({key:'route:'+key+':'+i,name:r.name+' · '+(i+1)+' '+p.name})));
   return items;
 }
@@ -2664,7 +3092,33 @@ function setHSIReference(spec) {
   persistHSISettings();recordConfigurationEvent('obs-anchor');
   updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
 }
+let hsiRepeatDelay = null;
+let hsiRepeatInterval = null;
+let hsiPointerStepAt = 0;
 function stepHSICourse(n) { enterHSICourse(norm360(Math.round(hsiState.obsCourse)+n)); }
+function stopHSICourseHold() {
+  clearTimeout(hsiRepeatDelay); clearInterval(hsiRepeatInterval);
+  hsiRepeatDelay = hsiRepeatInterval = null;
+}
+function startHSICourseHold(e, n) {
+  if (e.button !== undefined && e.button !== 0) return;
+  if (hsiState.mode !== 'obs') return;
+  e.preventDefault();
+  stopHSICourseHold();
+  hsiPointerStepAt = Date.now();
+  if (e.currentTarget.setPointerCapture) {
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+  stepHSICourse(n);
+  hsiRepeatDelay = setTimeout(() => {
+    hsiRepeatDelay = null;
+    hsiRepeatInterval = setInterval(() => stepHSICourse(n), 90);
+  }, 430);
+}
+function clickHSICourse(e, n) {
+  // Pointer event already changed the course; click only handles keyboard activation.
+  if (e.detail === 0) stepHSICourse(n);
+}
 function enterHSICourse(v) {
   const text=String(v).trim();
   const c=Number(text);
@@ -2721,9 +3175,18 @@ function guidanceSummaryHtml(p) {
 }
 function buildHSISelects() {
   const r=document.getElementById('hsiRouteSelect');
-  if(r.options.length<=1){Object.entries(ROUTES).forEach(([key,route])=>r.add(new Option(route.name,key)));}
+  const routeSignature=Object.entries(ROUTES).map(([key,v])=>key+':'+v.name+':'+v.points.length).join('|');
+  if(r.dataset.signature!==routeSignature){
+    r.innerHTML='<option value="">Выберите маршрут</option>';
+    Object.entries(ROUTES).forEach(([key,route])=>r.add(new Option(route.name,key)));
+    r.dataset.signature=routeSignature;
+  }
   const ref=document.getElementById('hsiObsReference');
-  if(ref.options.length===0){makeHSIReferenceOptions().forEach(x=>ref.add(new Option(x.name,x.key)));}
+  if(ref.dataset.signature!==routeSignature){
+    ref.innerHTML='';
+    makeHSIReferenceOptions().forEach(x=>ref.add(new Option(x.name,x.key)));
+    ref.dataset.signature=routeSignature;
+  }
 }
 function refreshHSIPanel() {
   const panel=document.getElementById('hsiPanel'); if(!panel)return;
@@ -2750,7 +3213,7 @@ function refreshHSIPanel() {
   document.getElementById('hsiCourseAuto').hidden=hsiState.mode==='obs';
   const input=document.getElementById('hsiCourseInput');
   if(document.activeElement!==input)input.value=String(Math.round(hsiState.obsCourse));
-  document.getElementById('hsiCourseAuto').querySelector('div div:last-child').textContent=
+  document.getElementById('hsiCourseAuto').firstElementChild.lastElementChild.textContent=
     hsiState.mode==='obs'?'ЗМПУ':'ЗМПУ (авто)';
   // Масштаб ЛБУ постоянный: от −5 до +5 км.
   const g=getHSIGuidance(), p=hsiCurrentFix();
@@ -2794,6 +3257,7 @@ function openHSI() {
   document.getElementById('hsiClose').focus();
 }
 function closeHSI() {
+  stopHSICourseHold();
   document.getElementById('hsiPanel').classList.add('hidden');
   // После закрытия HSI возвращаем обычное центрирование на самолёт.
   centerFollowedAircraft(false);
@@ -2809,7 +3273,7 @@ if (typeof ResizeObserver !== 'undefined') {
   }).observe(document.getElementById('hsiPanel'));
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHSI();});
-<!-- === КОНЕЦ БЛОКА 34-B === -->
+// === КОНЕЦ БЛОКА 34-B ===
 
 // Запись настроек, которые действительно действовали на каждом участке полёта.
 // Используются для последующего восстановления расчётных МК, УС и заданной TAS.
@@ -2883,7 +3347,7 @@ function setupConfigurationTracking() {
   document.getElementById('tasUnit').addEventListener('change',()=>navConfigurationChanged('change'));
 }
 
-<!-- === БЛОК 35: RTNAV === -->
+// === БЛОК 35: RTNAV ===
 function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
 
 // Формат v2: один журнал смены, отдельный массив точек для каждого запуска РВ.
@@ -3202,7 +3666,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 3, appVersion: '1.58',
+    version: 3, appVersion: '1.60',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -3348,6 +3812,7 @@ function renderRTMarker() {
   const show = rtTracking;
   if (!show || !rtCurrentPosition) {
     if (rtMarker) { map.removeLayer(rtMarker); rtMarker = null; }
+    updateJokeMarker();
     return;
   }
   let course = rtCurrentPosition.heading;
@@ -3368,6 +3833,7 @@ function renderRTMarker() {
       icon: planeIconBlue(course), interactive: false, zIndexOffset: 1200
     }).addTo(map);
   }
+  updateJokeMarker();
 }
 
 function updateRTUI() {
@@ -3669,9 +4135,9 @@ function restoreWindMeasureButton() {
   btn.disabled = false;
   btn.innerHTML = '⏱ Измерить';
 }
-<!-- === КОНЕЦ БЛОКА 35: RTNAV === -->
+// === КОНЕЦ БЛОКА 35: RTNAV ===
 
-<!-- === БЛОК 36: GPS ONCE === -->
+// === БЛОК 36: GPS ONCE ===
 function getMyPosition() {
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -3743,9 +4209,9 @@ function getMyPosition() {
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 }
-<!-- === КОНЕЦ БЛОКА 36 === -->
+// === КОНЕЦ БЛОКА 36 ===
 
-<!-- === БЛОК 37: CALC === -->
+// === БЛОК 37: CALC ===
 function calculate() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const sources = [];
@@ -3917,19 +4383,21 @@ function onCourseRTInput() {
   if (a && b) a.value = b.value;
   onCourseChange();
 }
-<!-- === КОНЕЦ БЛОКА 37 === -->
+// === КОНЕЦ БЛОКА 37 ===
 
-<!-- === БЛОК 38: INIT === -->
+// === БЛОК 38: INIT ===
 setInterval(() => {
   if (rtTracking && rtCurrentPosition && currentTab === 'rtnav') {
     updateRTUI();
   }
 }, 1000);
 
+document.getElementById('decl').value = String(ACTIVE_PROFILE.magneticDeclinationDeg);
 loadPreset();
 loadTrack();
 loadTrackGps();
 loadRTTrack();
+loadUserRoutes();
 loadHSISettings();
 buildHSISelects();
 changeMenuSide(localStorage.getItem(MENU_SIDE_KEY) === 'right');
@@ -3946,6 +4414,8 @@ updateSpeedUnitLabel();
 
 renderTrack();
 renderRoutes();
+updateRouteEditorUI();
+initJokePreference();
 renderCircle();
 renderAreas();
 document.getElementById('toggleAltitudeColors').checked = localStorage.getItem(ALT_COLORS_KEY) === '1';
@@ -3973,8 +4443,105 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saveFlightLog(true);
 });
 window.addEventListener('pagehide', () => saveFlightLog(true));
-<!-- === КОНЕЦ БЛОКА 38 === -->
-
+// === КОНЕЦ БЛОКА 38 ===
 </script>
-</body>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
+<script>
+(function () {
+  'use strict';
+  const status = document.getElementById('naebaciaStartup');
+  function statusMessage(msg, color) {
+    if (!status) return;
+    status.style.background = color || '#122b38';
+    status.textContent = msg;
+  }
+  function reportWarning(message) {
+    console.warn('[НАЕБАЦИЯ] ' + message);
+    // Не перекрываем карту: диагностическая плашка сама исчезнет через 10 секунд.
+    const note = document.createElement('div');
+    note.textContent = message;
+    note.setAttribute('role','status');
+    note.style.cssText = 'position:fixed;left:10px;right:10px;top:75px;z-index:2300;max-width:510px;margin:auto;border-radius:9px;background:rgba(114,69,13,.94);color:#fff;padding:11px 14px;box-shadow:0 2px 12px #0005;font:13px/1.4 sans-serif;pointer-events:none;text-align:center';
+    document.body.appendChild(note);
+    setTimeout(() => note.remove(), 11000);
+  }
+  function embeddedProfile() {
+    return JSON.parse(document.getElementById('naebaciaEmbeddedProfile').textContent);
+  }
+  function validProfile(profile) {
+    return profile && profile.id === 'krasny-kut' && profile.airfield &&
+      profile.routes && Array.isArray(profile.stations) &&
+      Array.isArray(profile.zones) && Array.isArray(profile.sectors);
+  }
+  function loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Не удалось загрузить ' + url));
+      document.body.appendChild(script);
+    });
+  }
+  async function ensureLeaflet() {
+    // Если unpkg недоступен, пробуем второй CDN. Автономные библиотеки — следующий этап.
+    if (!window.L || !L.map) {
+      await loadScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js');
+    }
+    if (!window.L || !L.map) throw new Error('Недоступна библиотека карты Leaflet');
+    if (!L.tileLayer.provider) {
+      try { await loadScript('https://cdn.jsdelivr.net/npm/leaflet-providers@1.13.0/leaflet-providers.js'); }
+      catch (e) { console.warn('Провайдеры Leaflet недоступны, будет стандартная карта', e); }
+    }
+    // В стандартном коде switchMap предусмотрено переключение на OSM при ошибке provider.
+  }
+  function executeBuiltInApp() {
+    const source = document.getElementById('naebaciaEmbeddedApp');
+    if (!source) throw new Error('Не найдена резервная программная логика');
+    const backup = document.createElement('script');
+    backup.textContent = source.textContent;
+    document.body.appendChild(backup);
+  }
+  async function boot() {
+    let data;
+    let usingBackupProfile = false;
+    try {
+      const url = new URL('./regions/krasny-kut.json', document.baseURI);
+      const resp = await fetch(url, {cache:'no-cache'});
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const next = await resp.json();
+      if (!validProfile(next)) throw new Error('Некорректный формат JSON');
+      data = next;
+    } catch (error) {
+      console.warn('Не удалось загрузить внешний профиль Красного Кута:', error);
+      data = embeddedProfile();
+      usingBackupProfile = true;
+    }
+    if (!validProfile(data)) throw new Error('Повреждены данные профиля Красного Кута');
+    window.NAEBACIA_ACTIVE_PROFILE = data;
+    await ensureLeaflet();
+    statusMessage('Запуск НАЕБАЦИИ…');
+    try {
+      await loadScript('./app.js?v=1.60-r1');
+    } catch (error) {
+      console.warn('app.js недоступен, запускаем резервную копию из HTML:',error);
+      executeBuiltInApp();
+      reportWarning('Файл app.js не найден. Запущена резервная копия из index.html; проверьте загрузку файлов на GitHub.');
+    }
+    if (status) status.remove();
+    if (usingBackupProfile) {
+      reportWarning('Файл regions/krasny-kut.json недоступен. Работает встроенный резервный профиль Красного Кута.');
+    }
+  }
+  boot().catch(error => {
+    console.error('Ошибка запуска НАЕБАЦИИ',error);
+    statusMessage('Ошибка запуска: ' + error.message + '. Проверьте доступность библиотек карт и повторите загрузку.', '#7d2020');
+  });
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(e => console.warn('PWA: Service Worker не загружен',e));
+    });
+  }
+})();
+</script>
 </html>
