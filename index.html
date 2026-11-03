@@ -32,15 +32,30 @@
   #map.nav-mode .leaflet-shadow-pane *,
   #map.nav-mode .leaflet-tooltip-pane * { pointer-events: none !important; }
 
-  #toggleBtn {
+  #toggleBtn, #infoBtn {
     position:absolute; top:10px; left:10px; z-index:1100;
     background:#2a7; color:white; border:none; border-radius:6px;
     padding:8px 12px; font-size:18px; cursor:pointer;
     box-shadow:0 2px 6px rgba(0,0,0,0.3);
     min-width:44px; min-height:44px;
   }
-  #toggleBtn:active { background:#185; }
-  #toggleBtn.menu-right { left:auto; right:10px; }
+  #toggleBtn:active, #infoBtn:active { background:#185; }
+  #toggleBtn.menu-right, #infoBtn.menu-right { left:auto; right:10px; }
+  #infoBtn { top:62px; min-width:44px; width:44px; height:44px; padding:6px;
+    background:#27758e;font-size:22px;font-weight:bold; }
+  #infoBtn[hidden], #installHelpOverlay[hidden] {display:none!important;}
+  #installHelpOverlay {position:fixed;inset:0;z-index:1700;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.56);padding:16px;box-sizing:border-box;}
+  #installHelpDialog {width:min(400px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:border-box;
+    background:white;color:#1d2b31;border-radius:14px;box-shadow:0 8px 36px #0008;padding:18px 20px;font:14px/1.5 sans-serif;}
+  #installHelpDialog .install-help-title {display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  #installHelpDialog h2 {font-size:19px;margin:0;}
+  #installHelpDialog h3 {font-size:15px;margin:15px 0 4px;}
+  #installHelpDialog ol {padding-left:22px;margin:5px 0;}
+  #installHelpDialog li {margin:4px 0;}
+  #installHelpDialog p {margin:10px 0 0;color:#465961;font-size:13px;}
+  #installHelpClose {font-size:23px;min-width:40px;min-height:40px;background:#eff2f4;border:1px solid #c8d2d7;
+    border-radius:8px;color:#21313a;cursor:pointer;}
 
 
   #panel {
@@ -355,7 +370,18 @@
   #routeEditorBanner { position:fixed; top:64px; right:9px; max-width:min(270px,calc(100vw - 115px)); z-index:1250;
     background:rgba(24,53,63,.91); color:white; padding:9px 11px; border-radius:9px;
     box-shadow:0 3px 14px #0005; font:12px/1.35 sans-serif; pointer-events:auto; }
-  #routeEditorBanner button { background:#f39128; border:0; color:#111; font-weight:bold; border-radius:6px; margin-top:6px; }
+  #routeEditorBanner.route-editor-menu-right { top:121px; }
+  .route-editor-head { display:flex;align-items:flex-start;justify-content:space-between;gap:5px; }
+  #routeEditorBannerText { flex:1;min-width:0; }
+  #routeEditorBanner .route-editor-actions { display:flex;align-items:stretch;gap:5px;margin-top:8px; }
+  #routeEditorBanner .route-editor-actions button { flex:1;min-width:0;margin:0;padding:7px 6px;
+    background:#244754;border:1px solid #8eaaaf;color:#fff;font-weight:600;border-radius:6px; }
+  #routeEditorBanner .route-editor-actions button.selected { background:#ff9b2f;border-color:#ffc274;color:#172329;font-weight:800;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.45); }
+  #routeEditorBanner .route-editor-actions button:focus-visible, #routeEditorBannerClose:focus-visible {outline:3px solid #a3e1ff;outline-offset:2px;}
+  #routeEditorBanner #routeEditorBannerClose { width:30px;height:30px;min-width:30px;margin:0;padding:0;
+    display:flex;align-items:center;justify-content:center;border:1px solid #90a9b3;border-radius:6px;
+    color:white;background:#304c57;font-size:23px;line-height:1;cursor:pointer; }
   .route-editor-dot { width:30px; height:30px; border:3px solid white; background:#ef871e; border-radius:50%;
     color:white; font:bold 14px/30px sans-serif; text-align:center; box-shadow:0 2px 10px #0009; margin:4px; touch-action:none; }
   .joke-caption { width:160px;height:110px;position:relative;pointer-events:none; }
@@ -369,7 +395,22 @@
 <div id="naebaciaStartup" role="status" style="position:fixed;z-index:2500;left:50%;top:45%;transform:translate(-50%,-50%);background:#122b38;color:#fff;padding:13px 18px;border-radius:9px;box-shadow:0 2px 12px #0005;font:14px sans-serif;max-width:85vw;text-align:center;pointer-events:none">Загрузка профиля Красного Кута…</div>
 
 <!-- === БЛОК 6: BODY: КНОПКА МЕНЮ === -->
-<button id="toggleBtn" onclick="togglePanel()">☰</button>
+<button id="toggleBtn" onclick="togglePanel()" aria-label="Открыть или закрыть меню">☰</button>
+<button id="infoBtn" type="button" onclick="openInstallHelp()" title="Как установить НАЕБАЦИЮ" aria-label="Как установить приложение" aria-haspopup="dialog" aria-expanded="false" hidden>ⓘ</button>
+<div id="installHelpOverlay" hidden onclick="if(event.target===this)closeInstallHelp()">
+  <section id="installHelpDialog" role="dialog" aria-modal="true" aria-labelledby="installHelpTitle">
+    <div class="install-help-title"><h2 id="installHelpTitle">Как установить НАЕБАЦИЮ</h2><button id="installHelpClose" type="button" onclick="closeInstallHelp()" aria-label="Закрыть инструкцию">×</button></div>
+    <h3>Android · Chrome</h3>
+    <ol><li>Открой ссылку на сайт непосредственно в <b>Chrome</b>, не во встроенном браузере мессенджера.</li>
+      <li>Открой меню <b>⋮</b> → <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</li>
+      <li>Подтверди установку и запускай НАЕБАЦИЮ с иконки — без адресной строки.</li></ol>
+    <h3>iPhone · Safari</h3>
+    <ol><li>Открой сайт в <b>Safari</b>.</li>
+      <li>Нажми <b>«Поделиться»</b> → <b>«На экран Домой»</b> (название пункта может отличаться).</li>
+      <li>Добавь иконку и запускай приложение с домашнего экрана.</li></ol>
+    <p>Веб-версия по ссылке продолжит работать. Для первой установки нужен интернет; карты и внешние библиотеки пока не гарантированы офлайн.</p>
+  </section>
+</div>
 <!-- === КОНЕЦ БЛОКА 6 === -->
 
 <!-- === БЛОК 7: BODY: HUD === -->
@@ -498,6 +539,31 @@
     </div>
 
 
+    <div class="oprs nav-box">
+      <b>Ветер и скорость</b>
+      <div class="row">
+        <label>δ (напр. ветра):</label>
+        <input id="windDir" placeholder="—" inputmode="numeric" oninput="updateNavUI()"> °
+      </div>
+      <div class="row">
+        <label>U (скорость ветра):</label>
+        <input id="windSpd" placeholder="—" inputmode="decimal" oninput="updateNavUI()" style="width:72px;">
+        <span class="compact-switch-row" style="display:inline-flex;vertical-align:middle;">
+          <span class="unit-side">км/ч</span>
+          <label class="circle-switch" title="Единицы скорости ветра: км/ч / м/с">
+            <input type="checkbox" id="windSpeedUnit" role="switch" aria-label="Скорость ветра в м/с" onchange="changeWindSpeedUnit()">
+            <span class="circle-switch-track" aria-hidden="true"></span>
+          </label>
+          <span class="unit-side">м/с</span>
+        </span>
+      </div>
+      <div class="row">
+        <label>V (возд. скорость):</label>
+        <input id="airspeed" placeholder="180" value="180" inputmode="decimal" oninput="updateNavUI()"> км/ч
+      </div>
+      <div class="hint">δ — магнитное направление, ОТКУДА дует ветер</div>
+    </div>
+
     <div class="oprs nav-box" id="myRouteNavBox">
       <b>Мой маршрут</b>
       <div class="hint">Свои ППМ на карте: касание линии вставляет новую точку между существующими.</div>
@@ -519,6 +585,7 @@
           <div class="my-route-buttons">
             <button id="routeAddMode" type="button" onclick="editorSetMapMode('add')">＋ ППМ с карты</button>
             <button id="routeStopMode" type="button" onclick="editorSetMapMode('none')">✋ Перемещать карту</button>
+            <button type="button" onclick="editorShowMapBanner()">▤ Панель на карте</button>
           </div>
           <div id="myRoutePoints"></div>
           <div class="my-route-buttons">
@@ -545,30 +612,7 @@
       <button type="button" class="hsi-open-btn" onclick="openHSI()">🧭 Открыть HSI</button>
     </div>
 
-    <div class="oprs nav-box">
-      <b>Ветер и скорость</b>
-      <div class="row">
-        <label>δ (напр. ветра):</label>
-        <input id="windDir" placeholder="—" inputmode="numeric" oninput="updateNavUI()"> °
-      </div>
-      <div class="row">
-        <label>U (скорость ветра):</label>
-        <input id="windSpd" placeholder="—" inputmode="decimal" oninput="updateNavUI()" style="width:72px;">
-        <span class="compact-switch-row" style="display:inline-flex;vertical-align:middle;">
-          <span class="unit-side">км/ч</span>
-          <label class="circle-switch" title="Единицы скорости ветра: км/ч / м/с">
-            <input type="checkbox" id="windSpeedUnit" role="switch" aria-label="Скорость ветра в м/с" onchange="changeWindSpeedUnit()">
-            <span class="circle-switch-track" aria-hidden="true"></span>
-          </label>
-          <span class="unit-side">м/с</span>
-        </span>
-      </div>
-      <div class="row">
-        <label>V (возд. скорость):</label>
-        <input id="airspeed" placeholder="180" value="180" inputmode="decimal" oninput="updateNavUI()"> км/ч
-      </div>
-      <div class="hint">δ — магнитное направление, ОТКУДА дует ветер</div>
-    </div>
+
 
     <div id="nav-result">Задайте цель на карте.</div>
   </div>
@@ -761,16 +805,21 @@
         <span>Справа</span>
       </div>
     </div>
-    <div class="oprs"><b>🎃 Пасхалка</b>
-      <label class="route-toggle"><input type="checkbox" id="toggleJokeArrow" onchange="toggleJokeArrow()"> Для геев 😂</label>
-      <div class="hint">Оранжевая надпись и стрелка к самолёту при активном РВ. По умолчанию выключено.</div>
+    <div class="oprs">
+      <label class="route-toggle"><input type="checkbox" id="toggleJokeArrow" onchange="toggleJokeArrow()"> Для геев</label>
     </div>
   </div>
 </div>
-<div id="routeEditorBanner" hidden><div id="routeEditorBannerText"></div>
-  <button type="button" onclick="editorSetMapMode('none')">✋ Карта</button>
-  <button type="button" onclick="editorSetMapMode('add')">＋ ППМ</button>
-  <button type="button" onclick="{const p=document.getElementById('panel');if(p.classList.contains('hidden'))togglePanel();}">☰ Меню</button>
+<div id="routeEditorBanner" hidden aria-label="Управление редактированием маршрута">
+  <div class="route-editor-head">
+    <div id="routeEditorBannerText"></div>
+    <button type="button" id="routeEditorBannerClose" onclick="editorHideMapBanner()" title="Скрыть панель редактора" aria-label="Скрыть панель редактора">×</button>
+  </div>
+  <div class="route-editor-actions">
+    <button type="button" id="routeBannerMap" onclick="editorSetMapMode('none')">✋ Карта</button>
+    <button type="button" id="routeBannerAdd" onclick="editorSetMapMode('add')">＋ ППМ</button>
+    <button type="button" onclick="{const p=document.getElementById('panel');if(p.classList.contains('hidden'))togglePanel();}">☰ Меню</button>
+  </div>
 </div>
 <!-- === КОНЕЦ БЛОКА 8 === -->
 
@@ -912,6 +961,8 @@ function switchTab(name) {
 function changeMenuSide(right) {
   const btn = document.getElementById('toggleBtn');
   btn.classList.toggle('menu-right', !!right);
+  document.getElementById('infoBtn').classList.toggle('menu-right', !!right);
+  document.getElementById('routeEditorBanner').classList.toggle('route-editor-menu-right', !!right);
   document.getElementById('menuButtonRight').checked = !!right;
   try { localStorage.setItem(MENU_SIDE_KEY, right ? 'right' : 'left'); } catch (e) {}
 }
@@ -920,11 +971,27 @@ function togglePanel() {
   const p = document.getElementById('panel');
   p.classList.toggle('hidden');
   document.getElementById('toggleBtn').textContent = p.classList.contains('hidden') ? '☰' : '✕';
+  document.getElementById('infoBtn').hidden = !p.classList.contains('hidden');
 }
 if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
   document.getElementById('toggleBtn').textContent = '☰';
+  document.getElementById('infoBtn').hidden = false;
 }
+function openInstallHelp() {
+  const overlay=document.getElementById('installHelpOverlay');
+  overlay.hidden=false;
+  document.getElementById('infoBtn').setAttribute('aria-expanded','true');
+  document.getElementById('installHelpClose').focus();
+}
+function closeInstallHelp() {
+  document.getElementById('installHelpOverlay').hidden=true;
+  document.getElementById('infoBtn').setAttribute('aria-expanded','false');
+  const btn=document.getElementById('infoBtn');if(!btn.hidden)btn.focus();
+}
+window.addEventListener('keydown', e => {
+  if(e.key==='Escape'&&!document.getElementById('installHelpOverlay').hidden)closeInstallHelp();
+});
 // === КОНЕЦ БЛОКА 12 ===
 
 // === БЛОК 13: MAP ===
@@ -963,6 +1030,7 @@ let routeEditorDraft = null;
 let routeEditorSavedId = null;
 let routeEditorSavedSnapshot = '';
 let routeEditorMapMode = 'none';
+let routeEditorBannerDismissed = false;
 let routeEditorMoveIndex = -1;
 let routeEditorHistory = [];
 let routeEditorHistoryIndex = -1;
@@ -2642,7 +2710,7 @@ function editorStartDraft(draft, savedId) {
   routeEditorSavedId=savedId||null;
   routeEditorSavedSnapshot=savedId?JSON.stringify(draft):'';
   routeEditorHistory=[cloneRoute(routeEditorDraft)];routeEditorHistoryIndex=0;
-  routeEditorMoveIndex=-1;routeEditorMapMode='add';
+  routeEditorMoveIndex=-1;routeEditorMapMode='add';routeEditorBannerDismissed=false;
   document.getElementById('myRouteEditor').hidden=false;
   updateMapInteractivity(); updateNavUI();updateRouteEditorUI();renderRouteEditorOnMap();
 }
@@ -2685,12 +2753,24 @@ function editorRedo() {
 function editorSetMapMode(mode,index=-1) {
   if(!routeEditorDraft)return;
   routeEditorMapMode=mode;routeEditorMoveIndex=mode==='move'?index:-1;
+  routeEditorBannerDismissed=false;
   if(mode==='add'||mode==='move'){
     // На телефоне сразу раскрываем карту, как для постановки обычной цели.
     if(window.innerWidth<=600 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)){
       const p=document.getElementById('panel'); if(p&&!p.classList.contains('hidden'))togglePanel();
     }
   }
+  updateRouteEditorUI();
+}
+function editorHideMapBanner() {
+  // Закрываем только плавающую панель; черновик и история сохраняются.
+  routeEditorBannerDismissed=true;
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;
+  updateRouteEditorUI();
+}
+function editorShowMapBanner() {
+  if(!routeEditorDraft)return;
+  routeEditorBannerDismissed=false;
   updateRouteEditorUI();
 }
 function renumberDefaultRoutePoints(points) {
@@ -2734,6 +2814,13 @@ function editorDeletePoint(index) {
   if(!routeEditorDraft || !routeEditorDraft.points[index])return;
   editorCommit(d=>{d.points.splice(index,1);renumberDefaultRoutePoints(d.points);});
 }
+function editorDeletePointFromMap(index) {
+  const p=routeEditorDraft?.points[index];
+  if(!p)return;
+  if(!confirm('Удалить ППМ №'+(index+1)+' «'+p.name+'» из черновика маршрута?'))return;
+  map.closePopup();
+  editorDeletePoint(index);
+}
 function editorCoordinates(index) {
   const p=routeEditorDraft?.points[index];if(!p)return;
   const raw=prompt('Координаты ППМ (широта; долгота), десятичные градусы:',p.lat.toFixed(6)+'; '+p.lon.toFixed(6));
@@ -2768,8 +2855,10 @@ function renderRouteEditorOnMap() {
     const marker=L.marker([p.lat,p.lon],{draggable:true,autoPan:true,
       icon:L.divIcon({className:'',html:'<div class="route-editor-dot">'+(i+1)+'</div>',iconSize:[44,44],iconAnchor:[22,22]})}).addTo(map);
     marker.on('dragend',()=>{const ll=marker.getLatLng();editorCommit(d=>{d.points[i].lat=ll.lat;d.points[i].lon=ll.lng;});});
-    marker.on('click',()=>{editorSetMapMode('none');const p=routeEditorDraft.points[i];
-      marker.bindPopup('<b>'+safeText(p.name)+'</b><br><button onclick="editorSetMapMode(\'move\','+i+')">Перенести касанием карты</button>').openPopup();});
+    marker.on('click',()=>{routeEditorMapMode='none';routeEditorMoveIndex=-1;updateRouteEditorUI();const p=routeEditorDraft.points[i];
+      marker.bindPopup('<b>'+safeText(p.name)+'</b><br>'+ 
+        '<button type="button" onclick="editorSetMapMode(\'move\','+i+')">Перенести касанием карты</button>'+ 
+        '<br><button type="button" style="margin-top:7px;color:#b32727" onclick="editorDeletePointFromMap('+i+')">Удалить ППМ</button>').openPopup();});
     routeEditorLayers.push(marker);
   });
 }
@@ -2861,11 +2950,16 @@ function updateRouteEditorUI() {
   const editing=!!routeEditorDraft;
   const banner=document.getElementById('routeEditorBanner');
   if(banner){
-    banner.hidden=!editing||currentTab!=='nav';
+    banner.hidden=!editing||currentTab!=='nav'||routeEditorBannerDismissed;
     if(!banner.hidden){
       const instruction=routeEditorMapMode==='move'?'Коснись нового положения ППМ №'+(routeEditorMoveIndex+1):
         routeEditorMapMode==='add'?'Коснись карты для нового ППМ. Нажми на участок, чтобы вставить ППМ между точками.':'Перетаскивай ППМ или выбери действие в меню.';
       document.getElementById('routeEditorBannerText').textContent=instruction;
+      for(const [id,selected] of [['routeBannerMap',routeEditorMapMode==='none'],['routeBannerAdd',routeEditorMapMode==='add']]){
+        const button=document.getElementById(id);
+        button.classList.toggle('selected',selected);
+        button.setAttribute('aria-pressed',selected?'true':'false');
+      }
     }
   }
   const list=document.getElementById('mySavedRoutes');
@@ -4367,6 +4461,7 @@ function calculate() {
   if (window.innerWidth <= 600) {
     document.getElementById('panel').classList.add('hidden');
     document.getElementById('toggleBtn').textContent = '☰';
+    document.getElementById('infoBtn').hidden = false;
   }
 }
 
@@ -4444,6 +4539,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => saveFlightLog(true));
 // === КОНЕЦ БЛОКА 38 ===
+
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
@@ -4522,7 +4618,7 @@ window.addEventListener('pagehide', () => saveFlightLog(true));
     await ensureLeaflet();
     statusMessage('Запуск НАЕБАЦИИ…');
     try {
-      await loadScript('./app.js?v=1.60-r1');
+      await loadScript('./app.js?v=1.60-r2');
     } catch (error) {
       console.warn('app.js недоступен, запускаем резервную копию из HTML:',error);
       executeBuiltInApp();

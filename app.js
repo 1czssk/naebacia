@@ -83,6 +83,8 @@ function switchTab(name) {
 function changeMenuSide(right) {
   const btn = document.getElementById('toggleBtn');
   btn.classList.toggle('menu-right', !!right);
+  document.getElementById('infoBtn').classList.toggle('menu-right', !!right);
+  document.getElementById('routeEditorBanner').classList.toggle('route-editor-menu-right', !!right);
   document.getElementById('menuButtonRight').checked = !!right;
   try { localStorage.setItem(MENU_SIDE_KEY, right ? 'right' : 'left'); } catch (e) {}
 }
@@ -91,11 +93,27 @@ function togglePanel() {
   const p = document.getElementById('panel');
   p.classList.toggle('hidden');
   document.getElementById('toggleBtn').textContent = p.classList.contains('hidden') ? '☰' : '✕';
+  document.getElementById('infoBtn').hidden = !p.classList.contains('hidden');
 }
 if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
   document.getElementById('toggleBtn').textContent = '☰';
+  document.getElementById('infoBtn').hidden = false;
 }
+function openInstallHelp() {
+  const overlay=document.getElementById('installHelpOverlay');
+  overlay.hidden=false;
+  document.getElementById('infoBtn').setAttribute('aria-expanded','true');
+  document.getElementById('installHelpClose').focus();
+}
+function closeInstallHelp() {
+  document.getElementById('installHelpOverlay').hidden=true;
+  document.getElementById('infoBtn').setAttribute('aria-expanded','false');
+  const btn=document.getElementById('infoBtn');if(!btn.hidden)btn.focus();
+}
+window.addEventListener('keydown', e => {
+  if(e.key==='Escape'&&!document.getElementById('installHelpOverlay').hidden)closeInstallHelp();
+});
 // === КОНЕЦ БЛОКА 12 ===
 
 // === БЛОК 13: MAP ===
@@ -134,6 +152,7 @@ let routeEditorDraft = null;
 let routeEditorSavedId = null;
 let routeEditorSavedSnapshot = '';
 let routeEditorMapMode = 'none';
+let routeEditorBannerDismissed = false;
 let routeEditorMoveIndex = -1;
 let routeEditorHistory = [];
 let routeEditorHistoryIndex = -1;
@@ -1813,7 +1832,7 @@ function editorStartDraft(draft, savedId) {
   routeEditorSavedId=savedId||null;
   routeEditorSavedSnapshot=savedId?JSON.stringify(draft):'';
   routeEditorHistory=[cloneRoute(routeEditorDraft)];routeEditorHistoryIndex=0;
-  routeEditorMoveIndex=-1;routeEditorMapMode='add';
+  routeEditorMoveIndex=-1;routeEditorMapMode='add';routeEditorBannerDismissed=false;
   document.getElementById('myRouteEditor').hidden=false;
   updateMapInteractivity(); updateNavUI();updateRouteEditorUI();renderRouteEditorOnMap();
 }
@@ -1856,12 +1875,24 @@ function editorRedo() {
 function editorSetMapMode(mode,index=-1) {
   if(!routeEditorDraft)return;
   routeEditorMapMode=mode;routeEditorMoveIndex=mode==='move'?index:-1;
+  routeEditorBannerDismissed=false;
   if(mode==='add'||mode==='move'){
     // На телефоне сразу раскрываем карту, как для постановки обычной цели.
     if(window.innerWidth<=600 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)){
       const p=document.getElementById('panel'); if(p&&!p.classList.contains('hidden'))togglePanel();
     }
   }
+  updateRouteEditorUI();
+}
+function editorHideMapBanner() {
+  // Закрываем только плавающую панель; черновик и история сохраняются.
+  routeEditorBannerDismissed=true;
+  routeEditorMapMode='none';routeEditorMoveIndex=-1;
+  updateRouteEditorUI();
+}
+function editorShowMapBanner() {
+  if(!routeEditorDraft)return;
+  routeEditorBannerDismissed=false;
   updateRouteEditorUI();
 }
 function renumberDefaultRoutePoints(points) {
@@ -1905,6 +1936,13 @@ function editorDeletePoint(index) {
   if(!routeEditorDraft || !routeEditorDraft.points[index])return;
   editorCommit(d=>{d.points.splice(index,1);renumberDefaultRoutePoints(d.points);});
 }
+function editorDeletePointFromMap(index) {
+  const p=routeEditorDraft?.points[index];
+  if(!p)return;
+  if(!confirm('Удалить ППМ №'+(index+1)+' «'+p.name+'» из черновика маршрута?'))return;
+  map.closePopup();
+  editorDeletePoint(index);
+}
 function editorCoordinates(index) {
   const p=routeEditorDraft?.points[index];if(!p)return;
   const raw=prompt('Координаты ППМ (широта; долгота), десятичные градусы:',p.lat.toFixed(6)+'; '+p.lon.toFixed(6));
@@ -1939,8 +1977,10 @@ function renderRouteEditorOnMap() {
     const marker=L.marker([p.lat,p.lon],{draggable:true,autoPan:true,
       icon:L.divIcon({className:'',html:'<div class="route-editor-dot">'+(i+1)+'</div>',iconSize:[44,44],iconAnchor:[22,22]})}).addTo(map);
     marker.on('dragend',()=>{const ll=marker.getLatLng();editorCommit(d=>{d.points[i].lat=ll.lat;d.points[i].lon=ll.lng;});});
-    marker.on('click',()=>{editorSetMapMode('none');const p=routeEditorDraft.points[i];
-      marker.bindPopup('<b>'+safeText(p.name)+'</b><br><button onclick="editorSetMapMode(\'move\','+i+')">Перенести касанием карты</button>').openPopup();});
+    marker.on('click',()=>{routeEditorMapMode='none';routeEditorMoveIndex=-1;updateRouteEditorUI();const p=routeEditorDraft.points[i];
+      marker.bindPopup('<b>'+safeText(p.name)+'</b><br>'+ 
+        '<button type="button" onclick="editorSetMapMode(\'move\','+i+')">Перенести касанием карты</button>'+ 
+        '<br><button type="button" style="margin-top:7px;color:#b32727" onclick="editorDeletePointFromMap('+i+')">Удалить ППМ</button>').openPopup();});
     routeEditorLayers.push(marker);
   });
 }
@@ -2032,11 +2072,16 @@ function updateRouteEditorUI() {
   const editing=!!routeEditorDraft;
   const banner=document.getElementById('routeEditorBanner');
   if(banner){
-    banner.hidden=!editing||currentTab!=='nav';
+    banner.hidden=!editing||currentTab!=='nav'||routeEditorBannerDismissed;
     if(!banner.hidden){
       const instruction=routeEditorMapMode==='move'?'Коснись нового положения ППМ №'+(routeEditorMoveIndex+1):
         routeEditorMapMode==='add'?'Коснись карты для нового ППМ. Нажми на участок, чтобы вставить ППМ между точками.':'Перетаскивай ППМ или выбери действие в меню.';
       document.getElementById('routeEditorBannerText').textContent=instruction;
+      for(const [id,selected] of [['routeBannerMap',routeEditorMapMode==='none'],['routeBannerAdd',routeEditorMapMode==='add']]){
+        const button=document.getElementById(id);
+        button.classList.toggle('selected',selected);
+        button.setAttribute('aria-pressed',selected?'true':'false');
+      }
     }
   }
   const list=document.getElementById('mySavedRoutes');
@@ -3538,6 +3583,7 @@ function calculate() {
   if (window.innerWidth <= 600) {
     document.getElementById('panel').classList.add('hidden');
     document.getElementById('toggleBtn').textContent = '☰';
+    document.getElementById('infoBtn').hidden = false;
   }
 }
 
