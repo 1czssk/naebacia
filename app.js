@@ -1,4 +1,4 @@
-/* НАЕБАЦИЯ v1.60 🎃. Исходная навигационная логика v1.58 сохранена. */
+/* НАЕБАЦИЯ v1.61 🎃. Исходная навигационная логика v1.58 сохранена. */
 // === КОНЕЦ БЛОКА 10 ===
 
 // === БЛОК 11: CONFIG ===
@@ -36,7 +36,12 @@ const RT_MIN_STEP_M = 5;
 const RT_MAX_POINTS = 10000;
 
 // Свежесть позиции: старше этого порога — показываем предупреждение
-const GPS_STALE_SEC = 60;
+const GPS_STALE_SEC = 30; // После 30 секунд позиция уже не пригодна для навигации.
+const GPS_WARNING_AGE_SEC = 15;
+const GPS_WARNING_ACCURACY_M = 80;
+const GPS_REJECT_ACCURACY_M = 250; // Слишком размытая позиция: не включать в трек и HSI.
+const GPS_SUSPICIOUS_SPEED_MPS = 110; // Свыше 396 км/ч: проверяем на скачок, а не слепо считаем пройденным путём.
+const GPS_TRACK_GAP_SEC = 60; // После длительного провала GPS не проводим линию через неизвестную траекторию.
 
 // Опорные точки п.п. Красный Кут
 // ДПРМ: АИП УВСК AD 2.19 (14.11.2013), координаты исторические; актуальность не подтверждена.
@@ -75,6 +80,7 @@ function switchTab(name) {
   updateNavUI();
   updateRTUI();
   updateSpeedHudVisibility();
+  updateMapOrientation();
   refreshHSIPanel();
 
   if (name === 'rtnav') centerFollowedAircraft(false);
@@ -84,8 +90,11 @@ function changeMenuSide(right) {
   const btn = document.getElementById('toggleBtn');
   btn.classList.toggle('menu-right', !!right);
   document.getElementById('infoBtn').classList.toggle('menu-right', !!right);
+  document.getElementById('nightQuickBtn').classList.toggle('menu-right', !!right);
+  document.getElementById('menuBrand').classList.toggle('brand-menu-right', !!right);
   document.getElementById('routeEditorBanner').classList.toggle('route-editor-menu-right', !!right);
   document.getElementById('menuButtonRight').checked = !!right;
+  document.getElementById('gpsQualityBadge')?.classList.toggle('menu-right',!!right);
   try { localStorage.setItem(MENU_SIDE_KEY, right ? 'right' : 'left'); } catch (e) {}
 }
 
@@ -94,6 +103,9 @@ function togglePanel() {
   p.classList.toggle('hidden');
   document.getElementById('toggleBtn').textContent = p.classList.contains('hidden') ? '☰' : '✕';
   document.getElementById('infoBtn').hidden = !p.classList.contains('hidden');
+  closeFollowOptions();
+  updateThemeShortcutVisibility();
+  updateGpsQualityIndicator();
 }
 if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
@@ -106,6 +118,85 @@ function openInstallHelp() {
   document.getElementById('infoBtn').setAttribute('aria-expanded','true');
   document.getElementById('installHelpClose').focus();
 }
+// === Резервная копия локальных данных (без передачи на сервер) ===
+function naebaciaBackupKey(key) {
+  return /^(naebacia_|oprs_)[a-zA-Z0-9_:-]{1,110}$/.test(key);
+}
+function exportNaebaciaBackup() {
+  try {
+    // Записать оставшиеся точки РВ перед выгрузкой.
+    saveFlightLog(true);
+    const storage={};
+    for (let i=0; i<localStorage.length; i++) {
+      const key=localStorage.key(i);
+      if (key && naebaciaBackupKey(key)) storage[key]=localStorage.getItem(key);
+    }
+    // При переполнении localStorage сохраняем ещё и последнюю копию журнала из памяти.
+    if (rtFlightLog) storage[FLIGHT_LOG_KEY]=JSON.stringify(rtFlightLog);
+    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.61',
+      exportedAt:new Date().toISOString(),storage};
+    const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='NAEBACIA_BACKUP_'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    setBackupMessage('Файл резервной копии создан. Сохраните его в надёжном месте.');
+  } catch(e) { setBackupMessage('Ошибка экспорта: '+e.message,true); }
+}
+function setBackupMessage(message, error=false) {
+  const el=document.getElementById('backupStatus');
+  if (el) {el.textContent=message;el.style.color=error?'#ad2929':'#25633b';}
+}
+async function importNaebaciaBackup(input) {
+  const file=input.files&&input.files[0];input.value='';
+  if (!file) return;
+  if (rtTracking) {setBackupMessage('Остановите РВ перед восстановлением данных.',true);return;}
+  if (file.size>50*1024*1024) {setBackupMessage('Файл больше 50 МБ.',true);return;}
+  try {
+    const data=JSON.parse(await file.text());
+    if (!data || data.format!=='naebacia-local-backup' || data.version!==1 ||
+        !data.storage || typeof data.storage!=='object' || Array.isArray(data.storage))
+      throw new Error('Неверный формат резервной копии. Нужен файл NAEBACIA_BACKUP*.json.');
+    const keys=Object.keys(data.storage);
+    if (!keys.length || keys.length>100) throw new Error('Некорректное количество записей');
+    let total=0;
+    for (const k of keys) {
+      const value=data.storage[k];
+      if (!naebaciaBackupKey(k) || typeof value!=='string') throw new Error('Некорректные данные: '+k.slice(0,40));
+      total+=value.length;
+    }
+    if (total>45*1024*1024) throw new Error('Резервная копия слишком велика');
+    if (data.storage[FLIGHT_LOG_KEY]) {
+      const f=JSON.parse(data.storage[FLIGHT_LOG_KEY]);
+      if (!f || f.format!=='naebacia-flight-log' || !Array.isArray(f.flights) ||
+          f.flights.length>20000) throw new Error('Неверный формат журнала полётов');
+    }
+    if (data.storage[USER_ROUTES_KEY]) {
+      const r=JSON.parse(data.storage[USER_ROUTES_KEY]);
+      if (!r || r.format!=='naebacia-user-routes' || !Array.isArray(r.routes) ||
+          r.routes.length>60) throw new Error('Неверный формат своих маршрутов');
+      // Проверяем данные до записи; неисправный импорт не должен сломать меню маршрутов.
+      r.routes.forEach(parseImportedRoute);
+    }
+    if (!confirm('Восстановить '+keys.length+' записей из файла? Совпадающие локальные данные НАЕБАЦИИ будут ЗАМЕНЕНЫ. Сначала рекомендуется скачать текущую резервную копию.')) return;
+    const previous={};
+    for (const k of keys) previous[k]=localStorage.getItem(k);
+    try {
+      for (const k of keys) localStorage.setItem(k,data.storage[k]);
+    } catch(writeError) {
+      for (const k of keys) {
+        try {if(previous[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,previous[k]);}
+        catch(rollbackError) {console.error('Не удалось откатить',k,rollbackError);}
+      }
+      throw new Error('Не хватило места для восстановления; прежние данные по возможности сохранены: '+writeError.message);
+    }
+    setBackupMessage('Резервная копия восстановлена. Перезапускаем приложение…');
+    location.reload();
+  } catch(e) {setBackupMessage('Не удалось восстановить: '+e.message,true);}
+}
+// === Конец резервного копирования ===
+
 function closeInstallHelp() {
   document.getElementById('installHelpOverlay').hidden=true;
   document.getElementById('infoBtn').setAttribute('aria-expanded','false');
@@ -114,10 +205,42 @@ function closeInstallHelp() {
 window.addEventListener('keydown', e => {
   if(e.key==='Escape'&&!document.getElementById('installHelpOverlay').hidden)closeInstallHelp();
 });
+
+// === НАЕБАЦИЯ 1.61: темы оформления ===
+const NAEB_THEME_KEY='naebacia_theme_v1';
+const NAEB_DAY_THEME_KEY='naebacia_day_theme_v1';
+const NAEB_THEME_LABELS={day:'☀️ Дневная',night:'🌙 Ночная',glam:'💖 Гламур',lsd:'🌈 Под ЛСД'};
+let naebaciaTheme=NAEB_THEME_LABELS[localStorage.getItem(NAEB_THEME_KEY)] ? localStorage.getItem(NAEB_THEME_KEY) : 'day';
+let naebaciaDayTheme=['day','glam','lsd'].includes(localStorage.getItem(NAEB_DAY_THEME_KEY)) ? localStorage.getItem(NAEB_DAY_THEME_KEY) : 'day';
+function setNaebaciaTheme(name) {
+  if(!NAEB_THEME_LABELS[name])return;
+  naebaciaTheme=name;
+  if(name!=='night')naebaciaDayTheme=name;
+  document.documentElement.dataset.theme=name;
+  try {localStorage.setItem(NAEB_THEME_KEY,name);localStorage.setItem(NAEB_DAY_THEME_KEY,naebaciaDayTheme);}catch(e){}
+  document.querySelectorAll('input[name="naebaciaTheme"]').forEach(el=>el.checked=el.value===name);
+  const label=document.getElementById('currentThemeLabel');if(label)label.textContent=NAEB_THEME_LABELS[name];
+  updateThemeShortcutVisibility();
+}
+function updateThemeShortcutVisibility(){
+  const btn=document.getElementById('nightQuickBtn');if(!btn)return;
+  const now=new Date(); const min=now.getHours()*60+now.getMinutes();
+  const nightHours=(min>=17*60+30||min<8*60);
+  const menuHidden=document.getElementById('panel').classList.contains('hidden');
+  const show=menuHidden&&(nightHours||naebaciaTheme==='night');
+  btn.hidden=!show;
+  btn.textContent=naebaciaTheme==='night'?'☀️':'🌙';
+  btn.title=naebaciaTheme==='night'?'Вернуть предыдущую дневную тему':'Включить ночную тему';
+  btn.setAttribute('aria-label',btn.title);
+  const gpsBadge=document.getElementById('gpsQualityBadge');if(gpsBadge)gpsBadge.style.top=show?'170px':'116px';
+}
+function toggleQuickNightTheme(){setNaebaciaTheme(naebaciaTheme==='night'?naebaciaDayTheme:'night');}
+// === Конец тем оформления ===
+
 // === КОНЕЦ БЛОКА 12 ===
 
 // === БЛОК 13: MAP ===
-const map = L.map('map').setView(ACTIVE_PROFILE.airfield.initialCenter, ACTIVE_PROFILE.airfield.initialZoom);
+const map = L.map('map', {rotate:!!L.Map.prototype.setBearing, bearing:0, rotateControl:false, touchRotate:false, dragRotate:false, shiftKeyRotate:false}).setView(ACTIVE_PROFILE.airfield.initialCenter, ACTIVE_PROFILE.airfield.initialZoom);
 let currentLayer = null;
 
 function switchMap() {
@@ -132,6 +255,73 @@ function switchMap() {
   }
 }
 switchMap();
+
+// КТА Красного Кута: постоянно видимая красная звезда, НЕ подменяющая ДПРМ.
+// Источник положения — действующий профиль Красного Кута, без смены начального центра карты.
+function addActiveAirfieldKTA() {
+  const ref = ACTIVE_PROFILE.airfield && ACTIVE_PROFILE.airfield.kta;
+  if (!ref || !Number.isFinite(ref.lat) || !Number.isFinite(ref.lon)) return;
+  const icon = L.divIcon({
+    className:'naebacia-airfield-star',html:'<span aria-hidden="true">★</span>',
+    iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]
+  });
+  const radio = ACTIVE_PROFILE.airfield.radio || {};
+  // Частоты — справочные; из них нельзя делать вывод об актуальности радиосвязи.
+  const tower = radio.tower && radio.tower.display || '127.800 МГц';
+  const atis = radio.atis && radio.atis.display || '122.700 МГц';
+  const popup = '<b>★ КТА Красный Кут</b><br>' +
+    ref.lat.toFixed(6) + '° N, ' + ref.lon.toFixed(6) + '° E<br>' +
+    'Красный Кут Вышка — <b>' + tower + '</b><br>' +
+    'Красный Кут АТИС — <b>' + atis + '</b><br>' +
+    '<small>Частоты и координаты уточняйте по действующему АИП.</small><br>' +
+    '<button type="button" style="margin-top:8px;padding:9px;font-weight:bold" ' +
+    'onclick="naebaciaSetPopupTarget(' + ref.lat + ',' + ref.lon + ')">🎯 Задать как цель</button>';
+  L.marker([ref.lat,ref.lon],{icon,zIndexOffset:350}).addTo(map).bindPopup(popup);
+}
+addActiveAirfieldKTA();
+
+// Необязательные справочные регионы. Активный район остаётся Красный Кут.
+// Показываются ТОЛЬКО красные звёзды аэродромов; приводные маяки хранятся
+// в JSON и НЕ добавляются в «Место», HSI или в панель «Слои».
+// Отсутствующий внешний JSON не блокирует запуск: есть резерв в index.html.
+async function loadSupplementaryRegion(path, expectedId, backupElementId) {
+  let region = null;
+  try {
+    const response = await fetch(new URL(path, document.baseURI), {cache:'no-cache'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    region = await response.json();
+  } catch (error) {
+    console.warn('Справочный регион ' + expectedId + ' недоступен, пробуем резерв:',error);
+    const backup = document.getElementById(backupElementId);
+    if (backup) {
+      try { region = JSON.parse(backup.textContent); }
+      catch (backupError) { console.warn('Повреждён резерв ' + expectedId,backupError); }
+    }
+  }
+  if (!region || region.id !== expectedId || !Array.isArray(region.airfields)) return;
+  region.airfields.forEach(airfield => {
+    const point = airfield && airfield.referencePoint;
+    if (!airfield || airfield.showOnMap !== true || !point ||
+        !Number.isFinite(point.lat) || !Number.isFinite(point.lon) ||
+        Math.abs(point.lat) > 90 || Math.abs(point.lon) > 180) return;
+    // Безопасно формируем HTML даже при повреждённом пользовательском JSON.
+    const safeName = String(airfield.name || 'Аэродром').replace(/[&<>"']/g,c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const icon = L.divIcon({
+      className:'naebacia-airfield-star',html:'<span aria-hidden="true">★</span>',
+      iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-15]
+    });
+    const marker = L.marker([point.lat,point.lon],{icon,zIndexOffset:350}).addTo(map);
+    marker.bindPopup('<b>★ ' + safeName + '</b><br>Справочная точка аэродрома<br>' +
+      point.lat.toFixed(5) + '° N, ' + point.lon.toFixed(5) + '° E' +
+      '<br><small>Координаты требуют сверки с действующим АИП.</small>');
+  });
+  // Намеренно НЕ меняем map.setView(), zoom, flyTo() или fitBounds().
+}
+loadSupplementaryRegion('./regions/saint-petersburg.json', 'saint-petersburg',
+  'naebaciaEmbeddedSaintPetersburg').catch(e => console.warn('Звёзды СПб:',e));
+loadSupplementaryRegion('./regions/lipetsk.json', 'lipetsk',
+  'naebaciaEmbeddedLipetsk').catch(e => console.warn('Звезда Липецка:',e));
 // === КОНЕЦ БЛОКА 13 ===
 
 // === БЛОК 14: DATA: ОПРС ===
@@ -206,6 +396,8 @@ let rtCurrentPosition = null;
 let rtTrack = [];
 let rtFlightLog = null;  // общий журнал с отдельными полётами; продолжается до очистки
 let rtLogSaveWarning = '';
+let gpsSignalIssue = ''; // Причина последнего отказа GPS; погаснет при следующем принятом измерении.
+let gpsRejectedSamples = 0;
 let lastFlightSaveAt = 0;
 let rtSessionId = null;
 let rtLineLayer = null;
@@ -366,6 +558,7 @@ map.on('popupopen', (e) => {
   if (followMode) {
     followMode = false;
     localStorage.setItem(FOLLOW_KEY, '0');
+    updateMapOrientation();
     updateFollowBtn();
   }
 });
@@ -450,14 +643,56 @@ function cycleSpeedUnit() {
 // === КОНЕЦ БЛОКА 21 ===
 
 // === БЛОК 22: FOLLOW ===
+const FOLLOW_ORIENTATION_KEY='naebacia_follow_orientation_v1';
 let followMode = localStorage.getItem(FOLLOW_KEY) !== '0';
+let followOrientation=localStorage.getItem(FOLLOW_ORIENTATION_KEY)==='track'?'track':'north';
+const mapRotationAvailable=typeof map.setBearing==='function' && typeof map.getBearing==='function';
+function mapBearing(){return mapRotationAvailable?map.getBearing():0;}
+function getReliableTrackTrue(){
+  if(!rtTracking||!rtCurrentPosition||gpsQualityState().level!=='good')return null;
+  const cur=rtCurrentPosition;let speed=cur.speed;
+  if(!Number.isFinite(speed)&&rtTrack.length>=2){
+    const a=rtTrack[rtTrack.length-2],b=rtTrack[rtTrack.length-1];
+    if(a.flightId===b.flightId&&b.t>a.t&&b.t-a.t<30000)speed=distance(a,b)/((b.t-a.t)/1000);
+  }
+  if(!Number.isFinite(speed)||speed<8)return null; // GPS-путевой угол на малой скорости нестабилен.
+  let heading=cur.heading;
+  if(!Number.isFinite(heading)&&rtTrack.length>=2){
+    const a=rtTrack[rtTrack.length-2],b=rtTrack[rtTrack.length-1];
+    if(a.flightId===b.flightId&&b.t>a.t&&b.t-a.t<30000&&distance(a,b)>=25)heading=trueBearing(a,b);
+  }
+  return Number.isFinite(heading)?norm360(heading):null;
+}
+function updateMapOrientation(){
+  if(!mapRotationAvailable)return;
+  if(followMode&&followOrientation==='track'&&rtTracking&&currentTab==='rtnav'){
+    const heading=getReliableTrackTrue();
+    if(heading!==null&&typeof map.setHeading==='function'){
+      map.setHeading(heading,{ease:.24,deadzone:.7});
+    } else if(heading!==null){map.setBearing(-heading);}
+    else if(typeof map.stopHeadingUp==='function')map.stopHeadingUp(); // Заморозка при неустойчивом GPS.
+  } else {
+    if(typeof map.stopHeadingUp==='function')map.stopHeadingUp();
+    if(Math.abs(mapBearing())>.01)map.setBearing(0);
+  }
+}
+function updatePlaneVisualRotation(){
+  const bearing=mapBearing();
+  for(const marker of [rtMarker,posMarker]){
+    if(!marker||!Number.isFinite(marker._naebaciaCourseTrue))continue;
+    const svg=marker.getElement?.()?.querySelector('svg');
+    if(svg)svg.style.transform='rotate('+norm360(marker._naebaciaCourseTrue+bearing)+'deg)';
+  }
+}
+if(mapRotationAvailable)map.on('rotate',()=>{updatePlaneVisualRotation();if(followMode&&currentTab==='rtnav')centerFollowedAircraft(false);});
+
 
 function isFollowOn() { return followMode; }
 
 // Когда HSI открыт, центрирование приходится на свободную область НАД прибором,
 // а не на геометрический центр всей карты, который скрыт панелью HSI.
 function centerFollowedAircraft(animate = false) {
-  if (!followMode || !rtTracking || currentTab !== 'rtnav' || !rtCurrentPosition) return;
+  if (!followMode || !rtTracking || currentTab !== 'rtnav' || !rtCurrentPosition || gpsQualityState().level==='red') return;
   const latlng = [rtCurrentPosition.lat, rtCurrentPosition.lon];
   const hsi = document.getElementById('hsiPanel');
   const z = map.getZoom();
@@ -476,16 +711,42 @@ function centerFollowedAircraft(animate = false) {
   const targetX = size.x / 2;
   // Смещаем ЦЕНТР карты, а не маркер: вся геометрия Leaflet остаётся привязана к GPS.
   const aircraftPoint = map.project(latlng, z);
-  const centerPoint = aircraftPoint.add(L.point(size.x / 2 - targetX, size.y / 2 - targetY));
+  // Сдвиг к центру свободного участка экрана учитывает текущий угол карты.
+  const dx=size.x/2-targetX,dy=size.y/2-targetY;
+  const rad=-mapBearing()*Math.PI/180;
+  const rotated=L.point(dx*Math.cos(rad)-dy*Math.sin(rad),dx*Math.sin(rad)+dy*Math.cos(rad));
+  const centerPoint=aircraftPoint.add(rotated);
   map.setView(map.unproject(centerPoint, z), z, { animate });
 }
 
 function toggleFollowMode() {
+  closeFollowOptions();
   followMode = !followMode;
   localStorage.setItem(FOLLOW_KEY, followMode ? '1' : '0');
+  updateMapOrientation();
   updateFollowBtn();
   if (followMode) centerFollowedAircraft(true);
 }
+function closeFollowOptions(){
+  const menu=document.getElementById('followOptions');if(menu)menu.hidden=true;
+  document.getElementById('followOptionsBtn')?.setAttribute('aria-expanded','false');
+}
+function toggleFollowOptions(event){
+  if(event)event.stopPropagation();
+  const menu=document.getElementById('followOptions');
+  menu.hidden=!menu.hidden;
+  document.getElementById('followOptionsBtn')?.setAttribute('aria-expanded',String(!menu.hidden));
+}
+function setFollowOrientation(mode){
+  if(mode!=='north'&&mode!=='track')return;
+  if(mode==='track'&&!mapRotationAvailable){alert('Вращение карты недоступно: не загрузилось расширение Leaflet. Север сверху продолжит работать.');return;}
+  followOrientation=mode;followMode=true;
+  try {localStorage.setItem(FOLLOW_ORIENTATION_KEY,mode);localStorage.setItem(FOLLOW_KEY,'1');}catch(e){}
+  closeFollowOptions();updateMapOrientation();updateFollowBtn();centerFollowedAircraft(false);
+}
+document.addEventListener('pointerdown',e=>{
+  if(!document.getElementById('followControl')?.contains(e.target))closeFollowOptions();
+});
 
 function updateFollowBtn() {
   const btn = document.getElementById('followBtn');
@@ -494,13 +755,20 @@ function updateFollowBtn() {
   if (followMode) {
     btn.classList.add('active');
     btn.classList.remove('inactive');
-    icon.textContent = '🎯';
-    btn.title = 'Слежу за позицией (нажмите — свободный режим)';
+    icon.textContent = followOrientation==='track' ? '✈️' : '🎯';
+    btn.title = 'Следование: '+(followOrientation==='track'?'курс сверху':'север сверху')+' (нажмите — свободно)';
   } else {
     btn.classList.remove('active');
     btn.classList.add('inactive');
     icon.textContent = '✋';
     btn.title = 'Свободный режим (нажмите — следить за позицией)';
+  }
+  btn.setAttribute('aria-label',btn.title);
+  document.getElementById('followNorthOption')?.classList.toggle('selected',followOrientation==='north');
+  document.getElementById('followTrackOption')?.classList.toggle('selected',followOrientation==='track');
+  if(document.getElementById('followTrackOption')){
+    document.getElementById('followTrackOption').disabled=!mapRotationAvailable;
+    document.getElementById('followTrackOption').title=mapRotationAvailable?'':'Не загружено расширение вращения карты';
   }
 }
 // === КОНЕЦ БЛОКА 22 ===
@@ -516,7 +784,7 @@ function updateHudHeading() {
   const el = document.getElementById('speedHudHeading');
   if (!el || el.hidden) return;
   // ФМПУ показываем только при свежем GPS, чтобы не вводить в заблуждение.
-  const good = rtTracking && rtCurrentPosition &&
+  const good = rtTracking && rtCurrentPosition && gpsQualityState().level!=='red' &&
     Date.now() - rtCurrentPosition.t < GPS_STALE_SEC * 1000;
   const heading = good ? getGPSHeadingMag() : null;
   el.textContent = heading === null ? '—' : heading.toFixed(0) + '°';
@@ -554,6 +822,7 @@ map.on('dragstart', () => {
   if (followMode && currentTab === 'rtnav') {
     followMode = false;
     localStorage.setItem(FOLLOW_KEY, '0');
+    updateMapOrientation();
     updateFollowBtn();
   }
 });
@@ -565,9 +834,10 @@ function planeIconSvg(courseDeg, color) {
   // Нос направлен вверх, длинные почти прямые крылья, узкий фюзеляж,
   // небольшой горизонтальный стабилизатор и хвостовое оперение.
   const fill = color || '#2a7';
+  const displayedCourse=norm360(courseDeg+mapBearing()); // Значок не вращается вместе с тайлами.
   return '<svg viewBox="0 0 60 60" width="52" height="52" ' +
     'xmlns="http://www.w3.org/2000/svg" aria-hidden="true" ' +
-    'style="transform:rotate(' + norm360(courseDeg) + 'deg);transform-origin:50% 50%;' +
+    'style="transform:rotate(' + displayedCourse + 'deg);transform-origin:50% 50%;' +
     'filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));">' +
     '<path d="M30 2 ' +
       'C27.9 2 27 5.1 27 8.4 ' +
@@ -646,7 +916,8 @@ function turnIcon(color) {
 
 // === БЛОК 25: POSITION ===
 function getCurrentPosition() {
-  if (rtTracking && rtCurrentPosition) {
+  if (rtTracking) {
+    if (!rtCurrentPosition || gpsQualityState().level === 'red') return null;
     return {
       lat: rtCurrentPosition.lat,
       lon: rtCurrentPosition.lon,
@@ -1415,6 +1686,7 @@ function renderTrack() {
       .addTo(map)
       .bindPopup('Последнее местоположение<br>' + fmtTime(plane.t) + '<br>' +
                  plane.lat.toFixed(5) + ', ' + plane.lon.toFixed(5));
+    posMarker._naebaciaCourseTrue=courseTrue;
     trackPointLayers.push(posMarker);
   }
 
@@ -1425,7 +1697,7 @@ function renderTrack() {
 
 // === БЛОК 34: NAV ===
 function getGPSHeadingMag() {
-  if (!rtTracking || !rtCurrentPosition) return null;
+  if (!rtTracking || !rtCurrentPosition || gpsQualityState().level==='red') return null;
   let heading = rtCurrentPosition.heading;
   if (heading === null || heading === undefined || isNaN(heading)) {
     if (rtTrack.length >= 2) {
@@ -1440,7 +1712,7 @@ function getGPSHeadingMag() {
 }
 
 function getGPSSpeedKmh() {
-  if (!rtTracking || !rtCurrentPosition) return null;
+  if (!rtTracking || !rtCurrentPosition || gpsQualityState().level==='red') return null;
   if (rtCurrentPosition.speed === null || rtCurrentPosition.speed === undefined || isNaN(rtCurrentPosition.speed)) return null;
   return rtCurrentPosition.speed * 3.6;
 }
@@ -1708,7 +1980,91 @@ function updateNavUI() {
   refreshHSIPanel();
 }
 
+// Контекстное меню: долгое касание на телефоне / правый клик на компьютере.
+// Во время редактирования своего маршрута отключено, чтобы не мешать перетаскиванию ППМ.
+let mapLongPressTimer = null;
+let mapLongPressStart = null;
+let mapContextSuppressClickUntil = 0;
+let lastMapContextShownAt = 0;
+function naebaciaSetPopupTarget(lat,lon) {
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return;
+  map.closePopup();
+  setNavTarget(lat,lon); // Вся прежняя математика DIRECT, HSI и запись настройки сохраняются.
+  showMapContextNotice('🎯 Цель задана: '+lat.toFixed(5)+'°, '+lon.toFixed(5)+'°');
+}
+function showMapContextNotice(text) {
+  let el=document.getElementById('mapContextNotice');
+  if(!el){el=document.createElement('div');el.id='mapContextNotice';
+    el.setAttribute('role','status');document.body.appendChild(el);}
+  el.textContent=text;
+  el.style.cssText='position:fixed;bottom:120px;left:12px;right:12px;max-width:360px;margin:auto;'+
+    'text-align:center;z-index:1700;background:rgba(22,42,53,.95);color:white;border-radius:9px;'+
+    'padding:10px 12px;pointer-events:none;font:14px/1.35 sans-serif';
+  clearTimeout(el._hideTimer);
+  el._hideTimer=setTimeout(()=>{el.remove();},2400);
+}
+async function naebaciaCopyPopupCoords(lat,lon) {
+  const txt=lat.toFixed(6)+', '+lon.toFixed(6);
+  try {
+    if(!navigator.clipboard || !navigator.clipboard.writeText)throw new Error('no Clipboard API');
+    await navigator.clipboard.writeText(txt);
+    showMapContextNotice('Координаты скопированы: '+txt);
+  } catch(e) { prompt('Скопируйте координаты:',txt); }
+}
+function openMapContextAt(lat,lon) {
+  if(routeEditorDraft || !Number.isFinite(lat)||!Number.isFinite(lon)||
+     Math.abs(lat)>90 || Math.abs(lon)>180)return;
+  const now=Date.now();
+  if(now-lastMapContextShownAt<900)return; // iOS/Android могут генерировать contextmenu дополнительно.
+  lastMapContextShownAt=now;
+  mapContextSuppressClickUntil=now+850;
+  const latitude=lat.toFixed(6),longitude=lon.toFixed(6);
+  const ns=lat>=0?'N':'S',ew=lon>=0?'E':'W';
+  const content='<div style="font:14px/1.5 sans-serif;min-width:180px">' +
+    '<b>📍 Точка на карте</b><br>' + Math.abs(lat).toFixed(6)+'° '+ns+'<br>' +
+    Math.abs(lon).toFixed(6)+'° '+ew+'<br>'+
+    '<button type="button" style="display:block;margin:9px 0 5px;padding:9px;width:100%" ' +
+      'onclick="naebaciaSetPopupTarget('+latitude+','+longitude+')">🎯 Задать как цель</button>'+
+    '<button type="button" style="display:block;padding:9px;width:100%" ' +
+      'onclick="naebaciaCopyPopupCoords('+latitude+','+longitude+')">Копировать координаты</button></div>';
+  L.popup({closeButton:true,maxWidth:265}).setLatLng([lat,lon]).setContent(content).openOn(map);
+}
+function clearMapLongPressTimer() {
+  if(mapLongPressTimer!==null)clearTimeout(mapLongPressTimer);
+  mapLongPressTimer=null;mapLongPressStart=null;
+}
+map.on('contextmenu',e=>{
+  if(e.originalEvent && e.originalEvent.preventDefault)e.originalEvent.preventDefault();
+  if(!routeEditorDraft)openMapContextAt(e.latlng.lat,e.latlng.lng);
+});
+(function installMapLongPress(){
+  const el=map.getContainer();
+  el.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'||e.button!==0||e.isPrimary===false || routeEditorDraft ||
+       e.target.closest('.leaflet-control,.leaflet-popup,.leaflet-marker-icon,.leaflet-interactive'))return;
+    clearMapLongPressTimer();
+    mapLongPressStart={x:e.clientX,y:e.clientY,pointerId:e.pointerId};
+    const start=mapLongPressStart;
+    mapLongPressTimer=setTimeout(()=>{
+      mapLongPressTimer=null;
+      if(!mapLongPressStart||mapLongPressStart!==start||routeEditorDraft)return;
+      const ll=map.mouseEventToLatLng(e);
+      mapLongPressStart=null;
+      openMapContextAt(ll.lat,ll.lng);
+    },650);
+  },true);
+  el.addEventListener('pointermove',e=>{
+    if(mapLongPressStart && e.pointerId===mapLongPressStart.pointerId &&
+      Math.hypot(e.clientX-mapLongPressStart.x,e.clientY-mapLongPressStart.y)>12)
+      clearMapLongPressTimer();
+  },true);
+  for(const name of ['pointerup','pointercancel','pointerleave'])
+    el.addEventListener(name,clearMapLongPressTimer,true);
+  map.on('dragstart',clearMapLongPressTimer);
+})();
+
 map.on('click', e => {
+  if(Date.now() < mapContextSuppressClickUntil)return;
   if (currentTab !== 'nav') return;
   if (routeEditorDraft && routeEditorMapMode === 'add') {
     routeEditorAddPoint(e.latlng.lat,e.latlng.lng);
@@ -2145,6 +2501,7 @@ function updateJokeMarker(){
 function hsiValidPoint(p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); }
 function hsiCurrentFix() {
   if (rtTracking && rtCurrentPosition) {
+    if (gpsQualityState().level==='red') return null;
     const age = Date.now() - rtCurrentPosition.t;
     return age >= 0 && age <= GPS_STALE_SEC * 1000 ? rtCurrentPosition : null;
   }
@@ -2208,17 +2565,33 @@ function hsiDeviation(p,g) {
 // затем переключаем только вперёд по порядку при достижении конечного ППМ.
 function hsiRouteBestLeg(route,p) {
   if (!route || !hsiValidPoint(p)) return 0;
-  let best=0,score=Infinity;
+  const candidates=[];
   for (let i=0;i<route.points.length-1;i++) {
     const A=route.points[i],B=route.points[i+1];
     const off=computeOffset(p,A,B);
     if (!off) continue;
     const len=distance(A,B);
     const beyond=(off.t<0?-off.t:off.t>1?off.t-1:0)*len;
-    const current=off.lbu+1.25*beyond;
-    if (current<score) {score=current;best=i;}
+    const spatialScore=off.lbu+1.25*beyond;
+    candidates.push({idx:i,spatialScore,bearing:trueBearing(A,B)});
   }
-  return best;
+  if(!candidates.length)return 0;
+  candidates.sort((a,b)=>a.spatialScore-b.spatialScore);
+  const nearest=candidates[0];
+  // На земле, без корректного ФМПУ или при плохой точности — прежняя геометрия.
+  const headingReliable=Number.isFinite(p.heading)&&Number.isFinite(p.speed)&&p.speed>5&&
+    (!Number.isFinite(p.acc)||p.acc<=200);
+  if(!headingReliable)return nearest.idx;
+  // У перекрёстка маршрутов не выбираем противоположное направление при почти
+  // равных расстояниях до участка. Большой разрыв по геометрии не перебиваем.
+  let best=nearest,weightedScore=Infinity;
+  for(const leg of candidates){
+    if(leg.spatialScore>nearest.spatialScore+650)break;
+    const diff=Math.abs(((p.heading-leg.bearing+540)%360)-180);
+    const score=leg.spatialScore+900*(1-Math.cos(toRad(diff)))/2;
+    if(score<weightedScore){weightedScore=score;best=leg;}
+  }
+  return best.idx;
 }
 function maybeAdvanceHSIRoute(p) {
   if (hsiState.mode!=='route' || !rtTracking || !hsiValidPoint(p) || hsiNeedsInitialLegFix) return;
@@ -2350,7 +2723,7 @@ function enterHSICourse(v) {
 function persistHSISettings() {
   try {localStorage.setItem(HSI_SETTINGS_KEY,JSON.stringify({mode:hsiState.mode,
     routeKey:hsiState.routeKey,legIndex:hsiState.legIndex,obsCourse:hsiState.obsCourse,
-    obsRef:hsiState.obsRef,obsAnchor:hsiState.obsAnchor}));}catch(e){}
+    obsRef:hsiState.obsRef,obsAnchor:hsiState.obsAnchor,scaleKm:hsiState.scaleKm}));}catch(e){}
 }
 function loadHSISettings() {
   try {
@@ -2362,7 +2735,7 @@ function loadHSISettings() {
     if(typeof o.obsRef==='string')hsiState.obsRef=o.obsRef;
     if(hsiValidPoint(o.obsAnchor))hsiState.obsAnchor=o.obsAnchor;
     hsiNeedsInitialLegFix=hsiState.mode==='route' && !!hsiState.routeKey;
-    hsiState.scaleKm=5; // Предыдущие настройки масштаба больше не применяются.
+    hsiState.scaleKm=o.scaleKm===1?1:5;
   }catch(e){console.warn('HSI settings:',e);}
 }
 function renderHSIGuideLine() {
@@ -2404,6 +2777,11 @@ function buildHSISelects() {
     ref.dataset.signature=routeSignature;
   }
 }
+function toggleHSIScale(){
+  hsiState.scaleKm=hsiState.scaleKm===5?1:5;
+  persistHSISettings();
+  refreshHSIPanel();
+}
 function refreshHSIPanel() {
   const panel=document.getElementById('hsiPanel'); if(!panel)return;
   document.querySelectorAll('[data-hsi-mode]').forEach(btn=>{
@@ -2431,7 +2809,7 @@ function refreshHSIPanel() {
   if(document.activeElement!==input)input.value=String(Math.round(hsiState.obsCourse));
   document.getElementById('hsiCourseAuto').firstElementChild.lastElementChild.textContent=
     hsiState.mode==='obs'?'ЗМПУ':'ЗМПУ (авто)';
-  // Масштаб ЛБУ постоянный: от −5 до +5 км.
+  // Четыре риски и край линии — пятое деление: ±5 или ±1 км.
   const g=getHSIGuidance(), p=hsiCurrentFix();
   const d=hsiDeviation(p,g);
   const txt=document.getElementById('hsiXtk');
@@ -2441,11 +2819,12 @@ function refreshHSIPanel() {
   document.getElementById('hsiToFrom').textContent=d?d.toFrom:'—';
   const label=d?(d.absKm<1?(d.absKm*1000).toFixed(0)+' м':d.absKm.toFixed(2)+' км'):'—';
   txt.textContent='ЛБУ '+label+(d?(d.side==='left'?' · СЛЕВА':d.side==='right'?' · СПРАВА':' · НА ЛИНИИ'):'');
-  const x=d?Math.max(-116,Math.min(116,d.signedKm/hsiState.scaleKm*116)):0;
+  const x=d?Math.max(-140,Math.min(140,d.signedKm/hsiState.scaleKm*140)):0;
   document.getElementById('hsiCdiNeedle').setAttribute('transform','translate('+x.toFixed(1)+' 0)');
   // CDI-планка отклоняется к ЛЗП: самолёт левее линии => планка справа.
-  document.getElementById('hsiScaleLeft').textContent='−5 км';
-  document.getElementById('hsiScaleRight').textContent='+5 км';
+  document.getElementById('hsiScaleLeft').textContent='−'+hsiState.scaleKm+' км';
+  document.getElementById('hsiScaleRight').textContent='+'+hsiState.scaleKm+' км';
+  document.getElementById('hsiScaleToggle').setAttribute('aria-label','Шкала ЛБУ ±'+hsiState.scaleKm+' км. Нажмите для изменения диапазона.');
   const distanceEl=document.getElementById('hsiDistance');
   const distanceLabel=g?.mode==='route'?'До ППМ':g?.mode==='direct'?'До цели':'До точки';
   const distM=(g&&p&&hsiValidPoint(g.reference))?distance(p,g.reference):null;
@@ -2615,6 +2994,7 @@ function startRT() {
   }
   // Новый старт — новый сегмент того же журнала. Старые полёты не удаляем.
   rtCurrentPosition = null;
+  gpsSignalIssue=''; gpsRejectedSamples=0;
   beginFlightSegment();
   rtLogSaveWarning = '';
   saveFlightLog(true);
@@ -2653,6 +3033,7 @@ function stopRT() {
     rtWatchId = null;
   }
   rtTracking = false;
+  gpsSignalIssue=''; updateGpsQualityIndicator();
   if (windMeasuring) cancelWindMeasure();
   const flight = getActiveFlight();
   if (flight && flight.status === 'recording') {
@@ -2668,12 +3049,64 @@ function stopRT() {
   renderRTMarker();
   updateRTUI();
   updateSpeedHudVisibility();
+  updateMapOrientation();
   updateFlightLogUI();
 }
 
 function finiteOrNull(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
+
+// === Контроль качества GPS (индикатор и защита журнала) ===
+function gpsQualityState() {
+  if (!rtTracking) return {level:'off', label:'РВ выключена'};
+  if (gpsSignalIssue) return {level:'red', label:gpsSignalIssue};
+  if (!rtCurrentPosition) return {level:'red', label:'Нет подтверждённой позиции GPS'};
+  const ageSec = (Date.now()-rtCurrentPosition.t)/1000;
+  if (ageSec > GPS_STALE_SEC) return {level:'red', label:'GPS устарел: '+Math.round(ageSec)+' с'};
+  if (ageSec > GPS_WARNING_AGE_SEC) return {level:'amber', label:'GPS давно не обновлялся: '+Math.round(ageSec)+' с'};
+  const acc=rtCurrentPosition.acc;
+  if (!Number.isFinite(acc)) return {level:'amber', label:'GPS: точность неизвестна'};
+  if (acc > GPS_WARNING_ACCURACY_M) return {level:'amber', label:'GPS: точность ±'+Math.round(acc)+' м'};
+  return {level:'good', label:'GPS: точность ±'+Math.round(acc)+' м'};
+}
+function updateGpsQualityIndicator() {
+  const state=gpsQualityState();
+  const badge=document.getElementById('gpsQualityBadge');
+  if (badge) {
+    const panel=document.getElementById('panel');
+    const show=(state.level==='red'||state.level==='amber') && (!panel || panel.classList.contains('hidden'));
+    badge.hidden=!show;
+    badge.className='gps-quality-badge'+(document.getElementById('toggleBtn')?.classList.contains('menu-right')?' menu-right':'')+(show?' '+state.level:'');
+    badge.title=state.label;
+    badge.setAttribute('aria-label',state.label);
+  }
+  const text=document.getElementById('rt-gps-status');
+  if (text) {
+    text.textContent=state.level==='good'?'🛰 GPS: сигнал пригоден':
+      state.level==='off'?'':(state.level==='amber'?'🟡 🛰 ':'🔴 🛰 ')+state.label;
+    text.className='gps-quality-text '+state.level;
+  }
+  if(state.level!=='good'&&mapRotationAvailable&&typeof map.stopHeadingUp==='function')map.stopHeadingUp();
+}
+function rejectGpsSample(reason) {
+  gpsRejectedSamples++;
+  gpsSignalIssue=reason;
+  updateGpsQualityIndicator();
+  updateRTUI();
+}
+function gpsPointIsImplausible(last, lat, lon, t, speed, acc) {
+  if (!last || !Number.isFinite(last.t) || t<=last.t) return false;
+  const dt=(t-last.t)/1000;
+  // Длинный перерыв не даёт права считать прямую между точками пройденным треком.
+  if (dt>GPS_TRACK_GAP_SEC) return false;
+  const delta=distance(last,{lat,lon});
+  const uncertainty=(Math.max(0,acc||0)+Math.max(0,last.acc||0))*3;
+  if (delta<=Math.max(150,uncertainty)) return false;
+  // Не доверяем и самому speed из GPS: он тоже может ошибочно зашкалить.
+  return delta/dt>GPS_SUSPICIOUS_SPEED_MPS;
+}
+// === Конец контроля качества GPS ===
 
 function onRTPosition(pos) {
   if (!rtTracking) return;
@@ -2690,6 +3123,18 @@ function onRTPosition(pos) {
   const receivedAt = Date.now();
   const t = Number.isFinite(pos.timestamp) && pos.timestamp > 0 ? pos.timestamp : receivedAt;
   const last = flight.points.length ? flight.points[flight.points.length - 1] : null;
+  // Сначала проверка качества: отброшенные координаты не меняют HSI, цель, маркер и журнал.
+  if (t > receivedAt + 10000 || receivedAt-t > GPS_STALE_SEC*1000) {
+    rejectGpsSample('Непригодное время GPS-позиции'); return;
+  }
+  if (acc !== null && (acc<0 || acc>GPS_REJECT_ACCURACY_M)) {
+    rejectGpsSample('GPS: низкая точность'+(acc===null?'':' ±'+Math.round(acc)+' м')); return;
+  }
+  if (last && t<=last.t) return; // повторный или старый отсчёт не является новой точкой.
+  if (gpsPointIsImplausible(last,lat,lon,t,speed,acc)) {
+    rejectGpsSample('Подозрительный скачок GPS — точка отклонена'); return;
+  }
+  gpsSignalIssue='';
   // Каждый полёт начинается собственной первой точкой: предыдущий полёт не влияет на фильтр.
   const validNewTime = !last || t > last.t;
   let shouldAdd = false;
@@ -2698,7 +3143,8 @@ function onRTPosition(pos) {
   else if (validNewTime && t - last.t >= 5000) shouldAdd = true;
 
   if (shouldAdd) {
-    const sample = { lat, lon, t, speed, heading, acc, alt, altAcc };
+    const sample = { lat, lon, t, speed, heading, acc, alt, altAcc,
+      breakBefore: !!last && (t-last.t) > GPS_TRACK_GAP_SEC*1000 };
     flight.points.push(sample);
     rtFlightLog.downloaded = false;
     rtTrack.push({ ...sample, flightId: flight.id });
@@ -2707,6 +3153,8 @@ function onRTPosition(pos) {
     renderRTTrack();
   }
   rtCurrentPosition = { lat, lon, t, speed, heading, acc };
+  updateGpsQualityIndicator();
+  updateMapOrientation();
   // Если цель была поставлена без определения места, начало DIRECT фиксируется
   // на первом полученном положении и затем больше не перемещается.
   if (hsiState.mode === 'direct' && navTarget && !navLineStart) {
@@ -2749,6 +3197,8 @@ function onRTError(err) {
   const el = document.getElementById('rt-result');
   el.classList.add('error');
   el.textContent = msg;
+  gpsSignalIssue=msg;
+  updateGpsQualityIndicator();
 }
 
 function saveFlightLog(force) {
@@ -2771,7 +3221,8 @@ function normalizeStoredPoint(p) {
   return {
     lat, lon, t,
     speed: finiteOrNull(p.speed), heading: finiteOrNull(p.heading),
-    acc: finiteOrNull(p.acc), alt: finiteOrNull(p.alt), altAcc: finiteOrNull(p.altAcc)
+    acc: finiteOrNull(p.acc), alt: finiteOrNull(p.alt), altAcc: finiteOrNull(p.altAcc),
+    breakBefore: p.breakBefore === true
   };
 }
 
@@ -2882,7 +3333,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 3, appVersion: '1.60',
+    version: 3, appVersion: '1.61',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -2906,7 +3357,8 @@ function flightLogExportObject() {
         trueTrackDeg: p.heading ?? null,
         horizontalAccuracyM: p.acc ?? null,
         gpsAltitudeM: p.alt ?? null,
-        altitudeAccuracyM: p.altAcc ?? null
+        altitudeAccuracyM: p.altAcc ?? null,
+        trackBreakBefore: p.breakBefore === true
       }))
     }))
   };
@@ -2973,7 +3425,7 @@ function splitRTTrack() {
   const segments = [];
   for (const p of rtTrack) {
     const last = segments[segments.length - 1];
-    if (!last || last[0].flightId !== p.flightId) segments.push([p]);
+    if (!last || last[0].flightId !== p.flightId || p.breakBefore) segments.push([p]);
     else last.push(p);
   }
   return segments;
@@ -3049,6 +3501,7 @@ function renderRTMarker() {
       icon: planeIconBlue(course), interactive: false, zIndexOffset: 1200
     }).addTo(map);
   }
+  rtMarker._naebaciaCourseTrue=course;
   updateJokeMarker();
 }
 
@@ -3069,7 +3522,7 @@ function updateRTUI() {
   } else {
     posEl.innerHTML = '<b>' + ddToDM(rtCurrentPosition.lat, true) + '</b><br>' +
                       '<b>' + ddToDM(rtCurrentPosition.lon, false) + '</b>';
-    if (rtCurrentPosition.speed !== null) {
+    if (rtCurrentPosition.speed !== null && gpsQualityState().level!=='red') {
       const v = convertSpeed(rtCurrentPosition.speed);
       spEl.textContent = v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
     } else spEl.textContent = '—';
@@ -3090,7 +3543,7 @@ function updateRTUI() {
   for (const flight of allFlights) {
     const points = flight.points;
     if (points.length < 2) continue;
-    for (let i=1; i<points.length; i++) totalDist += distance(points[i-1], points[i]);
+    for (let i=1; i<points.length; i++) if (!points[i].breakBefore) totalDist += distance(points[i-1], points[i]);
     totalSec += Math.max(0, (points[points.length-1].t-points[0].t)/1000);
   }
   totalDist /= 1000;
@@ -3104,7 +3557,7 @@ function updateRTUI() {
   else if (navTarget) tgtEl.innerHTML = ddToDM(navTarget.lat, true) + ' ' + ddToDM(navTarget.lon, false);
   else tgtEl.innerHTML = '<span style="color:#888">Задайте цель на вкладке Навигация</span>';
 
-  if (rtCurrentPosition && rtCurrentPosition.speed !== null) {
+  if (rtCurrentPosition && rtCurrentPosition.speed !== null && gpsQualityState().level!=='red') {
     const v = convertSpeed(rtCurrentPosition.speed);
     document.getElementById('speedHudValue').textContent = v.toFixed(0);
   } else {
@@ -3604,8 +4057,10 @@ function onCourseRTInput() {
 
 // === БЛОК 38: INIT ===
 setInterval(() => {
-  if (rtTracking && rtCurrentPosition && currentTab === 'rtnav') {
-    updateRTUI();
+  if (rtTracking) {
+    updateGpsQualityIndicator();
+    updateHudHeading();
+    if (currentTab === 'rtnav') updateRTUI();
   }
 }, 1000);
 
@@ -3618,6 +4073,8 @@ loadUserRoutes();
 loadHSISettings();
 buildHSISelects();
 changeMenuSide(localStorage.getItem(MENU_SIDE_KEY) === 'right');
+setNaebaciaTheme(naebaciaTheme);
+setInterval(updateThemeShortcutVisibility,60000);
 document.getElementById('windSpeedUnit').checked = localStorage.getItem(WIND_SPEED_UNIT_KEY) === 'ms';
 setHudHeadingVisible(localStorage.getItem(HUD_HEADING_KEY) === '1');
 loadWindNavPreference();
@@ -3639,6 +4096,7 @@ document.getElementById('toggleAltitudeColors').checked = localStorage.getItem(A
 toggleAltitudeView();
 updateNavUI();
 updateRTUI();
+updateGpsQualityIndicator();
 updateFlightLogUI();
 renderHSIGuideLine();
 refreshHSIPanel();

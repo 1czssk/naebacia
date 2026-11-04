@@ -1,13 +1,16 @@
-/* НАЕБАЦИЯ v1.60 🎃 — редактор маршрутов, обновлённый PWA-кэш */
-const CACHE = 'naebacia-v1-60-r2';
+/* НАЕБАЦИЯ v1.61 🎃 — редактор маршрутов, обновлённый PWA-кэш */
+const CACHE = 'naebacia-v1-61-r1';
 const SHELL = ['./','./index.html','./app.js','./manifest.json',
-  './regions/krasny-kut.json','./icons/icon-192.png','./icons/icon-512.png'];
+  './regions/krasny-kut.json','./regions/saint-petersburg.json','./regions/lipetsk.json',
+  './regions/ulyanovsk.json','./regions/buguruslan.json','./icons/icon-192.png','./icons/icon-512.png'];
 const LEAFLET_ASSETS = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js',
   'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
-  'https://cdn.jsdelivr.net/npm/leaflet-providers@1.13.0/leaflet-providers.js'
+  'https://cdn.jsdelivr.net/npm/leaflet-providers@1.13.0/leaflet-providers.js',
+  'https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.3.0/dist/leaflet-rotate.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/@tomickigrzegorz/leaflet-rotate@0.3.0/dist/leaflet-rotate.umd.min.js'
 ];
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
