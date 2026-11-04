@@ -1,0 +1,12 @@
+{
+  "id": "buguruslan",
+  "name": "Бугуруслан",
+  "active": false,
+  "status": "empty-draft",
+  "dataNotice": "Заготовка профиля. Координаты, аэродромы, радиомаяки, маршруты и зоны пока не внесены; не использовать в навигационных расчётах.",
+  "airfields": [],
+  "navigationAids": [],
+  "routes": {},
+  "zones": [],
+  "sectors": []
+}

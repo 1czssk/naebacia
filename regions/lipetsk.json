@@ -1,0 +1,116 @@
+{
+  "id": "lipetsk",
+  "name": "Липецк",
+  "status": "draft-unverified",
+  "active": false,
+  "dataNotice": "Справочные данные из предоставленных пользователем скриншотов. Сведения, частоты и положение КТА не проверены по действующему АИП/NOTAM. У приводов нет координат в источнике; координаты не добавлены. Не использовать в полётной навигации.",
+  "airfields": [
+    {
+      "id": "lipetsk",
+      "name": "Липецк",
+      "icao": "UUOL",
+      "iata": "LPK",
+      "referencePoint": {
+        "lat": 52.7028,
+        "lon": 39.5378
+      },
+      "alternativeReferencePoints": [
+        {
+          "lat": 52.70333333,
+          "lon": 39.53833333,
+          "sourceText": "52°42.2′ N, 39°32.3′ E",
+          "note": "Другой вариант в присланном скриншоте, не используется для звезды"
+        }
+      ],
+      "showOnMap": true,
+      "showInPlace": false,
+      "symbol": "red-star",
+      "runways": [
+        "15",
+        "33"
+      ],
+      "runwayDimensionsFromScreenshot": "2343 × 45 м"
+    }
+  ],
+  "navigationAids": [
+    {
+      "id": "lipetsk-dprm-15",
+      "name": "Липецк ДПРМ 15",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "15",
+      "ident": "DD",
+      "frequencyKHz": 815,
+      "showOnMap": false,
+      "showInPlace": false,
+      "coordinatesAvailable": false,
+      "note": "В предоставленных данных координаты не указаны; не вычислялись."
+    },
+    {
+      "id": "lipetsk-bprm-15",
+      "name": "Липецк БПРМ 15",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "15",
+      "ident": "D",
+      "frequencyKHz": 400,
+      "showOnMap": false,
+      "showInPlace": false,
+      "coordinatesAvailable": false,
+      "note": "В предоставленных данных координаты не указаны; не вычислялись."
+    },
+    {
+      "id": "lipetsk-dprm-33",
+      "name": "Липецк ДПРМ 33",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "33",
+      "ident": "IT",
+      "frequencyKHz": 815,
+      "showOnMap": false,
+      "showInPlace": false,
+      "coordinatesAvailable": false,
+      "note": "В предоставленных данных координаты не указаны; не вычислялись."
+    },
+    {
+      "id": "lipetsk-bprm-33",
+      "name": "Липецк БПРМ 33",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "33",
+      "ident": "I",
+      "frequencyKHz": 400,
+      "showOnMap": false,
+      "showInPlace": false,
+      "coordinatesAvailable": false,
+      "note": "В предоставленных данных координаты не указаны; не вычислялись."
+    }
+  ],
+  "approachInfo": [
+    {
+      "airportId": "lipetsk",
+      "runways": [
+        "15"
+      ],
+      "landingCourseDeg": 150,
+      "navigationAidsIds": [
+        "lipetsk-dprm-15",
+        "lipetsk-bprm-15"
+      ]
+    },
+    {
+      "airportId": "lipetsk",
+      "runways": [
+        "33"
+      ],
+      "landingCourseDeg": 330,
+      "navigationAidsIds": [
+        "lipetsk-dprm-33",
+        "lipetsk-bprm-33"
+      ]
+    }
+  ],
+  "routes": [],
+  "zones": [],
+  "sectors": []
+}

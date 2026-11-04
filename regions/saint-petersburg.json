@@ -1,0 +1,217 @@
+{
+  "id": "saint-petersburg",
+  "name": "Санкт-Петербург",
+  "status": "draft-unverified",
+  "active": false,
+  "dataNotice": "Непроверенные справочные данные, вручную перенесённые из присланных скриншотов. Частоты и координаты не сверены с действующим АИП/NOTAM. Координаты приводов ВПП 26 Левашово указаны приблизительно. Не использовать для полётной навигации.",
+  "airfields": [
+    {
+      "id": "pulkovo",
+      "name": "Пулково",
+      "referencePoint": {
+        "lat": 59.8003,
+        "lon": 30.2625
+      },
+      "alternativeReferencePoints": [
+        {
+          "lat": 59.7998,
+          "lon": 30.273,
+          "note": "Альтернативное положение в присланном справочном материале; не используется для звезды"
+        }
+      ],
+      "showOnMap": true,
+      "showInPlace": false,
+      "symbol": "red-star"
+    },
+    {
+      "id": "levashovo",
+      "name": "Левашово",
+      "referencePoint": {
+        "lat": 60.0867,
+        "lon": 30.1933
+      },
+      "alternativeReferencePoints": [
+        {
+          "lat": 60.086666666666666,
+          "lon": 30.193333333333335,
+          "sourceText": "60°05′12″ N, 30°11′36″ E",
+          "note": "Альтернативная запись из скриншота"
+        }
+      ],
+      "showOnMap": true,
+      "showInPlace": false,
+      "symbol": "red-star"
+    }
+  ],
+  "navigationAids": [
+    {
+      "id": "pulkovo-vor-spb",
+      "name": "Пулково VOR/DME",
+      "type": "VOR/DME",
+      "ident": "SPB",
+      "frequencyMHz": 113.4,
+      "dmeChannel": "81X",
+      "lat": 59.8067,
+      "lon": 30.285,
+      "showOnMap": false,
+      "showInPlace": false
+    },
+    {
+      "id": "pulkovo-dprm-10l",
+      "name": "Пулково ДПРМ 10L",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "10L",
+      "ident": "PK",
+      "frequencyKHz": 342,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.81,
+      "lon": 30.14966667,
+      "coordinatesOriginal": "59°48.60′ N, 30°08.98′ E"
+    },
+    {
+      "id": "pulkovo-bprm-10l",
+      "name": "Пулково БПРМ 10L",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "10L",
+      "ident": "K",
+      "frequencyKHz": 700,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.80716667,
+      "lon": 30.18883333,
+      "coordinatesOriginal": "59°48.43′ N, 30°11.33′ E"
+    },
+    {
+      "id": "pulkovo-dprm-10r",
+      "name": "Пулково ДПРМ 10R",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "10R",
+      "ident": "PU",
+      "frequencyKHz": 303,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.82166667,
+      "lon": 30.17466667,
+      "coordinatesOriginal": "59°49.30′ N, 30°10.48′ E"
+    },
+    {
+      "id": "pulkovo-bprm-10r",
+      "name": "Пулково БПРМ 10R",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "10R",
+      "ident": "U",
+      "frequencyKHz": 625,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.8025,
+      "lon": 30.20616667,
+      "coordinatesOriginal": "59°48.15′ N, 30°12.37′ E"
+    },
+    {
+      "id": "pulkovo-dprm-28l",
+      "name": "Пулково ДПРМ 28L",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "28L",
+      "ident": "PO",
+      "frequencyKHz": 277,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.78166667,
+      "lon": 30.35,
+      "coordinatesOriginal": "59°46.90′ N, 30°21.00′ E"
+    },
+    {
+      "id": "pulkovo-bprm-28l",
+      "name": "Пулково БПРМ 28L",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "28L",
+      "ident": "PL",
+      "frequencyKHz": 525,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.79166667,
+      "lon": 30.373,
+      "coordinatesOriginal": "59°47.50′ N, 30°22.38′ E"
+    },
+    {
+      "id": "levashovo-dprm-26",
+      "name": "Левашово ДПРМ 26",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "26",
+      "ident": "MA",
+      "frequencyKHz": 386,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 60.10016667,
+      "lon": 30.26083333,
+      "coordinatesOriginal": "60°06.01′ N, 30°15.65′ E",
+      "coordinateQuality": "approximate-from-screenshot",
+      "note": "Координаты приведены приблизительно (знак ~ в источнике)."
+    },
+    {
+      "id": "levashovo-bprm-26",
+      "name": "Левашово БПРМ 26",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "26",
+      "ident": "M",
+      "frequencyKHz": 785,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 60.09016667,
+      "lon": 30.20966667,
+      "coordinatesOriginal": "60°05.41′ N, 30°12.58′ E",
+      "coordinateQuality": "approximate-from-screenshot",
+      "note": "Координаты приведены приблизительно (знак ~ в источнике)."
+    }
+  ],
+  "routes": [],
+  "zones": [],
+  "sectors": [],
+  "approachInfo": [
+    {
+      "airportId": "pulkovo",
+      "runways": [
+        "10L",
+        "10R"
+      ],
+      "landingCourseDeg": 100,
+      "navigationAidsIds": [
+        "pulkovo-dprm-10l",
+        "pulkovo-bprm-10l",
+        "pulkovo-dprm-10r",
+        "pulkovo-bprm-10r"
+      ]
+    },
+    {
+      "airportId": "pulkovo",
+      "runways": [
+        "28L"
+      ],
+      "landingCourseDeg": 280,
+      "navigationAidsIds": [
+        "pulkovo-dprm-28l",
+        "pulkovo-bprm-28l"
+      ]
+    },
+    {
+      "airportId": "levashovo",
+      "runways": [
+        "26"
+      ],
+      "landingCourseDeg": 255,
+      "navigationAidsIds": [
+        "levashovo-dprm-26",
+        "levashovo-bprm-26"
+      ]
+    }
+  ]
+}

@@ -19,7 +19,21 @@
       51.1,
       46.7
     ],
-    "initialZoom": 10
+    "initialZoom": 10,
+    "radio": {
+      "tower": {
+        "name": "Красный Кут Вышка",
+        "frequencyMHz": 127.8,
+        "display": "127.800 МГц",
+        "verification": "tower-confirmed-secondary-source"
+      },
+      "atis": {
+        "name": "Красный Кут АТИС",
+        "frequencyMHz": 122.7,
+        "display": "122.700 МГц",
+        "verification": "provided-by-user-unverified"
+      }
+    }
   },
   "stations": [
     {
@@ -380,5 +394,86 @@
       "s": 38
     }
   ],
-  "circleModel": "krasny-kut-v1.58"
+  "circleModel": "krasny-kut-v1.58",
+  "airfields": [
+    {
+      "id": "uwsk",
+      "name": "Красный Кут",
+      "icao": "UWSK",
+      "referencePoint": {
+        "lat": 50.960278,
+        "lon": 46.945556
+      },
+      "showOnMap": true,
+      "showInPlace": false,
+      "symbol": "red-star",
+      "radio": {
+        "tower": {
+          "name": "Красный Кут Вышка",
+          "frequencyMHz": 127.8,
+          "display": "127.800 МГц",
+          "verification": "tower-confirmed-secondary-source"
+        },
+        "atis": {
+          "name": "Красный Кут АТИС",
+          "frequencyMHz": 122.7,
+          "display": "122.700 МГц",
+          "verification": "provided-by-user-unverified"
+        }
+      },
+      "notice": "Справочные данные: КТА и частоты уточняйте по действующему АИП/NOTAM."
+    }
+  ],
+  "navigationAids": [
+    {
+      "id": "krasny-kut-station-1",
+      "name": "Красный Кут",
+      "type": "NDB",
+      "lat": 50.9273333,
+      "lon": 46.919,
+      "frequency": "1155 кГц",
+      "showOnMap": false,
+      "showInPlace": true
+    },
+    {
+      "id": "krasny-kut-station-2",
+      "name": "Ямское",
+      "type": "NDB",
+      "lat": 50.9683333,
+      "lon": 47.2205556,
+      "frequency": "1245 кГц",
+      "showOnMap": false,
+      "showInPlace": true
+    },
+    {
+      "id": "krasny-kut-station-3",
+      "name": "Комсомольское",
+      "type": "NDB",
+      "lat": 50.8,
+      "lon": 47.0477778,
+      "frequency": "310 кГц",
+      "showOnMap": false,
+      "showInPlace": true
+    },
+    {
+      "id": "krasny-kut-station-4",
+      "name": "Красноармейск",
+      "type": "NDB",
+      "lat": 51.0313889,
+      "lon": 45.6444444,
+      "frequency": "932 кГц",
+      "showOnMap": false,
+      "showInPlace": true
+    },
+    {
+      "id": "krasny-kut-station-5",
+      "name": "Гагарин VOR/DME (RK)",
+      "type": "VOR/DME",
+      "lat": 51.7105556,
+      "lon": 46.1847222,
+      "frequency": "113.0 МГц",
+      "showOnMap": false,
+      "showInPlace": false
+    }
+  ]
 }
