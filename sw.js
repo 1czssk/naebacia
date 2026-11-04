@@ -1,5 +1,5 @@
 /* НАЕБАЦИЯ v1.61 🎃 — редактор маршрутов, обновлённый PWA-кэш */
-const CACHE = 'naebacia-v1-61-r1';
+const CACHE = 'naebacia-v1-61-r2';
 const SHELL = ['./','./index.html','./app.js','./manifest.json',
   './regions/krasny-kut.json','./regions/saint-petersburg.json','./regions/lipetsk.json',
   './regions/ulyanovsk.json','./regions/buguruslan.json','./icons/icon-192.png','./icons/icon-512.png'];

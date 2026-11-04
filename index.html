@@ -534,6 +534,149 @@
   html[data-theme=night] #hsiPanel .hsi-details {background:rgba(23,43,55,.92);}
   html[data-theme=glam] #hsiPanel .hsi-details {background:rgba(68,27,59,.86);}
   html[data-theme=lsd] #hsiPanel .hsi-details {background:rgba(47,25,86,.9);}
+
+  /* v1.61 🎃 «Под ЛСД»: намеренно безумная, но статичная кислота.
+     Только оформление. Карта, HSI, GPS и навигационные цвета не подменяются. */
+  html[data-theme=lsd] {
+    --naeb-panel:#efff25; --naeb-card:#ceff24; --naeb-ink:#22102b;
+    --naeb-subtle:#38203c; --naeb-border:#54117d; --naeb-input:#fffef2;
+    --naeb-accent:#ff00ba; --naeb-selected:#ff87e5; --naeb-result:#e5ff33;
+    --naeb-tab:#ff4ed5;
+  }
+  html[data-theme=lsd]:not([data-theme=day]) #panel {
+    background:
+      radial-gradient(ellipse at 12% 7%,#f7ff00 0%,#f7ff00 8%,transparent 39%),
+      radial-gradient(ellipse at 91% 21%,#ff00b8 0%,transparent 42%),
+      radial-gradient(ellipse at 9% 50%,#00faff 0%,transparent 47%),
+      radial-gradient(ellipse at 91% 78%,#c000ff 0%,transparent 49%),
+      repeating-linear-gradient(135deg,#dfff00 0px,#dfff00 34px,#ff50c8 34px,#ff50c8 69px,
+        #00f7fa 69px,#00f7fa 103px,#ef6f00 103px,#ef6f00 137px,
+        #ab4dff 137px,#ab4dff 171px) !important;
+    color:#1e0b28!important;
+    border:3px solid #1c002e!important;
+    box-shadow:0 0 0 3px #f500ff,0 0 0 6px #ccff00,0 8px 28px #000b!important;
+  }
+  html[data-theme=lsd] #panel .menu-brand {
+    color:#f4ff00!important;
+    text-shadow:2px 2px 0 #ff00b8,-1px -1px 0 #11f8ff,0 0 5px #000;
+    background:repeating-linear-gradient(-35deg,#17102f 0 16px,#3a005c 16px 30px);
+    border:2px solid #04fff6;border-radius:5px;padding:0 7px;
+    box-shadow:3px 3px 0 #ff00b8;
+  }
+  html[data-theme=lsd] #panel .tabs {
+    background:#1a0635;border:3px solid #caff00;border-radius:9px;
+    padding:7px;margin-bottom:10px;box-shadow:3px 3px 0 #ff00b8;
+  }
+  html[data-theme=lsd] #panel .tab-btn {
+    border:2px solid #160720!important;border-radius:6px!important;
+    font-weight:900!important;box-shadow:2px 2px 0 #0d0420;
+    text-shadow:none!important;
+  }
+  html[data-theme=lsd] #panel #tabBtnPlace {background:#f5ff00!important;color:#24112b!important;}
+  html[data-theme=lsd] #panel #tabBtnNav {background:#ff43c2!important;color:#270020!important;}
+  html[data-theme=lsd] #panel #tabBtnRtnav {background:#00f6f4!important;color:#001d24!important;}
+  html[data-theme=lsd] #panel #tabBtnLayers {background:#b675ff!important;color:#20092d!important;}
+  html[data-theme=lsd] #panel .tab-btn.active {
+    border:3px solid #fff!important;
+    box-shadow:0 0 0 2px #160024,3px 3px 0 #f0ff00!important;
+    text-decoration:underline;text-decoration-thickness:2px;
+  }
+  /* Каждой карточке свой безумный цвет — текст остаётся тёмным и различимым. */
+  html[data-theme=lsd] #panel .oprs,
+  html[data-theme=lsd] #panel .rt-stats>div,
+  html[data-theme=lsd] #panel .my-route-point {
+    background:#d9ff00!important;color:#21092b!important;
+    border:2px solid #24003d!important;border-radius:8px;
+    box-shadow:3px 3px 0 #ff00c8;
+  }
+  html[data-theme=lsd] #panel .oprs:nth-of-type(6n+2) {background:#00f4f4!important;box-shadow:3px 3px 0 #ff4b00;}
+  html[data-theme=lsd] #panel .oprs:nth-of-type(6n+3) {background:#ff60cd!important;box-shadow:3px 3px 0 #adff00;}
+  html[data-theme=lsd] #panel .oprs:nth-of-type(6n+4) {background:#ffca00!important;box-shadow:3px 3px 0 #9500ff;}
+  html[data-theme=lsd] #panel .oprs:nth-of-type(6n+5) {background:#c38aff!important;box-shadow:3px 3px 0 #00ffc3;}
+  html[data-theme=lsd] #panel .oprs:nth-of-type(6n) {background:#aaff32!important;box-shadow:3px 3px 0 #fa008e;}
+  html[data-theme=lsd] #panel .oprs.vor {background:#df85ff!important;}
+  html[data-theme=lsd] #panel .oprs.nav-box {background:#00f3d1!important;}
+  html[data-theme=lsd] #panel .oprs.rt-box {background:#ffc52d!important;}
+  html[data-theme=lsd] #panel .oprs.routes-box {background:#dfff23!important;}
+  html[data-theme=lsd] #panel .oprs.circle-box {background:#ff73d1!important;}
+  html[data-theme=lsd] #panel .oprs.areas-box {background:#bf8cff!important;}
+  html[data-theme=lsd] #panel .oprs.course-box {background:#55eeff!important;}
+  html[data-theme=lsd] #panel .theme-details {background:#faff00!important;}
+  html[data-theme=lsd] #panel .theme-details summary {
+    color:#20002b!important;font-weight:900;
+    background:linear-gradient(90deg,#faff00,#00f4ff,#ff73d0,#b6ff19);
+    border-radius:5px;
+  }
+  html[data-theme=lsd] #panel .theme-options label:nth-child(1) {background:#eeff00!important;}
+  html[data-theme=lsd] #panel .theme-options label:nth-child(2) {background:#63f7ff!important;}
+  html[data-theme=lsd] #panel .theme-options label:nth-child(3) {background:#ff94e8!important;}
+  html[data-theme=lsd] #panel .theme-options label:nth-child(4) {background:#b0ff45!important;}
+  html[data-theme=lsd] #panel .oprs label,
+  html[data-theme=lsd] #panel .oprs .hint,
+  html[data-theme=lsd] #panel .oprs .subhint,
+  html[data-theme=lsd] #panel .oprs .calc-line,
+  html[data-theme=lsd] #panel .oprs .circle-mode-name,
+  html[data-theme=lsd] #panel .oprs .my-route-point-head span {
+    color:#240c32!important;text-shadow:none!important;
+  }
+  html[data-theme=lsd]:not([data-theme=day]) #panel .subhint,
+  html[data-theme=lsd]:not([data-theme=day]) #panel .tab-content > .hint {
+    background:#190c30;color:#f0ff00!important;border:2px solid #00f7ff;
+    border-radius:5px;padding:6px;line-height:1.4;
+  }
+  html[data-theme=lsd] #panel input:not([type=checkbox]):not([type=radio]),
+  html[data-theme=lsd] #panel select,
+  html[data-theme=lsd] #panel textarea {
+    background:#fffbe9!important;color:#23082b!important;border:2px solid #db00a7!important;
+    border-radius:5px;box-shadow:inset 0 0 0 1px #ffff36;
+  }
+  html[data-theme=lsd] #panel input[type=checkbox],
+  html[data-theme=lsd] #panel input[type=radio] {accent-color:#d000dc;}
+  html[data-theme=lsd] #panel button:not(.tab-btn) {
+    border:2px solid #220032!important;border-radius:6px!important;
+    font-weight:800;box-shadow:2px 2px 0 #7000c8;
+    text-shadow:none;
+  }
+  html[data-theme=lsd] #panel button:not(.tab-btn):not(.gps):not(.warn):not(.stop):not(.primary):not(.refresh) {
+    background:#faff00!important;color:#26002b!important;
+  }
+  html[data-theme=lsd] #panel .btn-row button:nth-child(3n+1) {background:#00f5ee!important;color:#160a2b!important;}
+  html[data-theme=lsd] #panel .btn-row button:nth-child(3n+2) {background:#ff5abf!important;color:#290823!important;}
+  html[data-theme=lsd] #panel button.gps {background:#00f6ef!important;color:#180926!important;}
+  html[data-theme=lsd] #panel button.warn {background:#ff9a00!important;color:#261020!important;}
+  html[data-theme=lsd] #panel button.stop {background:#ff1b72!important;color:#fff!important;}
+  html[data-theme=lsd] #panel button.primary {background:#ccff00!important;color:#201029!important;}
+  html[data-theme=lsd] #panel button.refresh {background:#fa2bc8!important;color:#26062e!important;}
+  html[data-theme=lsd] #panel button.hsi-open-btn {background:#a85bff!important;color:#140320!important;}
+  html[data-theme=lsd] #panel #result,
+  html[data-theme=lsd] #panel #nav-result,
+  html[data-theme=lsd] #panel #rt-result,
+  html[data-theme=lsd] #panel #windResult {
+    background:#f5ff53!important;color:#200e26!important;border:2px dashed #ff00bc;
+  }
+  html[data-theme=lsd] #panel #result.error,
+  html[data-theme=lsd] #panel #nav-result.error,
+  html[data-theme=lsd] #panel #rt-result.error {background:#fff0e7!important;color:#a00017!important;}
+  html[data-theme=lsd] #panel .freq {background:#270e49!important;color:#f9ff00!important;border:1px solid #ff26c8;}
+  html[data-theme=lsd] #panel .circle-switch-track {background:#a000ed;}
+  html[data-theme=lsd] #toggleBtn {
+    background:#f600bd!important;color:#eaff00!important;
+    border:2px solid #eaff00!important;box-shadow:3px 3px 0 #00f8f0;
+  }
+  html[data-theme=lsd] #infoBtn,
+  html[data-theme=lsd] #nightQuickBtn {
+    background:#c7ff00!important;color:#30003b!important;
+    border:2px solid #ff00cd;box-shadow:3px 3px 0 #00fcfc;
+  }
+  html[data-theme=lsd] #panel button:focus-visible,
+  html[data-theme=lsd] #panel input:focus-visible,
+  html[data-theme=lsd] #panel select:focus-visible,
+  html[data-theme=lsd] #panel summary:focus-visible {outline:3px solid #150024;outline-offset:3px;}
+  /* Без цветовых пульсаций, мигания и переходов в этой теме. */
+  html[data-theme=lsd] #panel *,html[data-theme=lsd] #toggleBtn,
+  html[data-theme=lsd] #infoBtn,html[data-theme=lsd] #nightQuickBtn {
+    animation:none!important;transition:none!important;
+  }
 </style>
 
 </head>
