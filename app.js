@@ -1,4 +1,4 @@
-/* НАЕБАЦИЯ v1.61 🎃. Исходная навигационная логика v1.58 сохранена. */
+/* НАЕБАЦИЯ v1.62 🚀. Исходная навигационная логика v1.58 сохранена. */
 // === КОНЕЦ БЛОКА 10 ===
 
 // === БЛОК 11: CONFIG ===
@@ -133,7 +133,7 @@ function exportNaebaciaBackup() {
     }
     // При переполнении localStorage сохраняем ещё и последнюю копию журнала из памяти.
     if (rtFlightLog) storage[FLIGHT_LOG_KEY]=JSON.stringify(rtFlightLog);
-    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.61',
+    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.62',
       exportedAt:new Date().toISOString(),storage};
     const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json;charset=utf-8'});
     const url=URL.createObjectURL(blob);
@@ -326,9 +326,8 @@ loadSupplementaryRegion('./regions/lipetsk.json', 'lipetsk',
 
 // === БЛОК 14: DATA: ОПРС ===
 // Координаты Красноармейска: сборник маршрутов ОВД РФ от 03.12.2020 (исторический источник).
-const PRESET = ACTIVE_PROFILE.stations;
-// Индекс VOR в PRESET (после добавления 4-го NDB стал 4)
-const VOR_IDX = ACTIVE_PROFILE.vorIndex;
+let PRESET = ACTIVE_PROFILE.stations.map(s=>({...s})); // v1.62: текущий рабочий набор из общей библиотеки.
+const VOR_IDX = ACTIVE_PROFILE.vorIndex; // оставлен для миграции старых данных; логика расчёта динамическая.
 // === КОНЕЦ БЛОКА 14 ===
 
 // === БЛОК 15: DATA: ROUTES ===
@@ -367,7 +366,8 @@ function fmtZmpu(v) {
 // === КОНЕЦ БЛОКА 16 ===
 
 // === БЛОК 17: STATE ===
-let oprsMarkers = [null, null, null, null, null];
+let oprsMarkers = [];
+let navaidMapMarkers = [];
 let stationLines = [];
 let errorLines = [];
 let trackSegments = [];
@@ -915,74 +915,322 @@ function turnIcon(color) {
 // === КОНЕЦ БЛОКА 24 ===
 
 // === БЛОК 25: POSITION ===
-function getCurrentPosition() {
-  if (rtTracking) {
-    if (!rtCurrentPosition || gpsQualityState().level === 'red') return null;
-    return {
-      lat: rtCurrentPosition.lat,
-      lon: rtCurrentPosition.lon,
-      t: rtCurrentPosition.t,
-      source: 'GPS (РВ)'
-    };
+const POSITION_MODE_KEY='naebacia_position_mode_v1';
+const MANUAL_POSITION_KEY='naebacia_manual_position_v1';
+const LAST_GOOD_GPS_KEY='naebacia_last_good_gps_v1';
+let positionMode=['auto','gps','last','map','coords','nrt'].includes(localStorage.getItem(POSITION_MODE_KEY)) ? localStorage.getItem(POSITION_MODE_KEY) : 'auto';
+function storedPoint(key){
+  try{const p=JSON.parse(localStorage.getItem(key)||'null');
+    return p&&Number.isFinite(p.lat)&&Math.abs(p.lat)<=90&&Number.isFinite(p.lon)&&Math.abs(p.lon)<=180&&Number.isFinite(p.t)?p:null;
+  }catch(e){return null;}
+}
+// Отдельно помним каждую ручную точку, чтобы переключение источника не стирало прежнюю.
+function restoreManualPositions(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(MANUAL_POSITION_KEY)||'null');
+    if(raw && typeof raw==='object'){
+      if(raw.kind && ['map','coords','nrt'].includes(raw.kind))return {[raw.kind]:raw};
+      const result={};
+      for(const kind of ['map','coords','nrt']){
+        const p=raw[kind];
+        if(p&&Number.isFinite(p.lat)&&Number.isFinite(p.lon)&&Number.isFinite(p.t)&&
+           Math.abs(p.lat)<=90&&Math.abs(p.lon)<=180)result[kind]={lat:p.lat,lon:p.lon,t:p.t,kind};
+      }
+      return result;
+    }
+  }catch(e){}
+  return {};
+}
+let manualPositions=restoreManualPositions();
+let lastGoodGps=storedPoint(LAST_GOOD_GPS_KEY);
+let lastCalculatedNRT=null;
+let manualPositionPickMode=false;
+let manualPositionMarker=null;
+function acceptGoodGpsPoint(p){
+  if(!p||!Number.isFinite(p.lat)||!Number.isFinite(p.lon)||!Number.isFinite(p.t)||
+     !Number.isFinite(p.acc)||p.acc>GPS_REJECT_ACCURACY_M||p.acc<0)return;
+  if(lastGoodGps && p.t<=lastGoodGps.t)return;
+  lastGoodGps={lat:p.lat,lon:p.lon,t:p.t,acc:p.acc};
+  try{localStorage.setItem(LAST_GOOD_GPS_KEY,JSON.stringify(lastGoodGps));}catch(e){}
+  updateMyPositionUI();
+}
+function navaidGpsValid(p){return p&&Number.isFinite(p.lat)&&Number.isFinite(p.lon)&&(!Number.isFinite(p.acc)||(p.acc>=0&&p.acc<=GPS_REJECT_ACCURACY_M));}
+function getLastGpsPosition(){
+  let last=lastGoodGps;
+  const gpsTrack=trackGps.length?trackGps[trackGps.length-1]:null;
+  if(gpsTrack&&Number.isFinite(gpsTrack.t)&&(!last||gpsTrack.t>last.t))last=gpsTrack;
+  const rvSample=rtTrack.length?rtTrack[rtTrack.length-1]:null;
+  if(rvSample&&Number.isFinite(rvSample.t)&&navaidGpsValid(rvSample)&&(!last||rvSample.t>last.t))last=rvSample;
+  if(rtCurrentPosition&&Number.isFinite(rtCurrentPosition.t)&&navaidGpsValid(rtCurrentPosition)&&(!last||rtCurrentPosition.t>last.t))last=rtCurrentPosition;
+  return last?{lat:last.lat,lon:last.lon,t:last.t,acc:last.acc,source:'Последняя GPS-точка',sourceType:'last'}:null;
+}
+function getLiveGpsPosition(){
+  const gps=getLastGpsPosition();
+  if(!gps||!Number.isFinite(gps.t)||Date.now()-gps.t>GPS_STALE_SEC*1000||gps.t>Date.now()+3000)return null;
+  if(Number.isFinite(gps.acc)&&gps.acc>GPS_REJECT_ACCURACY_M)return null;
+  if(rtTracking && (gpsSignalIssue || gpsQualityState().level==='red'))return null;
+  return {...gps,source:'GPS',sourceType:'gps'};
+}
+function getManualPositionFor(mode){
+  const all=Object.values(manualPositions);
+  const p=mode==='any'?all.sort((a,b)=>b.t-a.t)[0]:manualPositions[mode];
+  if(!p)return null;
+  const labels={map:'Точка с карты',coords:'Введённые координаты',nrt:'Расчёт по НРТС'};
+  return {...p,source:labels[p.kind]||'Позиция вручную',sourceType:p.kind};
+}
+function getCurrentPosition(){
+  const live=getLiveGpsPosition(),last=getLastGpsPosition();
+  const manual=getManualPositionFor('any');
+  if(positionMode==='gps')return live;
+  if(positionMode==='last')return last;
+  if(['map','coords','nrt'].includes(positionMode))return getManualPositionFor(positionMode);
+  // В AUTO: достоверный свежий GPS → более новая принятая вручную позиция → последний GPS.
+  return live||(manual&&(!last||manual.t>last.t)?manual:null)||last||manual||null;
+}
+function positionSourceText(p){
+  if(!p)return 'Нет сохранённого местоположения';
+  let text=p.source;
+  if(Number.isFinite(p.t)){
+    const age=Math.max(0,Math.floor((Date.now()-p.t)/1000));
+    text+=' · '+(age<60?age+' с назад':age<3600?Math.floor(age/60)+' мин назад':Math.floor(age/3600)+' ч назад');
   }
-  const lastOprs = track.length > 0 ? track[track.length - 1] : null;
-  const lastGps = trackGps.length > 0 ? trackGps[trackGps.length - 1] : null;
-  let last = null, src = '';
-  if (lastOprs && lastGps) {
-    if (lastGps.t > lastOprs.t) { last = lastGps; src = 'GPS (Получить МС)'; }
-    else { last = lastOprs; src = 'трек (расчёт ОПРС)'; }
-  } else if (lastOprs) { last = lastOprs; src = 'трек (расчёт ОПРС)'; }
-  else if (lastGps) { last = lastGps; src = 'GPS (Получить МС)'; }
-  if (last) return { lat: last.lat, lon: last.lon, t: last.t, source: src };
-  if (gpsMarker) {
-    const ll = gpsMarker.getLatLng();
-    return { lat: ll.lat, lon: ll.lng, t: null, source: 'GPS' };
+  if(p.sourceType!=='gps')text+=' · расчётная/устаревшая позиция';
+  return text;
+}
+function updateMyPositionUI(){
+  const el=document.getElementById('positionSummary');
+  const modeLabel=document.getElementById('positionCurrentMode');
+  if(!el||!modeLabel)return;
+  const names={auto:'Авто',gps:'GPS',last:'Последняя GPS',map:'С карты',coords:'Вручную',nrt:'По НРТС'};
+  modeLabel.textContent=names[positionMode]||'Авто';
+  const p=getCurrentPosition();
+  el.textContent=(positionMode==='auto'?'Авто · сейчас: ':'Источник: ')+positionSourceText(p);
+  el.classList.toggle('position-uncertain',!p||p.sourceType!=='gps');
+  document.querySelectorAll('input[name="positionSource"]').forEach(r=>r.checked=r.value===positionMode);
+  updateManualPositionMarker();
+}
+function toggleMyPositionDetails(){
+  const p=document.getElementById('myPositionDetails');if(!p)return;
+  p.hidden=!p.hidden;
+  document.getElementById('myPositionToggle').setAttribute('aria-expanded',String(!p.hidden));
+  document.getElementById('positionToggleArrow').textContent=p.hidden?'▾':'▴';
+  updateMyPositionUI();
+}
+function setPositionMode(mode){
+  if(!['auto','gps','last','map','coords','nrt'].includes(mode))return;
+  positionMode=mode;try{localStorage.setItem(POSITION_MODE_KEY,mode);}catch(e){}
+  refreshPositionConsumers();
+}
+function refreshPositionConsumers(){
+  updateMyPositionUI();updateNavUI();updateRTUI();refreshHSIPanel();refreshOpenPopup();
+}
+function updateManualPositionMarker(){
+  const p=getCurrentPosition();
+  const manual=!!p&&['map','coords','nrt'].includes(p.sourceType);
+  if(manualPositionMarker){
+    if(manual && manualPositionMarker._positionKind===p.sourceType &&
+       manualPositionMarker.getLatLng().lat===p.lat && manualPositionMarker.getLatLng().lng===p.lon)return;
+    map.removeLayer(manualPositionMarker);manualPositionMarker=null;
   }
-  return null;
+  if(!manual)return;
+  const icon=L.divIcon({className:'',html:'<div style="background:#ffe047;border:2px dashed #242424;border-radius:50%;width:19px;height:19px;box-shadow:0 0 0 3px #ffffffcc;text-align:center;line-height:19px;color:#242424;font-size:13px">⌖</div>',iconSize:[23,23],iconAnchor:[11,11]});
+  manualPositionMarker=L.marker([p.lat,p.lon],{icon,zIndexOffset:1100,interactive:false}).addTo(map);
+  manualPositionMarker._positionKind=p.sourceType;
+}
+function acceptManualPosition(lat,lon,kind){
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180||!['map','coords','nrt'].includes(kind))return false;
+  const newestManualT=Math.max(0,...Object.values(manualPositions).map(p=>p.t||0));
+  manualPositions[kind]={lat,lon,t:Math.max(Date.now(),newestManualT+1),kind};
+  try{localStorage.setItem(MANUAL_POSITION_KEY,JSON.stringify(manualPositions));}catch(e){}
+  setPositionMode(kind);
+  return true;
+}
+function naebaciaSetPopupOwnPosition(lat,lon){
+  if(acceptManualPosition(lat,lon,'map')){
+    map.closePopup();showMapContextNotice('📍 Моё место задано вручную. Навигация считает от выбранной точки.');
+  }
+}
+function beginMapPositionPick(){
+  manualPositionPickMode=true;
+  showMapContextNotice('✋ Коснись карты, чтобы задать расчётное место ВС');
+  const panel=document.getElementById('panel');
+  if(panel && !panel.classList.contains('hidden'))togglePanel();
+}
+function parseCoordinateInput(value,isLat){
+  const s=String(value||'').trim().replace(/,/g,'.');
+  const negative=/[SWЮЗ]/i.test(s)||(/^\s*-/.test(s));
+  const nums=s.match(/\d+(?:\.\d+)?/g);
+  if(!nums||nums.length<1||nums.length>3)return NaN;
+  const n=nums.map(Number);
+  if(n.length>=2 && (n[1]>=60 || (n.length===3&&n[2]>=60)))return NaN;
+  const result=(n[0]+(n[1]||0)/60+(n[2]||0)/3600)*(negative?-1:1);
+  return result<= (isLat?90:180)&&result>=-(isLat?90:180)?result:NaN;
+}
+function acceptManualCoords(){
+  const lat=parseCoordinateInput(document.getElementById('ownLat').value,true);
+  const lon=parseCoordinateInput(document.getElementById('ownLon').value,false);
+  if(!acceptManualPosition(lat,lon,'coords')){
+    alert('Введите широту и долготу: например 51.1000 и 46.7000 или 51 06.0 и 46 42.0');return;
+  }
+  showMapContextNotice('📍 Расчётное место ВС задано по координатам');
+}
+function acceptNrtPosition(){
+  if(!lastCalculatedNRT)return;
+  if(acceptManualPosition(lastCalculatedNRT.lat,lastCalculatedNRT.lon,'nrt'))
+    showMapContextNotice('📡 Расчёт по НРТС принят как моё место');
 }
 // === КОНЕЦ БЛОКА 25 ===
+// === КОНЕЦ БЛОКА 25 ===
 
-// === БЛОК 26: STATION POPUPS ===
-function buildStationPopup(idx) {
-  const p = PRESET[idx];
-  let html = '<b>' + p.name + '</b><br>' + p.freq + '<br>' +
-             ddToDM(p.lat, true) + ' ' + ddToDM(p.lon, false);
-  const cur = getCurrentPosition();
-  if (!cur) {
-    html += '<br><span style="color:#888;font-size:11px">Нет известного местоположения</span>';
-    return html;
+// === БЛОК 26: STATION POPUPS, ОБЩАЯ БИБЛИОТЕКА НРТС ===
+const NAVAID_WORK_KEY='naebacia_work_navaids_v1';
+const NAVAID_COLORS=['#2473b6','#e35050','#ef9c20','#20956c','#8e5bd8','#d26195','#45a0a0'];
+let navaidCatalog=[];
+let navaidWorkIds=[];
+let navaidLastRefreshAt=0;
+function navaidHasCoordinates(a){return a && Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&Math.abs(a.lat)<=90&&Math.abs(a.lon)<=180;}
+function navaidFormatFrequency(a){return a.frequency||(Number.isFinite(a.frequencyKHz)?a.frequencyKHz+' кГц':Number.isFinite(a.frequencyMHz)?a.frequencyMHz.toFixed(2)+' МГц':'Частота не указана');}
+function navaidIsVor(a){return a.type==='VOR/DME'||a.type==='VOR';}
+function makeLibraryEntry(a,region){return {...a,region,frequency:navaidFormatFrequency(a),type:navaidIsVor(a)?'VOR':'NDB',color:navaidIsVor(a)?'#9b66e6':'#2779ae'};}
+function loadNavaidCatalog(){
+  const regions=[ACTIVE_PROFILE];
+  for(const id of ['naebaciaEmbeddedSaintPetersburg','naebaciaEmbeddedLipetsk','naebaciaEmbeddedUlyanovsk','naebaciaEmbeddedBuguruslan']){
+    const el=document.getElementById(id);
+    if(!el)continue;
+    try{regions.push(JSON.parse(el.textContent));}catch(e){console.warn('Регион НРТС:',id,e);}
   }
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
-  const brgTrue = trueBearing(cur, p);
-  const mpr = norm360(brgTrue - decl);
-  const mps = norm360(mpr + 180);
-  const dist = distance(cur, p) / 1000;
-  html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
-  html += '<b>От последнего местоположения:</b><br>';
-  html += 'МПР: <b>' + mpr.toFixed(0) + '°</b><br>';
-  html += 'МПС: <b>' + mps.toFixed(0) + '°</b><br>';
-  html += 'Расстояние: <b>' + dist.toFixed(1) + ' км</b>';
-  html += freshnessWarning(cur);
-  return html;
+  const byId=new Map();
+  for(const region of regions){
+    for(const aid of (Array.isArray(region.navigationAids)?region.navigationAids:[])){
+      if(!aid||typeof aid.id!=='string'||!/^[a-z0-9-]+$/.test(aid.id)||byId.has(aid.id))continue;
+      byId.set(aid.id,makeLibraryEntry(aid,region.name));
+    }
+  }
+  navaidCatalog=Array.from(byId.values());
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(NAVAID_WORK_KEY)||'null');}catch(e){}
+  if(saved && saved.version===1 && Array.isArray(saved.ids)){
+    const valid=new Set(navaidCatalog.map(a=>a.id));
+    navaidWorkIds=[...new Set(saved.ids.filter(id=>typeof id==='string'&&valid.has(id)))];
+  }else{
+    // Сохраняем начальную пятёрку из v1.61 (не пересчитываем список без нажатия кнопки).
+    navaidWorkIds=navaidCatalog.filter(a=>a.region===ACTIVE_PROFILE.name).map(a=>a.id).slice(0,5);
+    saveNavaidWork();
+  }
+  syncWorkingNavaids(false);
+  renderNavaidMarkers();
 }
-
-function updateMarker(idx) {
-  const p = PRESET[idx];
-  if (oprsMarkers[idx]) map.removeLayer(oprsMarkers[idx]);
-  oprsMarkers[idx] = L.marker([p.lat, p.lon], { draggable: false }).addTo(map);
-  bindLivePopup(oprsMarkers[idx], () => buildStationPopup(idx), { autoPan: true });
+function saveNavaidWork(){
+  try{localStorage.setItem(NAVAID_WORK_KEY,JSON.stringify({version:1,ids:navaidWorkIds}));}catch(e){console.warn('Рабочие НРТС не сохранены',e);}
 }
-
-function loadPreset() {
-  PRESET.forEach((p, i) => {
-    document.getElementById('label' + (i + 1)).textContent = '(' + p.name + ')';
-    const fEl = document.getElementById('freq' + (i + 1));
-    fEl.textContent = p.freq;
-    if (p.type === 'VOR') fEl.classList.add('vor');
-    updateMarker(i);
+function navaidSvg(isVor){
+  if(isVor)return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="5" width="30" height="30" fill="white" stroke="#3659a4" stroke-width="2.8"/><polygon points="20,9 29.5,14.5 29.5,25.5 20,31 10.5,25.5 10.5,14.5" fill="white" stroke="#3659a4" stroke-width="2.8"/><circle cx="20" cy="20" r="2.6" fill="#3659a4"/></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13" fill="none" stroke="#3659a4" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="1 6.3"/><circle cx="20" cy="20" r="8" fill="none" stroke="#3659a4" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="1 4"/><circle cx="20" cy="20" r="2.5" fill="#3659a4"/></svg>';
+}
+function renderNavaidMarkers(){
+  navaidMapMarkers.forEach(l=>map.removeLayer(l));navaidMapMarkers=[];
+  navaidCatalog.filter(navaidHasCoordinates).forEach(a=>{
+    const icon=L.divIcon({className:'naebacia-navaid-icon',html:navaidSvg(navaidIsVor(a)),iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-12]});
+    const m=L.marker([a.lat,a.lon],{icon,zIndexOffset:80}).addTo(map);
+    m.bindPopup(()=>{
+      const cur=getCurrentPosition();
+      let label='<b>'+safeText(a.name)+'</b><br>'+safeText(navaidIsVor(a)?'VOR/DME':'ОПРС / NDB')+' · '+safeText(a.frequency);
+      if(a.ident)label+='<br>Позывной: '+safeText(a.ident);
+      if(cur)label+='<br>От '+safeText(cur.source)+': '+(distance(cur,a)/1000).toFixed(1)+' км';
+      if(a.coordinateQuality)label+='<br><small>⚠ Координаты предварительные</small>';
+      label+='<br><small>Сведения требуют сверки с действующим АИП.</small>';
+      if(!navaidWorkIds.includes(a.id))label+='<br><button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">＋ В рабочий список</button>';
+      return label;
+    });
+    navaidMapMarkers.push(m);
   });
-  map.fitBounds(PRESET.slice(0, 3).map(p => [p.lat, p.lon]), { padding: [60, 60] });
 }
+function buildStationPopup(idx){
+  const a=PRESET[idx];if(!a)return '';
+  let html='<b>'+safeText(a.name)+'</b><br>'+safeText(a.frequency);
+  if(!navaidHasCoordinates(a))return html+'<br><small>Координаты не внесены — расчёт недоступен.</small>';
+  html+='<br>'+ddToDM(a.lat,true)+' '+ddToDM(a.lon,false);
+  const cur=getCurrentPosition();
+  if(!cur)return html+'<br><small>Нет известной расчётной позиции.</small>';
+  const decl=getDecl(), mpr=norm360(trueBearing(cur,a)-decl);
+  html+='<hr><b>От '+safeText(cur.source)+':</b><br>МПР '+mpr.toFixed(0)+'° · '+(distance(cur,a)/1000).toFixed(1)+' км';
+  return html+freshnessWarning(cur);
+}
+function stationInputSnapshot(){
+  const values={};
+  PRESET.forEach((a,i)=>{
+    values[a.id]={brg:document.getElementById('brg'+(i+1))?.value||'',dist:document.getElementById('vorDist'+(i+1))?.value||''};
+  });
+  return values;
+}
+function syncWorkingNavaids(keepInputs=true){
+  const snapshot=keepInputs?stationInputSnapshot():{};
+  PRESET=navaidWorkIds.map(id=>navaidCatalog.find(a=>a.id===id)).filter(Boolean);
+  const box=document.getElementById('stationForms');if(!box)return;
+  box.innerHTML=PRESET.map((a,i)=>{
+    const vor=navaidIsVor(a),num=i+1,coords=navaidHasCoordinates(a),previous=snapshot[a.id]||{};
+    let title='<div class="navaid-work-head"><span class="navaid-meta"><b>'+(vor?'VOR/DME':'ОПРС')+' '+num+' · '+safeText(a.name)+'</b><small>'+safeText(a.frequency)+(a.ident?' · '+safeText(a.ident):'')+'</small></span><button type="button" title="Убрать только из рабочего списка" aria-label="Убрать '+safeText(a.name)+'" onclick="removeWorkingNavaid(\''+a.id+'\')">×</button></div>';
+    if(!coords)return '<div class="oprs navaid-work-block" id="block'+num+'">'+title+'<div class="navaid-work-missing">⚠ Координаты ещё не внесены. Радионавигационные расчёты недоступны.</div></div>';
+    const input='<div class="row"><label>'+(vor?'Радиал':'МПР')+':</label> <input id="brg'+num+'" value="'+safeText(previous.brg||'')+'" placeholder="—" inputmode="numeric" oninput="preview()"> °</div>';
+    const dme=vor?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> км</div>':'';
+    return '<div class="oprs navaid-work-block'+(vor?' vor':'')+'" id="block'+num+'">'+title+input+dme+'<div class="calc-line" id="calc'+num+'"></div></div>';
+  }).join('') || '<div class="hint">Список пуст. Добавьте маяки из библиотеки или нажмите «Обновить».</div>';
+  document.getElementById('stationCount').textContent=PRESET.length+' в списке · '+navaidCatalog.length+' в библиотеке';
+  preview();renderNavaidLibrary();
+  if(document.getElementById('hsiObsReference')){document.getElementById('hsiObsReference').dataset.signature='';buildHSISelects();}
+}
+function addWorkingNavaid(id){
+  if(navaidWorkIds.includes(id)||!navaidCatalog.some(a=>a.id===id))return;
+  navaidWorkIds.push(id);saveNavaidWork();syncWorkingNavaids();
+  document.getElementById('stationUpdateHint').textContent='Добавлен маяк из библиотеки. Порядок останется прежним до «Обновить».';
+  refreshOpenPopup();
+}
+function removeWorkingNavaid(id){
+  navaidWorkIds=navaidWorkIds.filter(x=>x!==id);saveNavaidWork();syncWorkingNavaids();
+  document.getElementById('stationUpdateHint').textContent='Маяк удалён только из рабочего списка. В библиотеке он остался.';
+}
+function toggleNavaidLibrary(){
+  const p=document.getElementById('navaidLibrary');p.hidden=!p.hidden;
+  if(!p.hidden)renderNavaidLibrary();
+}
+function renderNavaidLibrary(){
+  const el=document.getElementById('navaidLibraryList');if(!el)return;
+  const filter=(document.getElementById('navaidSearch')?.value||'').trim().toLocaleLowerCase('ru');
+  const items=navaidCatalog.filter(a=>[a.name,a.ident,a.frequency,a.region].some(v=>String(v||'').toLocaleLowerCase('ru').includes(filter)));
+  el.innerHTML=items.map(a=>'<div class="navaid-library-item"><span class="navaid-meta"><b>'+safeText(a.name)+'</b><small>'+safeText(a.region)+' · '+safeText(a.frequency)+(navaidHasCoordinates(a)?'':' · ⚠ нет координат')+'</small></span>'+
+    (navaidWorkIds.includes(a.id)?'<small>✓ в списке</small>':'<button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">+ Добавить</button>')+'</div>').join('')||'<div class="hint">Маяков не найдено.</div>';
+}
+function navaidDistanceSort(a,b,origin){
+  const x=navaidHasCoordinates(a)?distance(origin,a):Infinity;
+  const y=navaidHasCoordinates(b)?distance(origin,b):Infinity;
+  return x-y;
+}
+function updateNearbyNavaids(){
+  const origin=getCurrentPosition()||{...KTA_POINT};
+  const nearest=navaidCatalog.filter(navaidHasCoordinates).sort((a,b)=>navaidDistanceSort(a,b,origin)).slice(0,5);
+  const now=Date.now();
+  const second=now-navaidLastRefreshAt<=10000;
+  navaidLastRefreshAt=now;
+  const before=new Set(navaidWorkIds);
+  // Первое нажатие: сохранить все вручную добавленные и добрать до пяти, если нужно.
+  // Второе за 10 с: включить отсутствующие маяки из ближайшей пятёрки.
+  if(second){for(const a of nearest)if(!before.has(a.id))navaidWorkIds.push(a.id);}
+  else if(navaidWorkIds.length<5){
+    for(const a of nearest){if(navaidWorkIds.length>=5)break;if(!before.has(a.id)){navaidWorkIds.push(a.id);before.add(a.id);}}
+  }
+  const mapById=new Map(navaidCatalog.map(a=>[a.id,a]));
+  navaidWorkIds.sort((x,y)=>navaidDistanceSort(mapById.get(x),mapById.get(y),origin));
+  saveNavaidWork();syncWorkingNavaids();
+  document.getElementById('stationUpdateHint').textContent=(second?'Повторное обновление: добавлены отсутствующие из ближайшей пятёрки. ':'Обновлено: сортировка по дальности. ')+
+    'Всего '+navaidWorkIds.length+' маяков. '+(!getCurrentPosition()?'Расчёт ближайших от КТА Красного Кута; нет позиции ВС. ':'')+
+    (!second?'Нажмите ещё раз в течение 10 с для добавления ближайшей пятёрки.':'');
+}
+function loadPreset(){
+  loadNavaidCatalog();
+  const points=PRESET.filter(navaidHasCoordinates).slice(0,3).map(a=>[a.lat,a.lon]);
+  if(points.length>=2)map.fitBounds(points,{padding:[60,60]});
+}
+// === КОНЕЦ БЛОКА 26: STATION POPUPS ===
 // === КОНЕЦ БЛОКА 26: STATION POPUPS ===
 
 // === БЛОК 27: ROUTES RENDER ===
@@ -1023,7 +1271,7 @@ function dedupeRoutePoints(points, threshold = 20) {
 function buildRouteSegmentPopup(routeKey, idx) {
   const route = ROUTES[routeKey];
   const A = route.points[idx];
-  const B = route.points[idx + 1];
+  const B = route.points[(idx+1)%route.points.length];
   const segLen = distance(A, B) / 1000;
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const zmpu = norm360(trueBearing(A, B) - decl);
@@ -1521,12 +1769,12 @@ function clearErrorLines() {
 
 // === БЛОК 30: CLEAR ===
 function clearFields() {
-  ['brg1','brg2','brg3','brg4','vorRadial','vorDist','course','courseRT'].forEach(id => {
+  [...PRESET.flatMap((_,i)=>['brg'+(i+1),'vorDist'+(i+1)]),'course','courseRT'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   document.getElementById('decl').value = '11';
-  for (let i = 1; i <= 5; i++) document.getElementById('calc' + i).innerHTML = '';
+  PRESET.forEach((_,i)=>{const el=document.getElementById('calc'+(i+1));if(el)el.innerHTML='';});
   stationLines.forEach(l => map.removeLayer(l));
   stationLines = [];
   clearErrorLines();
@@ -1556,55 +1804,34 @@ function clearGps() {
 // === КОНЕЦ БЛОКА 30 ===
 
 // === БЛОК 31: PREVIEW ===
-function preview() {
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
-  for (let i = 0; i < 4; i++) {
-    const v = document.getElementById('brg' + (i + 1)).value.trim();
-    const el = document.getElementById('calc' + (i + 1));
-    if (v === '') { el.innerHTML = ''; continue; }
-    const mpr = parseFloat(v);
-    if (isNaN(mpr)) { el.innerHTML = ''; continue; }
-    const mps = norm360(mpr + 180);
-    const ips = norm360(mps + decl);
-    el.innerHTML = 'МПР ' + mpr.toFixed(0) + '° → МПС ' + mps.toFixed(0) +
-                   '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
-  }
-  const rv = document.getElementById('vorRadial').value.trim();
-  const el5 = document.getElementById('calc5');
-  if (rv !== '') {
-    const radial = parseFloat(rv);
-    if (!isNaN(radial)) {
-      const ips = norm360(radial + decl);
-      el5.innerHTML = 'Радиал (МПС) ' + radial.toFixed(0) + '° → <b>ИПС ' + ips.toFixed(0) + '°</b>';
-    } else el5.innerHTML = '';
-  } else el5.innerHTML = '';
+function preview(){
+  const decl=getDecl();
+  PRESET.forEach((a,i)=>{
+    const input=document.getElementById('brg'+(i+1));
+    const el=document.getElementById('calc'+(i+1));
+    if(!input||!el)return;
+    const v=input.value.trim(), num=Number(v.replace(',','.'));
+    if(!v||!Number.isFinite(num)){el.innerHTML='';return;}
+    const ips=navaidIsVor(a)?norm360(num+decl):norm360(num+180+decl);
+    el.innerHTML=(navaidIsVor(a)?'Радиал':'МПР')+' '+num.toFixed(0)+'° → <b>ИПС '+ips.toFixed(0)+'°</b>';
+  });
 }
+// === КОНЕЦ БЛОКА 31 ===
 // === КОНЕЦ БЛОКА 31 ===
 
 // === БЛОК 32: ALIGN GPS ===
-function alignToGPS() {
-  const resultEl = document.getElementById('result');
-  resultEl.classList.remove('error');
-  if (!gpsMarker) {
-    resultEl.classList.add('error');
-    resultEl.textContent = '⚠️ Сначала нажмите «📍 Получить МС», чтобы получить точку GPS.';
-    return;
-  }
-  const ll = gpsMarker.getLatLng();
-  const gpsPt = { lat: ll.lat, lon: ll.lng };
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
-
-  for (let i = 0; i < 4; i++) {
-    const s = PRESET[i];
-    const brgTrue = trueBearing(gpsPt, s);
-    const mpr = norm360(brgTrue - decl);
-    document.getElementById('brg' + (i + 1)).value = mpr.toFixed(0);
-  }
-  preview();
-  resultEl.textContent = '📍 Поля МПР приведены к GPS: ' +
-    ddToDM(gpsPt.lat, true) + ' ' + ddToDM(gpsPt.lon, false) +
-    '. Нажмите «Рассчитать» — результат должен совпасть с GPS-точкой.';
+function alignToGPS(){
+  const resultEl=document.getElementById('result');resultEl.classList.remove('error');
+  const gps=getLiveGpsPosition();
+  if(!gps){resultEl.classList.add('error');resultEl.textContent='⚠️ Нет свежей достоверной позиции GPS для приведения пеленгов.';return;}
+  PRESET.forEach((a,i)=>{
+    if(!navaidHasCoordinates(a))return;
+    const input=document.getElementById('brg'+(i+1));if(!input)return;
+    input.value=(navaidIsVor(a)?norm360(trueBearing(a,gps)-getDecl()):norm360(trueBearing(gps,a)-getDecl())).toFixed(0);
+  });
+  preview();resultEl.textContent='Пеленги приведены к достоверному GPS. Нажмите «Рассчитать» для проверки.';
 }
+// === КОНЕЦ БЛОКА 32 ===
 // === КОНЕЦ БЛОКА 32 ===
 
 // === БЛОК 33: TRACK ===
@@ -1825,7 +2052,7 @@ function computeNav() {
 function buildNavPopupHtml() {
   const n = computeNav();
   if (!n) return '🎯 Цель';
-  let html = '<b>🎯 Цель</b><br>';
+  let html = '<b>🎯 Цель</b><br>'+(n.cur.sourceType==='gps'?'':'<b>⚠ От '+safeText(n.cur.source)+' (не текущая позиция ВС)</b><br>');
   html += '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
@@ -1841,7 +2068,7 @@ function buildNavPopupHtml() {
   }
 
   let etaSec = null;
-  const gpsSpeedKmh = getGPSSpeedKmh();
+  const gpsSpeedKmh = n.cur.sourceType==='gps'?getGPSSpeedKmh():null;
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
     etaSec = (n.distKm / gpsSpeedKmh) * 3600;
   } else if (n.wind && n.wind.etaSec !== null) {
@@ -1873,6 +2100,7 @@ function buildNavPopupHtml() {
 }
 
 function updateNavUI() {
+  updateMyPositionUI();
   if (navLine) { navLine.forEach(l => map.removeLayer(l)); navLine = null; }
   if (navTargetMarker) { map.removeLayer(navTargetMarker); navTargetMarker = null; }
   const cur = getCurrentPosition();
@@ -1896,7 +2124,7 @@ function updateNavUI() {
 
   const posEl = document.getElementById('nav-pos');
   if (cur) {
-    posEl.innerHTML = '<b>' + cur.source + '</b><br>' +
+    posEl.innerHTML = '<b>' + safeText(cur.source) + (cur.sourceType!=='gps'?' · ⚠ расчётная/устаревшая позиция':'') + '</b><br>' +
                       ddToDM(cur.lat, true) + ' ' + ddToDM(cur.lon, false) +
                       freshnessWarning(cur);
   } else {
@@ -1939,7 +2167,7 @@ function updateNavUI() {
   const n = computeNav();
   if (!n) { resEl.innerHTML = '—'; return; }
 
-  let html = '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
+  let html = (n.cur.sourceType==='gps'?'':'<b class="position-uncertain">⚠ Расчёт от '+safeText(n.cur.source)+'; текущее положение ВС неизвестно.</b><br>') + '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
   if (navLineStart) {
@@ -1951,7 +2179,7 @@ function updateNavUI() {
   }
 
   let etaSec = null;
-  const gpsSpeedKmh = getGPSSpeedKmh();
+  const gpsSpeedKmh = n.cur.sourceType==='gps'?getGPSSpeedKmh():null;
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) etaSec = (n.distKm / gpsSpeedKmh) * 3600;
   else if (n.wind && n.wind.etaSec !== null) etaSec = n.wind.etaSec;
 
@@ -2025,6 +2253,8 @@ function openMapContextAt(lat,lon) {
     Math.abs(lon).toFixed(6)+'° '+ew+'<br>'+
     '<button type="button" style="display:block;margin:9px 0 5px;padding:9px;width:100%" ' +
       'onclick="naebaciaSetPopupTarget('+latitude+','+longitude+')">🎯 Задать как цель</button>'+
+    '<button type="button" style="display:block;margin:5px 0;padding:9px;width:100%;font-weight:bold" ' +
+      'onclick="naebaciaSetPopupOwnPosition('+latitude+','+longitude+')">📍 Моё место</button>'+
     '<button type="button" style="display:block;padding:9px;width:100%" ' +
       'onclick="naebaciaCopyPopupCoords('+latitude+','+longitude+')">Копировать координаты</button></div>';
   L.popup({closeButton:true,maxWidth:265}).setLatLng([lat,lon]).setContent(content).openOn(map);
@@ -2065,6 +2295,11 @@ map.on('contextmenu',e=>{
 
 map.on('click', e => {
   if(Date.now() < mapContextSuppressClickUntil)return;
+  if(manualPositionPickMode){
+    manualPositionPickMode=false;
+    naebaciaSetPopupOwnPosition(e.latlng.lat,e.latlng.lng);
+    return;
+  }
   if (currentTab !== 'nav') return;
   if (routeEditorDraft && routeEditorMapMode === 'add') {
     routeEditorAddPoint(e.latlng.lat,e.latlng.lng);
@@ -2096,9 +2331,10 @@ function parseImportedRoute(v) {
     if (!validRoutePoint(p)) throw new Error('Некорректные координаты ППМ №'+(i+1));
     return {name: String(p.name||'ППМ '+(i+1)).slice(0,65),lat:Number(p.lat),lon:Number(p.lon)};
   });
+  if(v.closed===true && points.length<3)throw new Error('Для замкнутого маршрута нужны три ППМ');
   if (points.some((p,i)=>i>0 && distance(p,points[i-1])<5))
     throw new Error('Соседние ППМ совпадают (или ближе 5 м)');
-  return {name:String(v.name||'Мой маршрут').trim().slice(0,65)||'Мой маршрут',points};
+  return {name:String(v.name||'Мой маршрут').trim().slice(0,65)||'Мой маршрут',points,closed:v.closed===true};
 }
 function newUserRouteId() {
   let id;
@@ -2124,7 +2360,7 @@ function loadUserRoutes() {
     userRoutes=parsed.routes.slice(0,60).map(r=>{
       const clean=parseImportedRoute(r);
       const id=typeof r.id==='string' && /^USER_\d+_\d+$/.test(r.id)?r.id:newUserRouteId();
-      return {id,name:clean.name,points:clean.points,createdAt:Number(r.createdAt)||Date.now(),updatedAt:Number(r.updatedAt)||Date.now()};
+      return {id,name:clean.name,points:clean.points,closed:clean.closed,createdAt:Number(r.createdAt)||Date.now(),updatedAt:Number(r.updatedAt)||Date.now()};
     });
     syncUserRouteCatalog();
   } catch(e) {
@@ -2136,7 +2372,7 @@ function loadUserRoutes() {
 }
 function syncUserRouteCatalog() {
   Object.keys(ROUTES).filter(k=>k.startsWith(USER_ROUTE_PREFIX)).forEach(k=>delete ROUTES[k]);
-  for(const route of userRoutes) ROUTES[route.id]={name:route.name,color:'#ef871e',points:cloneRoute(route.points),custom:true};
+  for(const route of userRoutes) ROUTES[route.id]={name:route.name,color:'#ef871e',points:cloneRoute(route.points),closed:!!route.closed,custom:true};
   if (hsiState && hsiState.routeKey && !ROUTES[hsiState.routeKey]) {
     hsiState.routeKey=''; hsiState.legIndex=0; hsiState.awaitingRouteFix=0;
     hsiNeedsInitialLegFix=false; persistHSISettings();
@@ -2164,8 +2400,8 @@ function renderUserRoutes() {
     if(!enabled.has(r.id)) continue;
     const route=ROUTES[r.id];
     const layers=routeLayers[r.id];
-    for(let i=0;i<r.points.length-1;i++){
-      const a=r.points[i], b=r.points[i+1];
+    for(let i=0;i<routeLegCount(r);i++){
+      const a=r.points[i], b=r.points[(i+1)%r.points.length];
       const pair=makeClickableLine([[a.lat,a.lon],[b.lat,b.lon]],
         {color:'#ef871e',weight:3,opacity:.8},()=>buildRouteSegmentPopup(r.id,i));
       layers.push(...pair);
@@ -2175,6 +2411,17 @@ function renderUserRoutes() {
       bindLivePopup(marker,()=>buildRoutePointPopup(r.id,i,[i]),{autoPan:true});layers.push(marker);
     });
   }
+}
+function routeLegCount(route){return route&&Array.isArray(route.points)?Math.max(0,route.points.length-(route.closed?0:1)):0;}
+function routeLegEndpoints(route,index){
+  const count=routeLegCount(route);
+  if(index<0||index>=count)return null;
+  return {A:route.points[index],B:route.points[(index+1)%route.points.length]};
+}
+function editorToggleClosed(){
+  if(!routeEditorDraft)return;
+  if(!routeEditorDraft.closed && routeEditorDraft.points.length<3){alert('Для замыкания нужны минимум три разные точки.');return;}
+  editorCommit(d=>{d.closed=!d.closed;});
 }
 function editorOpen() {
   const section=document.getElementById('myRouteEditor');
@@ -2193,12 +2440,12 @@ function editorStartDraft(draft, savedId) {
   updateMapInteractivity(); updateNavUI();updateRouteEditorUI();renderRouteEditorOnMap();
 }
 function editorCreate() {
-  editorStartDraft({name:'Мой маршрут '+(userRoutes.length+1),points:[]},null);
+  editorStartDraft({name:'Мой маршрут '+(userRoutes.length+1),points:[],closed:false},null);
 }
 function editorEdit(id) {
   const found=userRoutes.find(r=>r.id===id);
   if(!found)return;
-  editorStartDraft({name:found.name,points:found.points},id);
+  editorStartDraft({name:found.name,points:found.points,closed:!!found.closed},id);
 }
 function editorIsDirty() {
   if(!routeEditorDraft)return false;
@@ -2317,8 +2564,8 @@ function renderRouteEditorOnMap() {
   clearRouteEditorOnMap();
   if(!routeEditorDraft)return;
   const pts=routeEditorDraft.points;
-  for(let i=0;i<pts.length-1;i++){
-    const a=pts[i],b=pts[i+1];
+  for(let i=0;i<routeLegCount(routeEditorDraft);i++){
+    const a=pts[i],b=pts[(i+1)%pts.length];
     const coords=[[a.lat,a.lon],[b.lat,b.lon]];
     const line=L.polyline(coords,{color:'#ff8b16',weight:5,opacity:.96,interactive:false,dashArray:'10,5'}).addTo(map);
     const hit=L.polyline(coords,{color:'#ff8b16',weight:28,opacity:0.01,bubblingMouseEvents:false}).addTo(map);
@@ -2347,11 +2594,11 @@ function editorSave() {
   const id=routeEditorSavedId||newUserRouteId();
   const old=userRoutes.find(r=>r.id===id);
   const now=Date.now();
-  const item={id,name:clean.name,points:clean.points,createdAt:old?.createdAt||now,updatedAt:now};
+  const item={id,name:clean.name,points:clean.points,closed:clean.closed,createdAt:old?.createdAt||now,updatedAt:now};
   const next=userRoutes.filter(r=>r.id!==id).concat(item);
   try {persistUserRoutes(next);}catch(e){alert('Не удалось записать маршрут на телефоне: '+e.message+' — экспортируйте его.');return false;}
   routeEditorSavedId=id;
-  routeEditorDraft={name:clean.name,points:clean.points};
+  routeEditorDraft={name:clean.name,points:clean.points,closed:clean.closed};
   routeEditorSavedSnapshot=JSON.stringify(routeEditorDraft);
   routeEditorHistory=[cloneRoute(routeEditorDraft)];routeEditorHistoryIndex=0;
   routeEditorMapMode='none';routeEditorMoveIndex=-1;
@@ -2392,7 +2639,7 @@ function editorDownload(data,name) {
 }
 function editorExport(id) {
   const r=userRoutes.find(x=>x.id===id);if(!r)return;
-  editorDownload({format:'naebacia-custom-route',version:1,name:r.name,points:r.points},'naebacia_route_'+id+'.json');
+  editorDownload({format:'naebacia-custom-route',version:1,name:r.name,points:r.points,closed:!!r.closed},'naebacia_route_'+id+'.json');
 }
 function editorExportAll() {
   if(!userRoutes.length){alert('Сохранённых маршрутов нет');return;}
@@ -2416,7 +2663,7 @@ async function editorImportFile(input) {
       let id;
       do{id=USER_ROUTE_PREFIX+Date.now()+'_'+Math.floor(Math.random()*1000000000);}while(used.has(id));
       used.add(id);
-      return {id,name:r.name,points:r.points,createdAt:now,updatedAt:now};
+      return {id,name:r.name,points:r.points,closed:!!r.closed,createdAt:now,updatedAt:now};
     });
     persistUserRoutes(userRoutes.concat(additional));
     alert('Импортировано маршрутов: '+additional.length+'; их можно проверить и открыть в редакторе.');
@@ -2442,7 +2689,7 @@ function updateRouteEditorUI() {
   }
   const list=document.getElementById('mySavedRoutes');
   if(list)list.innerHTML=userRoutes.length?userRoutes.map(r=>
-    '<div class="my-route-saved"><div><b>'+safeText(r.name)+'</b><span>'+r.points.length+' ППМ</span></div><div class="my-route-buttons">'+
+    '<div class="my-route-saved"><div><b>'+safeText(r.name)+'</b><span>'+r.points.length+' ППМ'+(r.closed?' · ⤺ кольцо':'')+'</span></div><div class="my-route-buttons">'+
     '<button type="button" onclick="editorEdit(\''+r.id+'\')">✎ Править</button>'+ 
     '<button type="button" onclick="editorToHSI(\''+r.id+'\')">🧭 HSI</button>'+ 
     '<button type="button" onclick="editorExport(\''+r.id+'\')">⬇ JSON</button>'+ 
@@ -2467,6 +2714,10 @@ function updateRouteEditorUI() {
     '<button onclick="editorCoordinates('+i+')">Коорд.</button>'+ 
     '<button class="danger" onclick="editorDeletePoint('+i+')">×</button>'+ 
     '</div></div>').join('')||'<div class="hint">Коснись карты, чтобы добавить первый ППМ.</div>';
+  const loopBtn=document.getElementById('routeLoopBtn');
+  if(loopBtn){loopBtn.disabled=!routeEditorDraft.closed&&routeEditorDraft.points.length<3;
+    loopBtn.textContent=routeEditorDraft.closed?'⤻ Разомкнуть маршрут':'⤺ Замкнуть маршрут';
+    loopBtn.classList.toggle('selected',!!routeEditorDraft.closed);}
   document.getElementById('routeUndo').disabled=routeEditorHistoryIndex<=0;
   document.getElementById('routeRedo').disabled=routeEditorHistoryIndex>=routeEditorHistory.length-1;
   document.getElementById('routeDraftState').textContent=editorIsDirty()?'● Несохранённый черновик':'✓ Сохранено';
@@ -2499,15 +2750,11 @@ function updateJokeMarker(){
 // === БЛОК 34-B: HSI / OBS / ROUTE ===
 // HSI: маршрут ROUTE выбирается вручную, активный участок выбирается и сменяется автоматически по GPS.
 function hsiValidPoint(p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); }
-function hsiCurrentFix() {
-  if (rtTracking && rtCurrentPosition) {
-    if (gpsQualityState().level==='red') return null;
-    const age = Date.now() - rtCurrentPosition.t;
-    return age >= 0 && age <= GPS_STALE_SEC * 1000 ? rtCurrentPosition : null;
-  }
-  const p = getCurrentPosition();
-  if (!hsiValidPoint(p)) return null;
-  if (Number.isFinite(p.t) && Date.now() - p.t > GPS_STALE_SEC * 1000) return null;
+function hsiCurrentFix(){
+  // Инструментальная CDI только от свежего GPS: выбранная вручную/старая позиция — НЕ реальная девиация.
+  if(getCurrentPosition()?.sourceType!=='gps')return null;
+  const p=getLiveGpsPosition();
+  if(!p || (rtTracking && gpsQualityState().level==='red'))return null;
   return p;
 }
 function hsiDecl() { return getDecl(); }
@@ -2521,8 +2768,8 @@ function hsiPointAlong(anchor, trueCourse, meters) {
 function hsiRouteInfo() {
   const route = ROUTES[hsiState.routeKey];
   if (!route || route.points.length < 2) return null;
-  const idx=Math.max(0,Math.min(route.points.length-2,hsiState.legIndex));
-  return {route,idx,A:route.points[idx],B:route.points[idx+1]};
+  const idx=Math.max(0,Math.min(routeLegCount(route)-1,hsiState.legIndex));
+  return {route,idx,A:route.points[idx],B:route.points[(idx+1)%route.points.length]};
 }
 function getHSIGuidance() {
   if (hsiState.mode === 'route') {
@@ -2566,8 +2813,8 @@ function hsiDeviation(p,g) {
 function hsiRouteBestLeg(route,p) {
   if (!route || !hsiValidPoint(p)) return 0;
   const candidates=[];
-  for (let i=0;i<route.points.length-1;i++) {
-    const A=route.points[i],B=route.points[i+1];
+  for (let i=0;i<routeLegCount(route);i++) {
+    const A=route.points[i],B=route.points[(i+1)%route.points.length];
     const off=computeOffset(p,A,B);
     if (!off) continue;
     const len=distance(A,B);
@@ -2596,17 +2843,20 @@ function hsiRouteBestLeg(route,p) {
 function maybeAdvanceHSIRoute(p) {
   if (hsiState.mode!=='route' || !rtTracking || !hsiValidPoint(p) || hsiNeedsInitialLegFix) return;
   const leg=hsiRouteInfo();
-  if (!leg || leg.idx>=leg.route.points.length-2) return;
+  if (!leg || (!leg.route.closed && leg.idx>=routeLegCount(leg.route)-1)) return;
   const off=computeOffset(p,leg.A,leg.B);
   if (!off) return;
   // Защита от случайного переключения при стоянке или скачке GPS.
   const moving=Number.isFinite(p.speed) && p.speed>5;
   const accurate=!Number.isFinite(p.acc) || p.acc<=300;
-  const near=moving && accurate && off.lbu<=2500 && off.t>=.985 && distance(p,leg.B)<=3500;
+  // На замыкающем участке проверяем направление: рядом с ИПМ возможны два разных участка.
+  const courseOK=!Number.isFinite(p.heading)||
+    Math.abs(((p.heading-trueBearing(leg.A,leg.B)+540)%360)-180)<100;
+  const near=moving && accurate && courseOK && off.lbu<=2500 && off.t>=.985 && distance(p,leg.B)<=3500;
   if (!near) { hsiState.awaitingRouteFix=0; return; }
   hsiState.awaitingRouteFix++;
   if (hsiState.awaitingRouteFix<2 || Date.now()-hsiLastRouteAdvanceAt<7000) return;
-  hsiState.legIndex=leg.idx+1;
+  hsiState.legIndex=(leg.idx+1)%routeLegCount(leg.route);
   hsiState.awaitingRouteFix=0;
   hsiLastRouteAdvanceAt=Date.now();
   persistHSISettings();
@@ -2658,7 +2908,7 @@ function selectHSIRoute(key) {
 }
 function makeHSIReferenceOptions() {
   const items=[{key:'target',name:'Выбранная цель'}, {key:'position',name:'Положение при установке'}];
-  PRESET.forEach((p,i)=>items.push({key:'station:'+i,name:p.name}));
+  PRESET.filter(navaidHasCoordinates).forEach(p=>items.push({key:'stationid:'+p.id,name:p.name}));
   Object.entries(ROUTES).forEach(([key,r])=>(r.custom?r.points:r.points.slice(0,-1)).forEach((p,i)=>
     items.push({key:'route:'+key+':'+i,name:r.name+' · '+(i+1)+' '+p.name})));
   return items;
@@ -2668,6 +2918,8 @@ function hsiResolveRef(spec) {
     const p=hsiCurrentFix();return hsiValidPoint(p)?{lat:p.lat,lon:p.lon}:null;
   }
   if(spec==='target')return hsiValidPoint(navTarget)?{...navTarget}:null;
+  const stable=/^stationid:([a-z0-9-]+)$/.exec(spec);
+  if(stable){const aid=navaidCatalog.find(a=>a.id===stable[1]);return navaidHasCoordinates(a)?{lat:aid.lat,lon:aid.lon}:null;}
   let m=/^station:(\d+)$/.exec(spec);
   if(m){const p=PRESET[+m[1]];return p?{lat:p.lat,lon:p.lon}:null;}
   m=/^route:([A-Z0-9_]+):(\d+)$/.exec(spec);
@@ -3153,6 +3405,7 @@ function onRTPosition(pos) {
     renderRTTrack();
   }
   rtCurrentPosition = { lat, lon, t, speed, heading, acc };
+  if(Number.isFinite(acc))acceptGoodGpsPoint(rtCurrentPosition);
   updateGpsQualityIndicator();
   updateMapOrientation();
   // Если цель была поставлена без определения места, начало DIRECT фиксируется
@@ -3333,7 +3586,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 3, appVersion: '1.61',
+    version: 3, appVersion: '1.62',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -3827,6 +4080,11 @@ function getMyPosition() {
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
       const acc = pos.coords.accuracy;
+      const t=Number.isFinite(pos.timestamp)&&pos.timestamp>0?pos.timestamp:Date.now();
+      if(!Number.isFinite(acc)||acc>GPS_REJECT_ACCURACY_M||Date.now()-t>GPS_STALE_SEC*1000){
+        resultEl.classList.add('error');resultEl.textContent='⚠️ Полученная GPS-точка слишком неточная или устаревшая. Не используем для расчёта.';return;
+      }
+      acceptGoodGpsPoint({lat,lon,t,acc});
 
       if (gpsMarker) map.removeLayer(gpsMarker);
       gpsMarker = L.marker([lat, lon], { icon: gpsIcon() }).addTo(map);
@@ -3853,7 +4111,7 @@ function getMyPosition() {
       html += '<br><span style="color:#666;font-size:11px">Нажмите «📍 Привести к GPS», чтобы подставить пеленги.</span>';
       gpsMarker.bindPopup(html);
 
-      trackGps.push({ lat, lon, t: Date.now() });
+      trackGps.push({ lat, lon, t });
       saveTrackGps();
       renderTrack();
       refreshOpenPopup();
@@ -3885,33 +4143,19 @@ function calculate() {
   const decl = parseFloat(document.getElementById('decl').value) || 0;
   const sources = [];
 
-  // 4 NDB (0..3)
-  for (let i = 0; i < 4; i++) {
-    const v = document.getElementById('brg' + (i + 1)).value.trim();
-    if (v === '') continue;
-    const mpr = parseFloat(v);
-    if (isNaN(mpr)) continue;
-    const ips = norm360(mpr + 180 + decl);
-    sources.push({
-      idx: i, type: 'NDB', name: PRESET[i].name,
-      data: { lat: PRESET[i].lat, lon: PRESET[i].lon },
-      ips: ips, inputLabel: 'МПР ' + mpr.toFixed(0) + '°', color: PRESET[i].color
-    });
-  }
-
-  // VOR — индекс 4
-  const rv = document.getElementById('vorRadial').value.trim();
-  const radial = rv === '' ? null : parseFloat(rv);
-  const vorDist = parseDistance(document.getElementById('vorDist').value.trim());
-  if (radial !== null && !isNaN(radial)) {
-    sources.push({
-      idx: VOR_IDX, type: 'VOR', name: PRESET[VOR_IDX].name,
-      data: { lat: PRESET[VOR_IDX].lat, lon: PRESET[VOR_IDX].lon },
-      ips: norm360(radial + decl),
-      inputLabel: 'Радиал ' + radial.toFixed(0) + '°',
-      color: PRESET[VOR_IDX].color, dist: vorDist
-    });
-  }
+  PRESET.forEach((a,i)=>{
+    if(!navaidHasCoordinates(a))return;
+    const input=document.getElementById('brg'+(i+1));if(!input)return;
+    const text=input.value.trim();if(!text)return;
+    const value=Number(text.replace(',','.'));
+    if(!Number.isFinite(value))return;
+    const vor=navaidIsVor(a);
+    const distInput=document.getElementById('vorDist'+(i+1));
+    const dist=vor&&distInput?parseDistance(distInput.value.trim()):null;
+    sources.push({idx:i,type:vor?'VOR':'NDB',name:a.name,
+      data:{lat:a.lat,lon:a.lon},ips:norm360(value+(vor?0:180)+decl),
+      inputLabel:(vor?'Радиал ':'МПР ')+value.toFixed(0)+'°',color:a.color||'#2473b6',dist});
+  });
 
   const resultEl = document.getElementById('result');
   resultEl.classList.remove('error');
@@ -3995,6 +4239,7 @@ function calculate() {
       stationLines.push(pair[0], pair[1]);
     });
 
+    lastCalculatedNRT={lat:pos.lat,lon:pos.lon,t:Date.now()};
     track.push({ lat: pos.lat, lon: pos.lon, t: Date.now() });
     saveTrack();
     renderTrack();
@@ -4021,6 +4266,7 @@ function calculate() {
     });
     html += geomWarning;
     html += '<br><span style="color:#666;font-size:11px">Точек в треке ОПРС: ' + track.length + '</span>';
+    html += '<br><button type="button" class="primary" onclick="acceptNrtPosition()" style="margin-top:8px">📍 Принять как мою позицию</button>';
     resultEl.innerHTML = html;
     resultEl.classList.remove('error');
   } else {
@@ -4059,6 +4305,8 @@ function onCourseRTInput() {
 setInterval(() => {
   if (rtTracking) {
     updateGpsQualityIndicator();
+    updateMyPositionUI();
+    if(currentTab==='nav')updateNavUI();
     updateHudHeading();
     if (currentTab === 'rtnav') updateRTUI();
   }
@@ -4095,6 +4343,7 @@ renderAreas();
 document.getElementById('toggleAltitudeColors').checked = localStorage.getItem(ALT_COLORS_KEY) === '1';
 toggleAltitudeView();
 updateNavUI();
+updateMyPositionUI();
 updateRTUI();
 updateGpsQualityIndicator();
 updateFlightLogUI();
@@ -4106,7 +4355,15 @@ function requestGpsPermissionAtStartup() {
   if (!navigator.geolocation) return;
   try {
     navigator.geolocation.getCurrentPosition(
-      () => { /* Разрешение получено: это НЕ старт записи. */ },
+      pos => {
+        // Однократный достоверный GPS-фикс для AUTO; без запуска РВ и без записи в журнал.
+        const c=pos.coords,t=Number.isFinite(pos.timestamp)?pos.timestamp:Date.now();
+        if(Number.isFinite(c.latitude)&&Number.isFinite(c.longitude)&&Number.isFinite(c.accuracy)&&
+           c.accuracy<=GPS_REJECT_ACCURACY_M && c.accuracy>=0 && Date.now()-t<=GPS_STALE_SEC*1000){
+          acceptGoodGpsPoint({lat:c.latitude,lon:c.longitude,t,acc:c.accuracy});
+          updateNavUI();refreshHSIPanel();
+        }
+      },
       () => { /* Ничего не пишем; кнопки РВ и «Получить МС» остаются доступны. */ },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
