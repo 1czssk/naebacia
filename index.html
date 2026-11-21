@@ -8,6 +8,81 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#101820">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('naebacia_theme_v1')||'day';}catch(e){}</script>
+<script id="naebaciaInstallHelper">
+// Ранний перехват события установки: основной app.js может загрузиться позднее карты.
+(function () {
+  let pendingInstallEvent = null;
+  let installedHere = false;
+  const isStandalone = () => !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  function showInstallStatus(message, isError) {
+    const status=document.getElementById('installQuickStatus');
+    if(!status)return;
+    status.textContent=message;
+    status.classList.toggle('install-help-warning',!!isError);
+  }
+  function updateInstallButton() {
+    const button=document.getElementById('installForMeBtn');
+    if(!button)return;
+    const alreadyInstalled=isStandalone()||installedHere;
+    button.disabled=alreadyInstalled;
+    button.textContent=alreadyInstalled?'✓ Уже установлено':'Сделать это за меня';
+    if(alreadyInstalled)showInstallStatus('НАЕБАЦИЯ уже запущена как установленное приложение.',false);
+  }
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    pendingInstallEvent=e;
+    updateInstallButton();
+    // Если помощь сейчас открыта, сообщаем, что системный диалог доступен.
+    if(!document.getElementById('installHelpOverlay')?.hidden)
+      showInstallStatus('Можно установить: нажмите кнопку и подтвердите действие в браузере.',false);
+  });
+  window.addEventListener('appinstalled', () => {
+    installedHere=true;
+    pendingInstallEvent=null;
+    updateInstallButton();
+    showInstallStatus('Установка подтверждена браузером. Иконка появится на устройстве.',false);
+  });
+  // Вызывается прямо из onclick: prompt() должен выполняться в обработчике жеста пользователя.
+  window.naebaciaInstallForMe = async function () {
+    updateInstallButton();
+    if(isStandalone()||installedHere)return;
+    if(pendingInstallEvent) {
+      const event=pendingInstallEvent;
+      pendingInstallEvent=null; // Одно событие beforeinstallprompt можно использовать только один раз.
+      showInstallStatus('Ожидаем подтверждения в системном окне…',false);
+      try {
+        await event.prompt();
+        const choice=await event.userChoice;
+        if(choice && choice.outcome==='accepted')
+          showInstallStatus('Установка принята. Дождитесь появления иконки на экране.',false);
+        else
+          showInstallStatus('Установка отменена. Можно установить через меню браузера.',false);
+      } catch(error) {
+        showInstallStatus('Не удалось открыть установку: воспользуйтесь инструкцией ниже.',true);
+        console.warn('PWA install prompt failed:',error);
+      }
+      updateInstallButton();
+      return;
+    }
+    const ua=navigator.userAgent||'';
+    const ios=/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints>1);
+    if(ios) {
+      showInstallStatus('На iPhone/iPad установка одной кнопкой недоступна. Откройте страницу в Safari → «Поделиться» → «На экран Домой».',false);
+    } else if(!window.isSecureContext) {
+      showInstallStatus('Для установки откройте опубликованный сайт по HTTPS, а не локальный HTML-файл.',true);
+    } else if(/Telegram|Instagram|FBAN|FBAV|VKAndroidApp|WhatsApp/i.test(ua)) {
+      showInstallStatus('Встроенный браузер может не устанавливать PWA. Откройте ссылку в Chrome и повторите.',true);
+    } else {
+      showInstallStatus('Браузер пока не предложил установку. Попробуйте меню ⋮ → «Установить приложение» или откройте сайт в Chrome. Для установки нужен HTTPS.',false);
+    }
+  };
+  window.naebaciaRefreshInstallHelp = function () {
+    updateInstallButton();
+    if(!isStandalone()&&!installedHere&&pendingInstallEvent)
+      showInstallStatus('Готово к установке: нажмите кнопку и подтвердите действие.',false);
+  };
+})();
+</script>
 <meta name="application-name" content="НАЕБАЦИЯ 🚀">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -91,6 +166,18 @@
   .backup-actions {display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;}
   .backup-actions button {flex:1 1 135px;background:#e6f2f4;color:#1a3441;border:1px solid #b4cbd1;
     border-radius:7px;padding:10px 7px;font-size:13px;cursor:pointer;}
+  #installForMeBtn {display:block;width:100%;min-height:46px;margin:12px 0 4px;padding:11px 12px;
+    color:#fff;background:#147b63;border:1px solid #106b55;border-radius:9px;font-size:15px;
+    font-weight:750;cursor:pointer;box-shadow:0 2px 5px #0002;}
+  #installForMeBtn:active {filter:brightness(.92);}
+  #installForMeBtn:disabled {background:#637680;border-color:#637680;cursor:default;opacity:.8;}
+  #installQuickStatus {min-height:16px;margin:5px 0 10px!important;font-size:12px!important;line-height:1.4;}
+  #installQuickStatus.install-help-warning {color:#b92e27!important;font-weight:650;}
+  html[data-theme=night] #installForMeBtn {background:#159b98;color:#fff;border-color:#76c6c3;}
+  html[data-theme=glam] #installForMeBtn {background:#d83595;color:#fff;border-color:#a8146b;}
+  html[data-theme=lsd] #installForMeBtn {background:#eaff00;color:#30003b;border:3px solid #ff00cc;
+    box-shadow:3px 3px 0 #00ffff;font-weight:900;}
+  html[data-theme=lsd] #installForMeBtn:disabled {background:#9d9d9d;color:#152029;box-shadow:none;}
   #installHelpClose {font-size:23px;min-width:40px;min-height:40px;background:#eff2f4;border:1px solid #c8d2d7;
     border-radius:8px;color:#21313a;cursor:pointer;}
 
@@ -718,6 +805,8 @@
 <div id="installHelpOverlay" hidden onclick="if(event.target===this)closeInstallHelp()">
   <section id="installHelpDialog" role="dialog" aria-modal="true" aria-labelledby="installHelpTitle">
     <div class="install-help-title"><h2 id="installHelpTitle">Как установить НАЕБАЦИЮ</h2><button id="installHelpClose" type="button" onclick="closeInstallHelp()" aria-label="Закрыть инструкцию">×</button></div>
+    <button id="installForMeBtn" type="button" onclick="naebaciaInstallForMe()">Сделать это за меня</button>
+    <p id="installQuickStatus" role="status" aria-live="polite">Нажми кнопку: если браузер поддерживает установку, он попросит подтверждение.</p>
     <h3>Android · Chrome</h3>
     <ol><li>Открой ссылку на сайт непосредственно в <b>Chrome</b>, не во встроенном браузере мессенджера.</li>
       <li>Открой меню <b>⋮</b> → <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</li>
@@ -5695,7 +5784,7 @@ window.addEventListener('pagehide', () => saveFlightLog(true));
     await ensureMapRotation();
     statusMessage('Запуск НАЕБАЦИИ…');
     try {
-      await loadScript('./app.js?v=1.62-r1');
+      await loadScript('./app.js?v=1.62-r2');
     } catch (error) {
       console.warn('app.js недоступен, запускаем резервную копию из HTML:',error);
       executeBuiltInApp();
