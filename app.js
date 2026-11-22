@@ -26,6 +26,7 @@ const MENU_SIDE_KEY = 'naebacia_menu_side_v1';
 const FLIGHT_SAVE_INTERVAL_MS = 5000;
 const WIND_NAV_KEY = 'naebacia_wind_nav_v1';
 const HSI_SETTINGS_KEY = 'naebacia_hsi_state_v1';
+const MAG_DECL_KEY = 'naebacia_magnetic_declination_v1';
 
 const MAX_DIST_KM = 300;
 const ANGLE_ERROR_DEG = 10;
@@ -516,10 +517,66 @@ function getCourseMag() {
   return isNaN(n) ? 0 : n;
 }
 
-function getDecl() {
-  const v = document.getElementById('decl').value;
-  const n = parseFloat(v);
-  return isNaN(n) ? 11 : n;
+// Магнитное склонение задаётся вручную для текущего района полётов.
+// Изменяем только подтверждённое число, чтобы незаконченный ввод не ломал HSI/SIM.
+let appliedMagneticDeclination = Number.isFinite(Number(ACTIVE_PROFILE.magneticDeclinationDeg))
+  ? Number(ACTIVE_PROFILE.magneticDeclinationDeg) : 0;
+function getDecl() { return appliedMagneticDeclination; }
+function displayMagneticDeclination(message) {
+  const input=document.getElementById('decl');
+  if(input)input.value=String(appliedMagneticDeclination);
+  const hint=document.getElementById('declHint');
+  if(hint)hint.textContent=message || 'Восточное +, западное −. Ввод вручную, не рассчитывается по GPS.';
+}
+function loadMagneticDeclination() {
+  try {
+    const raw=localStorage.getItem(MAG_DECL_KEY);
+    if(raw!==null && raw.trim()!==''){
+      const n=Number(raw.replace(',','.'));
+      if(Number.isFinite(n) && n>=-180 && n<=180){
+        appliedMagneticDeclination=n;
+        displayMagneticDeclination('Задано вручную и сохранено на этом устройстве · восточное +, западное −.');
+        return;
+      }
+    }
+  }catch(e){console.warn('Не удалось восстановить магнитное склонение:',e);}
+  displayMagneticDeclination('Исходное значение профиля (не актуализировано). Укажите склонение своего района вручную.');
+}
+function setMagneticDeclinationFromInput() {
+  const field=document.getElementById('decl');
+  const raw=field.value.trim().replace(',','.');
+  const n=/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)?Number(raw):NaN;
+  if(!Number.isFinite(n) || n < -180 || n > 180){
+    displayMagneticDeclination('Неверное значение: введите число от −180 до +180°. Предыдущее сохранено.');
+    return;
+  }
+  if(Object.is(n,appliedMagneticDeclination)){
+    displayMagneticDeclination();return;
+  }
+  appliedMagneticDeclination=n;
+  try{localStorage.setItem(MAG_DECL_KEY,String(n));}catch(e){console.warn('Не удалось сохранить магнитное склонение:',e);}
+  displayMagneticDeclination('Применено '+(n>0?'+':'')+n+'°. Сохранено на этом устройстве.');
+  refreshAfterMagneticDeclinationChange();
+}
+function resetMagneticDeclination() {
+  appliedMagneticDeclination=Number(ACTIVE_PROFILE.magneticDeclinationDeg)||0;
+  try{localStorage.removeItem(MAG_DECL_KEY);}catch(e){}
+  displayMagneticDeclination('Возвращено исходное значение профиля (не проверено по актуальному AIP).');
+  refreshAfterMagneticDeclinationChange();
+}
+function refreshAfterMagneticDeclinationChange() {
+  // Не оставляем на карте расчётные линии от старого склонения.
+  stationLines.forEach(layer=>map.removeLayer(layer));stationLines=[];
+  clearErrorLines();
+  if(posMarker){map.removeLayer(posMarker);posMarker=null;}
+  lastCalculatedNRT=null;
+  const result=document.getElementById('result');
+  result.classList.remove('error');
+  result.textContent='Магнитное склонение изменено. Для определения позиции по НРТС нажмите «Рассчитать» повторно.';
+  if(simActive&&simPoint){simUpdateGroundPosition(0);renderRTMarker();syncSimControls();}
+  renderCircle();renderTrack();renderHSIGuideLine();
+  updateNavUI();updateRTUI();refreshHSIPanel();refreshOpenPopup();
+  recordConfigurationEvent('magnetic-declination');
 }
 
 function parseDistance(v) {
@@ -1295,7 +1352,7 @@ function buildRouteSegmentPopup(routeKey, idx) {
   const A = route.points[idx];
   const B = route.points[(idx+1)%route.points.length];
   const segLen = distance(A, B) / 1000;
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const decl = getDecl();
   const zmpu = norm360(trueBearing(A, B) - decl);
 
   let html = '<b>' + route.name + '</b><br>';
@@ -1357,7 +1414,7 @@ function buildRoutePointPopup(routeKey, idx, allIndices) {
   const cur = getCurrentPosition();
   if (cur) {
     const distKm = distance(cur, pt) / 1000;
-    const decl = parseFloat(document.getElementById('decl').value) || 0;
+    const decl = getDecl();
     const mpu = norm360(trueBearing(cur, pt) - decl);
     html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
     html += '<b>От текущего положения:</b><br>';
@@ -1795,7 +1852,7 @@ function clearFields() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  document.getElementById('decl').value = '11';
+  // Значение магнитного склонения сохраняем при очистке пеленгов.
   PRESET.forEach((_,i)=>{const el=document.getElementById('calc'+(i+1));if(el)el.innerHTML='';});
   stationLines.forEach(l => map.removeLayer(l));
   stationLines = [];
@@ -1929,7 +1986,7 @@ function renderTrack() {
 
   if (plane) {
     const courseMag = getCourseMag();
-    const decl = parseFloat(document.getElementById('decl').value) || 0;
+    const decl = getDecl();
     const courseTrue = norm360(courseMag + decl);
     posMarker = L.marker([plane.lat, plane.lon], { icon: planeIcon(courseTrue) })
       .addTo(map)
@@ -1957,7 +2014,7 @@ function getGPSHeadingMag() {
     }
   }
   if (heading === null || heading === undefined || isNaN(heading)) return null;
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const decl = getDecl();
   return norm360(heading - decl);
 }
 
@@ -1984,7 +2041,7 @@ function getCurrentSpeedKmh(targetPt) {
   const cur = getCurrentPosition();
   if (!cur || !targetPt) return null;
   const ipu = trueBearing(cur, targetPt);
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const decl = getDecl();
   const mpu = norm360(ipu - decl);
   let uv = norm360(mpu - wd);
   if (uv > 180) uv -= 360;
@@ -2048,7 +2105,7 @@ function computeNav() {
   if (!cur || !navTarget) return null;
   const distKm = distance(cur, navTarget) / 1000;
   const ipu = trueBearing(cur, navTarget);
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const decl = getDecl();
   const mpu = norm360((navLineStart ? trueBearing(navLineStart, navTarget) : ipu) - decl);
 
   const wdRaw = document.getElementById('windDir').value.trim();
@@ -3955,7 +4012,7 @@ function doWindCalc(pts) {
     return;
   }
   const MK = getCourseMag();
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const decl = getDecl();
 
   const first = pts[0];
   const last = pts[pts.length - 1];
@@ -4139,7 +4196,7 @@ function getMyPosition() {
                  '<b>Точность:</b> ±' + acc.toFixed(0) + ' м';
       html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ccc">';
       html += '<b>Пеленги от МС:</b><br>';
-      const decl = parseFloat(document.getElementById('decl').value) || 0;
+      const decl = getDecl();
       for (let i = 0; i < PRESET.length; i++) {
         const s = PRESET[i];
         const dkm = distance({ lat, lon }, s) / 1000;
@@ -4183,7 +4240,7 @@ function getMyPosition() {
 
 // === БЛОК 37: CALC ===
 function calculate() {
-  const decl = parseFloat(document.getElementById('decl').value) || 0;
+  const decl = getDecl();
   const sources = [];
 
   PRESET.forEach((a,i)=>{
@@ -4599,7 +4656,7 @@ setInterval(() => {
   }
 }, 1000);
 
-document.getElementById('decl').value = String(ACTIVE_PROFILE.magneticDeclinationDeg);
+loadMagneticDeclination();
 loadPreset();
 loadSimPreferences();
 updateAircraftSkinUI();
