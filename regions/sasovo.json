@@ -1,0 +1,165 @@
+{
+  "id": "sasovo",
+  "name": "Сасово",
+  "active": false,
+  "status": "aip-excerpt-supplied-not-current-verified",
+  "dataNotice": "Сведения из предоставленных выдержек АИП УУБГ AD 2.2/2.18/2.19. Актуальность AIRAC/NOTAM не проверена; учебные маршруты и зоны пока не добавлены.",
+  "airfields": [
+    {
+      "id": "sasovo",
+      "name": "Сасово",
+      "icao": "UUBG",
+      "referencePoint": {
+        "lat": 54.356111111,
+        "lon": 41.987777778
+      },
+      "elevationM": 121,
+      "geoidUndulationM": 10,
+      "showOnMap": true,
+      "showInPlace": false,
+      "symbol": "red-star",
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "aipMagneticVariationReference": {
+        "degreesEast": 12,
+        "sourceYear": 2021,
+        "annualChangeMinutesEast": 10.8,
+        "note": "Справочное значение АИП. В приложении не применяется автоматически."
+      }
+    }
+  ],
+  "navigationAids": [
+    {
+      "id": "sasovo-dprm-173",
+      "name": "Сасово ДПРМ 173 (МН)",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "173",
+      "ident": "МН",
+      "frequencyKHz": 939,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 54.399694444,
+      "lon": 41.993833333,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "Во время работы АД и по заявке"
+    },
+    {
+      "id": "sasovo-bprm-173",
+      "name": "Сасово БПРМ 173 (М)",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "173",
+      "ident": "М",
+      "frequencyKHz": 462,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 54.373388889,
+      "lon": 41.990277778,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "Во время работы АД и по заявке"
+    },
+    {
+      "id": "sasovo-dprm-353",
+      "name": "Сасово ДПРМ 353 (ЛУ)",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "353",
+      "ident": "ЛУ",
+      "frequencyKHz": 939,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 54.31175,
+      "lon": 41.980666667,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "Во время работы АД и по заявке"
+    },
+    {
+      "id": "sasovo-bprm-353",
+      "name": "Сасово БПРМ 353 (Л)",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "353",
+      "ident": "Л",
+      "frequencyKHz": 462,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 54.340527778,
+      "lon": 41.985583333,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "Во время работы АД и по заявке"
+    }
+  ],
+  "approachInfo": [
+    {
+      "airportId": "sasovo",
+      "runways": [
+        "173"
+      ],
+      "navigationAidsIds": [
+        "sasovo-dprm-173",
+        "sasovo-bprm-173"
+      ]
+    },
+    {
+      "airportId": "sasovo",
+      "runways": [
+        "353"
+      ],
+      "navigationAidsIds": [
+        "sasovo-dprm-353",
+        "sasovo-bprm-353"
+      ]
+    }
+  ],
+  "communications": [
+    {
+      "service": "Аварийная",
+      "frequencyMHz": 121.5
+    },
+    {
+      "service": "Сасово-Вышка",
+      "frequencyMHz": 119.0
+    },
+    {
+      "service": "Сасово-Вышка (резерв)",
+      "frequencyMHz": 118.9
+    },
+    {
+      "service": "Сасово-Вышка (резерв)",
+      "frequencyMHz": 119.3
+    },
+    {
+      "service": "Сасово-Вышка (резерв)",
+      "frequencyMHz": 129.0
+    },
+    {
+      "service": "Сасово-Вышка (резерв)",
+      "frequencyMHz": 130.3
+    },
+    {
+      "service": "Сасово-АТИС",
+      "frequencyMHz": 133.8
+    },
+    {
+      "service": "Внутрипортовая (наземные службы)",
+      "frequencyMHz": 164.15
+    }
+  ],
+  "routes": {},
+  "zones": [],
+  "sectors": []
+}

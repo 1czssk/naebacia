@@ -1,176 +1,274 @@
 {
   "id": "saint-petersburg",
   "name": "Санкт-Петербург",
-  "status": "draft-unverified",
+  "status": "aip-excerpt-supplied-not-current-verified",
   "active": false,
-  "dataNotice": "Непроверенные справочные данные, вручную перенесённые из присланных скриншотов. Частоты и координаты не сверены с действующим АИП/NOTAM. Координаты приводов ВПП 26 Левашово указаны приблизительно. Не использовать для полётной навигации.",
+  "dataNotice": "КТА и НРТС Пулково/Левашово уточнены по предоставленным таблицам АИП AD 2.2/2.19. Ранее перепутанные ВПП исправлены по позывным. Актуальность AIRAC/NOTAM не проверена.",
   "airfields": [
     {
       "id": "pulkovo",
       "name": "Пулково",
       "referencePoint": {
-        "lat": 59.8003,
+        "lat": 59.800277778,
         "lon": 30.2625
       },
-      "alternativeReferencePoints": [
-        {
-          "lat": 59.7998,
-          "lon": 30.273,
-          "note": "Альтернативное положение в присланном справочном материале; не используется для звезды"
-        }
-      ],
       "showOnMap": true,
       "showInPlace": false,
-      "symbol": "red-star"
+      "symbol": "red-star",
+      "icao": "ULLI",
+      "elevationM": 24,
+      "geoidUndulationM": 17,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "aipMagneticVariationReference": {
+        "degreesEast": 11,
+        "sourceYear": 2018,
+        "annualChangeMinutesEast": 10.5,
+        "note": "Справочное значение АИП. В приложении не применяется автоматически."
+      }
     },
     {
       "id": "levashovo",
       "name": "Левашово",
       "referencePoint": {
-        "lat": 60.0867,
-        "lon": 30.1933
+        "lat": 60.087222222,
+        "lon": 30.188888889
       },
-      "alternativeReferencePoints": [
-        {
-          "lat": 60.086666666666666,
-          "lon": 30.193333333333335,
-          "sourceText": "60°05′12″ N, 30°11′36″ E",
-          "note": "Альтернативная запись из скриншота"
-        }
-      ],
       "showOnMap": true,
       "showInPlace": false,
-      "symbol": "red-star"
+      "symbol": "red-star",
+      "icao": "ULLA",
+      "elevationM": 22,
+      "geoidUndulationM": 17,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "aipMagneticVariationReference": {
+        "degreesEast": 12,
+        "sourceYear": 2023,
+        "annualChangeMinutesEast": 11,
+        "note": "Справочное значение АИП. В приложении не применяется автоматически."
+      }
     }
   ],
   "navigationAids": [
     {
       "id": "pulkovo-vor-spb",
-      "name": "Пулково VOR/DME",
+      "name": "Пулково DVOR/DME (СПБ)",
       "type": "VOR/DME",
-      "ident": "SPB",
+      "ident": "СПБ / SPB",
       "frequencyMHz": 113.4,
       "dmeChannel": "81X",
-      "lat": 59.8067,
-      "lon": 30.285,
-      "showOnMap": false,
-      "showInPlace": false
-    },
-    {
-      "id": "pulkovo-dprm-10l",
-      "name": "Пулково ДПРМ 10L",
-      "type": "NDB",
-      "role": "DPRM",
-      "runway": "10L",
-      "ident": "PK",
-      "frequencyKHz": 342,
+      "lat": 59.806888889,
+      "lon": 30.274638889,
+      "dmeAntennaPoint": {
+        "lat": 59.806972222,
+        "lon": 30.274722222
+      },
       "showOnMap": false,
       "showInPlace": false,
-      "lat": 59.81,
-      "lon": 30.14966667,
-      "coordinatesOriginal": "59°48.60′ N, 30°08.98′ E"
-    },
-    {
-      "id": "pulkovo-bprm-10l",
-      "name": "Пулково БПРМ 10L",
-      "type": "NDB",
-      "role": "BPRM",
-      "runway": "10L",
-      "ident": "K",
-      "frequencyKHz": 700,
-      "showOnMap": false,
-      "showInPlace": false,
-      "lat": 59.80716667,
-      "lon": 30.18883333,
-      "coordinatesOriginal": "59°48.43′ N, 30°11.33′ E"
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
     },
     {
       "id": "pulkovo-dprm-10r",
-      "name": "Пулково ДПРМ 10R",
+      "name": "Пулково ДПРМ 10R (ПК)",
       "type": "NDB",
       "role": "DPRM",
       "runway": "10R",
-      "ident": "PU",
-      "frequencyKHz": 303,
+      "ident": "ПК / PK",
+      "frequencyKHz": 342,
       "showOnMap": false,
       "showInPlace": false,
-      "lat": 59.82166667,
-      "lon": 30.17466667,
-      "coordinatesOriginal": "59°49.30′ N, 30°10.48′ E"
+      "lat": 59.810277778,
+      "lon": 30.148361111,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
     },
     {
       "id": "pulkovo-bprm-10r",
-      "name": "Пулково БПРМ 10R",
+      "name": "Пулково БПРМ 10R (К)",
       "type": "NDB",
       "role": "BPRM",
       "runway": "10R",
-      "ident": "U",
-      "frequencyKHz": 625,
+      "ident": "К / K",
+      "frequencyKHz": 700,
       "showOnMap": false,
       "showInPlace": false,
-      "lat": 59.8025,
-      "lon": 30.20616667,
-      "coordinatesOriginal": "59°48.15′ N, 30°12.37′ E"
+      "lat": 59.802583333,
+      "lon": 30.200388889,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
     },
     {
       "id": "pulkovo-dprm-28l",
-      "name": "Пулково ДПРМ 28L",
+      "name": "Пулково ДПРМ 28L (ПО)",
       "type": "NDB",
       "role": "DPRM",
       "runway": "28L",
-      "ident": "PO",
+      "ident": "ПО / PO",
       "frequencyKHz": 277,
       "showOnMap": false,
       "showInPlace": false,
-      "lat": 59.78166667,
-      "lon": 30.35,
-      "coordinatesOriginal": "59°46.90′ N, 30°21.00′ E"
+      "lat": 59.780694444,
+      "lon": 30.347583333,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
     },
     {
       "id": "pulkovo-bprm-28l",
-      "name": "Пулково БПРМ 28L",
+      "name": "Пулково БПРМ 28L (О)",
       "type": "NDB",
       "role": "BPRM",
       "runway": "28L",
-      "ident": "PL",
+      "ident": "О / O",
+      "frequencyKHz": 572,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.787833333,
+      "lon": 30.29975,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
+    },
+    {
+      "id": "pulkovo-dprm-10l",
+      "name": "Пулково ДПРМ 10L (ПУ)",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "10L",
+      "ident": "ПУ / PU",
+      "frequencyKHz": 326,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.820583333,
+      "lon": 30.171527778,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
+    },
+    {
+      "id": "pulkovo-bprm-10l",
+      "name": "Пулково БПРМ 10L (У)",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "10L",
+      "ident": "У / U",
+      "frequencyKHz": 625,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.812444444,
+      "lon": 30.226861111,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
+    },
+    {
+      "id": "pulkovo-dprm-28r",
+      "name": "Пулково ДПРМ 28R (ПЛ)",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "28R",
+      "ident": "ПЛ / PL",
       "frequencyKHz": 525,
       "showOnMap": false,
       "showInPlace": false,
-      "lat": 59.79166667,
-      "lon": 30.373,
-      "coordinatesOriginal": "59°47.50′ N, 30°22.38′ E"
+      "lat": 59.790972222,
+      "lon": 30.372027778,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
     },
     {
-      "id": "levashovo-dprm-26",
-      "name": "Левашово ДПРМ 26",
-      "type": "NDB",
-      "role": "DPRM",
-      "runway": "26",
-      "ident": "MA",
-      "frequencyKHz": 386,
-      "showOnMap": false,
-      "showInPlace": false,
-      "lat": 60.10016667,
-      "lon": 30.26083333,
-      "coordinatesOriginal": "60°06.01′ N, 30°15.65′ E",
-      "coordinateQuality": "approximate-from-screenshot",
-      "note": "Координаты приведены приблизительно (знак ~ в источнике)."
-    },
-    {
-      "id": "levashovo-bprm-26",
-      "name": "Левашово БПРМ 26",
+      "id": "pulkovo-bprm-28r",
+      "name": "Пулково БПРМ 28R (Л)",
       "type": "NDB",
       "role": "BPRM",
-      "runway": "26",
-      "ident": "M",
+      "runway": "28R",
+      "ident": "Л / L",
+      "frequencyKHz": 960,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 59.798694444,
+      "lon": 30.32025,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "O/R"
+    },
+    {
+      "id": "levashovo-bprm-08",
+      "name": "Левашово БПРМ 08 (П)",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "08",
+      "ident": "П",
       "frequencyKHz": 785,
       "showOnMap": false,
       "showInPlace": false,
-      "lat": 60.09016667,
-      "lon": 30.20966667,
-      "coordinatesOriginal": "60°05.41′ N, 30°12.58′ E",
-      "coordinateQuality": "approximate-from-screenshot",
-      "note": "Координаты приведены приблизительно (знак ~ в источнике)."
+      "lat": 60.086305556,
+      "lon": 30.148861111,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "H24"
+    },
+    {
+      "id": "levashovo-dprm-26",
+      "name": "Левашово ДПРМ 26 (МА)",
+      "type": "NDB",
+      "role": "DPRM",
+      "runway": "26",
+      "ident": "МА",
+      "frequencyKHz": 387,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 60.090027778,
+      "lon": 30.286166667,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "H24"
+    },
+    {
+      "id": "levashovo-bprm-26",
+      "name": "Левашово БПРМ 26 (М)",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": "26",
+      "ident": "М",
+      "frequencyKHz": 785,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 60.088444444,
+      "lon": 30.232194444,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "hoursOfOperation": "H24"
     }
   ],
   "routes": [],
@@ -180,15 +278,23 @@
     {
       "airportId": "pulkovo",
       "runways": [
-        "10L",
         "10R"
       ],
       "landingCourseDeg": 100,
       "navigationAidsIds": [
-        "pulkovo-dprm-10l",
-        "pulkovo-bprm-10l",
         "pulkovo-dprm-10r",
         "pulkovo-bprm-10r"
+      ]
+    },
+    {
+      "airportId": "pulkovo",
+      "runways": [
+        "10L"
+      ],
+      "landingCourseDeg": 100,
+      "navigationAidsIds": [
+        "pulkovo-dprm-10l",
+        "pulkovo-bprm-10l"
       ]
     },
     {
@@ -203,6 +309,27 @@
       ]
     },
     {
+      "airportId": "pulkovo",
+      "runways": [
+        "28R"
+      ],
+      "landingCourseDeg": 280,
+      "navigationAidsIds": [
+        "pulkovo-dprm-28r",
+        "pulkovo-bprm-28r"
+      ]
+    },
+    {
+      "airportId": "levashovo",
+      "runways": [
+        "08"
+      ],
+      "landingCourseDeg": 75,
+      "navigationAidsIds": [
+        "levashovo-bprm-08"
+      ]
+    },
+    {
       "airportId": "levashovo",
       "runways": [
         "26"
@@ -212,6 +339,326 @@
         "levashovo-dprm-26",
         "levashovo-bprm-26"
       ]
+    }
+  ],
+  "communications": {
+    "pulkovo": [
+      {
+        "service": "Радар",
+        "frequencyMHz": 120.3
+      },
+      {
+        "service": "Вышка ВПП 10R/28L",
+        "frequencyMHz": 118.7
+      },
+      {
+        "service": "Вышка ВПП 10L/28R",
+        "frequencyMHz": 118.1
+      },
+      {
+        "service": "Вышка VFR",
+        "frequencyMHz": 133.5
+      },
+      {
+        "service": "Руление",
+        "frequencyMHz": 121.7
+      },
+      {
+        "service": "Деливери",
+        "frequencyMHz": 121.9
+      },
+      {
+        "service": "АТИС",
+        "frequencyMHz": 127.4,
+        "language": "ru"
+      },
+      {
+        "service": "АТИС",
+        "frequencyMHz": 127.3,
+        "language": "en"
+      },
+      {
+        "service": "Транзит",
+        "frequencyMHz": 131.8
+      },
+      {
+        "service": "Перрон",
+        "frequencyMHz": 120.9
+      },
+      {
+        "service": "Рампа",
+        "frequencyMHz": 119.0
+      },
+      {
+        "service": "Аварийная",
+        "frequencyMHz": 121.5
+      },
+      {
+        "service": "Резервная",
+        "frequencyMHz": 128.0
+      },
+      {
+        "service": "Резервная",
+        "frequencyMHz": 129.0
+      },
+      {
+        "service": "Резервная",
+        "frequencyMHz": 124.0
+      },
+      {
+        "service": "Аварийно-спасательная",
+        "frequencyMHz": 123.1
+      },
+      {
+        "service": "ARINC",
+        "frequencyMHz": 131.825
+      },
+      {
+        "service": "SITA",
+        "frequencyMHz": 131.725
+      }
+    ],
+    "levashovo": []
+  },
+  "landingAids": [
+    {
+      "airportId": "levashovo",
+      "type": "DME",
+      "ident": "СРФ / SRF",
+      "frequencyMHz": 112.6,
+      "dmeChannel": "73X",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "ILS-LOC",
+      "runway": "08",
+      "ident": "ИЛВ / ILW",
+      "frequencyMHz": 111.55,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "ILS-GP",
+      "runway": "08",
+      "frequencyMHz": 332.75,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "DME",
+      "runway": "08",
+      "ident": "ИЛВ / ILW",
+      "dmeChannel": "52Y",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "ILS-LOC",
+      "runway": "26",
+      "ident": "ИЛО / ILO",
+      "frequencyMHz": 110.1,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "ILS-GP",
+      "runway": "26",
+      "frequencyMHz": 334.4,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "DME",
+      "runway": "26",
+      "ident": "ИЛО / ILO",
+      "dmeChannel": "38X",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "GBAS",
+      "ident": "ULLA",
+      "frequencyMHz": 112.325,
+      "dmeChannel": "22228",
+      "scope": "SID/STAR RNAV",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "GLS",
+      "runway": "08",
+      "ident": "G08A",
+      "dmeChannel": "20584",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "levashovo",
+      "type": "GLS",
+      "runway": "26",
+      "ident": "G26A",
+      "dmeChannel": "20995",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "GBAS",
+      "ident": "ULLI",
+      "frequencyMHz": 114.35,
+      "dmeChannel": "22309",
+      "scope": "SID/STAR RNAV",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "GLS",
+      "runway": "10R",
+      "ident": "G10A",
+      "dmeChannel": "20665",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "GLS",
+      "runway": "28L",
+      "ident": "G28A",
+      "dmeChannel": "21076",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "GLS",
+      "runway": "10L",
+      "ident": "G10B",
+      "dmeChannel": "21487",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "GLS",
+      "runway": "28R",
+      "ident": "G28B",
+      "dmeChannel": "21898",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-LOC",
+      "runway": "10R",
+      "ident": "ИРК / IRK",
+      "frequencyMHz": 111.9,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-GP",
+      "runway": "10R",
+      "frequencyMHz": 331.1,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "DME",
+      "runway": "10R",
+      "ident": "ИРК / IRK",
+      "dmeChannel": "56X",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-LOC",
+      "runway": "28L",
+      "ident": "ИПО / IPO",
+      "frequencyMHz": 108.9,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-GP",
+      "runway": "28L",
+      "frequencyMHz": 329.3,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "DME",
+      "runway": "28L",
+      "ident": "ИПО / IPO",
+      "dmeChannel": "26X",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-LOC",
+      "runway": "10L",
+      "ident": "ИПУ / IPU",
+      "frequencyMHz": 110.5,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-GP",
+      "runway": "10L",
+      "frequencyMHz": 329.6,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "DME",
+      "runway": "10L",
+      "ident": "ИПУ / IPU",
+      "dmeChannel": "42X",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-LOC",
+      "runway": "28R",
+      "ident": "ИПЛ / IPL",
+      "frequencyMHz": 111.3,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "ILS-GP",
+      "runway": "28R",
+      "frequencyMHz": 332.3,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "pulkovo",
+      "type": "DME",
+      "runway": "28R",
+      "ident": "ИПЛ / IPL",
+      "dmeChannel": "50X",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
     }
   ]
 }

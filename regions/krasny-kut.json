@@ -1,18 +1,18 @@
 {
   "id": "krasny-kut",
   "name": "Красный Кут",
-  "status": "historical-unverified",
-  "dataNotice": "Учебные/исторические данные из v1.58. Не сверены с действующими АИП и NOTAM; не использовать как основной источник навигации.",
-  "revision": "2026-11-02-v1.58-migration",
+  "status": "aip-excerpt-supplied-not-current-verified",
+  "dataNotice": "Точки КТА, ДПРМ и БПРМ по присланным выдержкам АИП УВСК AD 2.2/2.19. Остальные учебные маршруты, точки, зоны и маяки остаются историческими. Действующий AIRAC/NOTAM не проверен; не использовать как основной источник навигации.",
+  "revision": "2026-11-22-v1.63-aip-data-fix",
   "magneticDeclinationDeg": 11,
   "airfield": {
     "name": "Красный Кут",
     "kta": {
-      "lat": 50.960278,
-      "lon": 46.945556
+      "lat": 50.960555556,
+      "lon": 46.945555556
     },
     "dprm": {
-      "lat": 50.9273333,
+      "lat": 50.927333333,
       "lon": 46.919
     },
     "initialCenter": [
@@ -33,16 +33,32 @@
         "display": "122.700 МГц",
         "verification": "provided-by-user-unverified"
       }
+    },
+    "referencePoint": {
+      "lat": 50.960555556,
+      "lon": 46.945555556
+    },
+    "elevationM": 59,
+    "icao": "UWSK",
+    "coordinateSystem": "ПЗ-90.11",
+    "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+    "operationalStatus": "requires-current-AIP-NOTAM-check",
+    "aipMagneticVariationReference": {
+      "degreesEast": 11,
+      "sourceYear": 2024,
+      "annualChangeMinutesEast": 5.5,
+      "note": "Справочное значение АИП. В приложении не применяется автоматически."
     }
   },
   "stations": [
     {
-      "name": "Красный Кут",
-      "lat": 50.9273333,
+      "name": "Красный Кут ДПРМ (БФ)",
+      "lat": 50.927333333,
       "lon": 46.919,
       "freq": "1155 кГц",
       "type": "NDB",
-      "color": "blue"
+      "color": "blue",
+      "ident": "БФ"
     },
     {
       "name": "Ямское",
@@ -70,11 +86,12 @@
     },
     {
       "name": "Гагарин VOR/DME (RK)",
-      "lat": 51.7105556,
-      "lon": 46.1847222,
+      "lat": 51.710472222,
+      "lon": 46.184805556,
       "freq": "113.0 МГц",
       "type": "VOR",
-      "color": "purple"
+      "color": "purple",
+      "ident": "РК / RK"
     }
   ],
   "vorIndex": 4,
@@ -401,8 +418,8 @@
       "name": "Красный Кут",
       "icao": "UWSK",
       "referencePoint": {
-        "lat": 50.960278,
-        "lon": 46.945556
+        "lat": 50.960555556,
+        "lon": 46.945555556
       },
       "showOnMap": true,
       "showInPlace": false,
@@ -421,19 +438,56 @@
           "verification": "provided-by-user-unverified"
         }
       },
-      "notice": "Справочные данные: КТА и частоты уточняйте по действующему АИП/NOTAM."
+      "notice": "Справочные данные: КТА и частоты уточняйте по действующему АИП/NOTAM.",
+      "elevationM": 59,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "aipMagneticVariationReference": {
+        "degreesEast": 11,
+        "sourceYear": 2024,
+        "annualChangeMinutesEast": 5.5,
+        "note": "Справочное значение АИП. В приложении не применяется автоматически."
+      }
+    },
+    {
+      "id": "gagarin",
+      "name": "Саратов (Гагарин)",
+      "icao": "UWSG",
+      "referencePoint": {
+        "lat": 51.712777778,
+        "lon": 46.171111111
+      },
+      "showOnMap": false,
+      "showInPlace": false,
+      "elevationM": 32,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "aipMagneticVariationReference": {
+        "degreesEast": 11,
+        "sourceYear": 2023,
+        "annualChangeMinutesEast": 5.8,
+        "note": "Справочное значение АИП. В приложении не применяется автоматически."
+      }
     }
   ],
   "navigationAids": [
     {
       "id": "krasny-kut-station-1",
-      "name": "Красный Кут",
+      "name": "Красный Кут ДПРМ (БФ)",
       "type": "NDB",
-      "lat": 50.9273333,
+      "lat": 50.927333333,
       "lon": 46.919,
       "frequency": "1155 кГц",
       "showOnMap": false,
-      "showInPlace": true
+      "showInPlace": true,
+      "ident": "БФ",
+      "role": "DPRM",
+      "frequencyKHz": 1155,
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "coordinateSystem": "ПЗ-90.11",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
     },
     {
       "id": "krasny-kut-station-2",
@@ -467,13 +521,151 @@
     },
     {
       "id": "krasny-kut-station-5",
-      "name": "Гагарин VOR/DME (RK)",
+      "name": "Гагарин DVOR/DME (RK)",
       "type": "VOR/DME",
-      "lat": 51.7105556,
-      "lon": 46.1847222,
+      "lat": 51.710472222,
+      "lon": 46.184805556,
       "frequency": "113.0 МГц",
       "showOnMap": false,
-      "showInPlace": false
+      "showInPlace": false,
+      "ident": "РК / RK",
+      "frequencyMHz": 113.0,
+      "dmeAntennaPoint": null,
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "coordinateSystem": "ПЗ-90.11",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
+    },
+    {
+      "id": "krasny-kut-bprm",
+      "name": "Красный Кут БПРМ (Б)",
+      "type": "NDB",
+      "role": "BPRM",
+      "runway": null,
+      "ident": "Б",
+      "frequencyKHz": 275,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 50.949083333,
+      "lon": 46.936555556,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
+    },
+    {
+      "id": "gagarin-ndb-gr",
+      "name": "Гагарин ОПРС (ГР)",
+      "type": "NDB",
+      "role": "OPRS",
+      "runway": null,
+      "ident": "ГР / GR",
+      "frequencyKHz": 479,
+      "showOnMap": false,
+      "showInPlace": false,
+      "lat": 51.713333333,
+      "lon": 46.140416667,
+      "coordinatesAvailable": true,
+      "coordinateSystem": "ПЗ-90.11",
+      "source": "АИП: выдержка AD 2.2/2.19, предоставлена пользователем 22.11.2026; статус действующего AIRAC/NOTAM не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check",
+      "region": "Саратов (Гагарин)",
+      "hoursOfOperation": "H24"
+    }
+  ],
+  "aipCommunications": {
+    "gagarin": [
+      {
+        "service": "Подход",
+        "frequencyMHz": 121.625
+      },
+      {
+        "service": "Круг",
+        "frequencyMHz": 130.3
+      },
+      {
+        "service": "Старт",
+        "frequencyMHz": 122.85
+      },
+      {
+        "service": "Руление",
+        "frequencyMHz": 119.0
+      },
+      {
+        "service": "АТИС",
+        "frequencyMHz": 121.775,
+        "language": "ru"
+      },
+      {
+        "service": "АТИС",
+        "frequencyMHz": 123.375,
+        "language": "en"
+      },
+      {
+        "service": "Транзит",
+        "frequencyMHz": 126.775
+      },
+      {
+        "service": "Аварийная",
+        "frequencyMHz": 121.5
+      },
+      {
+        "service": "Резервная",
+        "frequencyMHz": 129.0
+      }
+    ]
+  },
+  "landingAids": [
+    {
+      "airportId": "gagarin",
+      "type": "ILS-LOC",
+      "runway": "08",
+      "ident": "ИТВ / ITW",
+      "frequencyMHz": 108.55,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "gagarin",
+      "type": "ILS-GP",
+      "runway": "08",
+      "frequencyMHz": 329.75,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "gagarin",
+      "type": "DME",
+      "runway": "08",
+      "ident": "ИТВ / ITW",
+      "dmeChannel": "22Y",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "gagarin",
+      "type": "ILS-LOC",
+      "runway": "26",
+      "ident": "ИТЛ / ITL",
+      "frequencyMHz": 108.75,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "gagarin",
+      "type": "ILS-GP",
+      "runway": "26",
+      "frequencyMHz": 330.35,
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
+    },
+    {
+      "airportId": "gagarin",
+      "type": "DME",
+      "runway": "26",
+      "ident": "ИТЛ / ITL",
+      "dmeChannel": "24Y",
+      "source": "Выдержка АИП, предоставлена пользователем 22.11.2026; проверить актуальный AIRAC/NOTAM",
+      "showInNavaidCatalog": false
     }
   ]
 }

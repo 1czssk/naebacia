@@ -1,8 +1,8 @@
 /* НАЕБАЦИЯ v1.63 VI — редактор маршрутов, обновлённый PWA-кэш */
-const CACHE = 'naebacia-v1-63-r5';
+const CACHE = 'naebacia-v1-63-r6';
 const SHELL = ['./','./index.html','./app.js','./assets/aircraft/aircraft-skins.js','./manifest.json',
   './regions/krasny-kut.json','./regions/saint-petersburg.json','./regions/lipetsk.json',
-  './regions/ulyanovsk.json','./regions/buguruslan.json','./assets/icons/icon-192.png','./assets/icons/icon-512.png',
+  './regions/sasovo.json','./regions/ulyanovsk.json','./regions/buguruslan.json','./assets/icons/icon-192.png','./assets/icons/icon-512.png',
   './assets/aircraft/standard.svg', './assets/aircraft/liner.svg', './assets/aircraft/tu154.svg', './assets/aircraft/fighter.svg', './assets/aircraft/shuttle.svg', './assets/aircraft/rocket.svg', './assets/aircraft/funny.svg', './assets/aircraft/da40.svg', './assets/aircraft/da42.svg', './assets/aircraft/mi8.svg']; 
 const LEAFLET_ASSETS = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',

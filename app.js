@@ -326,6 +326,8 @@ loadSupplementaryRegion('./regions/saint-petersburg.json', 'saint-petersburg',
   'naebaciaEmbeddedSaintPetersburg').catch(e => console.warn('Звёзды СПб:',e));
 loadSupplementaryRegion('./regions/lipetsk.json', 'lipetsk',
   'naebaciaEmbeddedLipetsk').catch(e => console.warn('Звезда Липецка:',e));
+loadSupplementaryRegion('./regions/sasovo.json', 'sasovo',
+  'naebaciaEmbeddedSasovo').catch(e => console.warn('Звезда Сасово:',e));
 // === КОНЕЦ БЛОКА 13 ===
 
 // === БЛОК 14: DATA: ОПРС ===
@@ -1163,6 +1165,17 @@ function acceptNrtPosition(){
 
 // === БЛОК 26: STATION POPUPS, ОБЩАЯ БИБЛИОТЕКА НРТС ===
 const NAVAID_WORK_KEY='naebacia_work_navaids_v1';
+// Фикс АИП: переносим старые сохранённые ID на тот же физический маяк (по позывному).
+const NAVAID_CATALOG_REVISION='aip-2026-11-22';
+const NAVAID_ID_MIGRATION=Object.freeze({
+  'pulkovo-dprm-10l':'pulkovo-dprm-10r', // ПК
+  'pulkovo-bprm-10l':'pulkovo-bprm-10r', // К
+  'pulkovo-dprm-10r':'pulkovo-dprm-10l', // ПУ
+  'pulkovo-bprm-10r':'pulkovo-bprm-10l', // У
+  'pulkovo-bprm-28l':'pulkovo-dprm-28r', // ПЛ (не О)
+  'lipetsk-bprm-15':'lipetsk-oprm-15',   // Д
+  'lipetsk-bprm-33':'lipetsk-oprm-33'    // И
+});
 const NAVAID_COLORS=['#2473b6','#e35050','#ef9c20','#20956c','#8e5bd8','#d26195','#45a0a0'];
 let navaidCatalog=[];
 let navaidWorkIds=[];
@@ -1170,10 +1183,10 @@ let navaidLastRefreshAt=0;
 function navaidHasCoordinates(a){return a && Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&Math.abs(a.lat)<=90&&Math.abs(a.lon)<=180;}
 function navaidFormatFrequency(a){return a.frequency||(Number.isFinite(a.frequencyKHz)?a.frequencyKHz+' кГц':Number.isFinite(a.frequencyMHz)?a.frequencyMHz.toFixed(2)+' МГц':'Частота не указана');}
 function navaidIsVor(a){return a.type==='VOR/DME'||a.type==='VOR';}
-function makeLibraryEntry(a,region){return {...a,region,frequency:navaidFormatFrequency(a),type:navaidIsVor(a)?'VOR':'NDB',color:navaidIsVor(a)?'#9b66e6':'#2779ae'};}
+function makeLibraryEntry(a,region){return {...a,region:a.region||region,frequency:navaidFormatFrequency(a),type:navaidIsVor(a)?'VOR':'NDB',color:navaidIsVor(a)?'#9b66e6':'#2779ae'};}
 function loadNavaidCatalog(){
   const regions=[ACTIVE_PROFILE];
-  for(const id of ['naebaciaEmbeddedSaintPetersburg','naebaciaEmbeddedLipetsk','naebaciaEmbeddedUlyanovsk','naebaciaEmbeddedBuguruslan']){
+  for(const id of ['naebaciaEmbeddedSaintPetersburg','naebaciaEmbeddedLipetsk','naebaciaEmbeddedSasovo','naebaciaEmbeddedUlyanovsk','naebaciaEmbeddedBuguruslan']){
     const el=document.getElementById(id);
     if(!el)continue;
     try{regions.push(JSON.parse(el.textContent));}catch(e){console.warn('Регион НРТС:',id,e);}
@@ -1190,7 +1203,10 @@ function loadNavaidCatalog(){
   try{saved=JSON.parse(localStorage.getItem(NAVAID_WORK_KEY)||'null');}catch(e){}
   if(saved && saved.version===1 && Array.isArray(saved.ids)){
     const valid=new Set(navaidCatalog.map(a=>a.id));
-    navaidWorkIds=[...new Set(saved.ids.filter(id=>typeof id==='string'&&valid.has(id)))];
+    const ids=saved.catalogRevision===NAVAID_CATALOG_REVISION ? saved.ids :
+      saved.ids.map(id=>NAVAID_ID_MIGRATION[id]||id);
+    navaidWorkIds=[...new Set(ids.filter(id=>typeof id==='string'&&valid.has(id)))];
+    if(saved.catalogRevision!==NAVAID_CATALOG_REVISION)saveNavaidWork();
   }else{
     // Сохраняем начальную пятёрку из v1.61 (не пересчитываем список без нажатия кнопки).
     navaidWorkIds=navaidCatalog.filter(a=>a.region===ACTIVE_PROFILE.name).map(a=>a.id).slice(0,5);
@@ -1200,7 +1216,7 @@ function loadNavaidCatalog(){
   renderNavaidMarkers();
 }
 function saveNavaidWork(){
-  try{localStorage.setItem(NAVAID_WORK_KEY,JSON.stringify({version:1,ids:navaidWorkIds}));}catch(e){console.warn('Рабочие НРТС не сохранены',e);}
+  try{localStorage.setItem(NAVAID_WORK_KEY,JSON.stringify({version:1,catalogRevision:NAVAID_CATALOG_REVISION,ids:navaidWorkIds}));}catch(e){console.warn('Рабочие НРТС не сохранены',e);}
 }
 function navaidSvg(isVor){
   if(isVor)return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="5" width="30" height="30" fill="white" stroke="#3659a4" stroke-width="2.8"/><polygon points="20,9 29.5,14.5 29.5,25.5 20,31 10.5,25.5 10.5,14.5" fill="white" stroke="#3659a4" stroke-width="2.8"/><circle cx="20" cy="20" r="2.6" fill="#3659a4"/></svg>';
@@ -1286,7 +1302,7 @@ function navaidDistanceSort(a,b,origin){
 }
 function updateNearbyNavaids(){
   const origin=getCurrentPosition()||{...KTA_POINT};
-  const nearest=navaidCatalog.filter(navaidHasCoordinates).sort((a,b)=>navaidDistanceSort(a,b,origin)).slice(0,5);
+  const nearest=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&a.allowAutoNearest!==false&&a.operationalStatus!=='historical-unverified').sort((a,b)=>navaidDistanceSort(a,b,origin)).slice(0,5);
   const now=Date.now();
   const second=now-navaidLastRefreshAt<=10000;
   navaidLastRefreshAt=now;
