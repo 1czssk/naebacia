@@ -121,7 +121,7 @@
 .route-loop-btn.selected{border-color:#ed8b1d!important;box-shadow:0 0 0 2px rgba(237,139,29,.25)}
 </style>
 
-<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
 <!-- === БЛОК 2: STYLE: БАЗА === -->
@@ -1444,41 +1444,59 @@
 <script id="naebaciaEmbeddedSaintPetersburg" type="application/json">{"id":"saint-petersburg","name":"Санкт-Петербург","status":"draft-unverified","active":false,"dataNotice":"Непроверенные справочные данные, вручную перенесённые из присланных скриншотов. Частоты и координаты не сверены с действующим АИП/NOTAM. Координаты приводов ВПП 26 Левашово указаны приблизительно. Не использовать для полётной навигации.","airfields":[{"id":"pulkovo","name":"Пулково","referencePoint":{"lat":59.8003,"lon":30.2625},"alternativeReferencePoints":[{"lat":59.7998,"lon":30.273,"note":"Альтернативное положение в присланном справочном материале; не используется для звезды"}],"showOnMap":true,"showInPlace":false,"symbol":"red-star"},{"id":"levashovo","name":"Левашово","referencePoint":{"lat":60.0867,"lon":30.1933},"alternativeReferencePoints":[{"lat":60.086666666666666,"lon":30.193333333333335,"sourceText":"60°05′12″ N, 30°11′36″ E","note":"Альтернативная запись из скриншота"}],"showOnMap":true,"showInPlace":false,"symbol":"red-star"}],"navigationAids":[{"id":"pulkovo-vor-spb","name":"Пулково VOR/DME","type":"VOR/DME","ident":"SPB","frequencyMHz":113.4,"dmeChannel":"81X","lat":59.8067,"lon":30.285,"showOnMap":false,"showInPlace":false},{"id":"pulkovo-dprm-10l","name":"Пулково ДПРМ 10L","type":"NDB","role":"DPRM","runway":"10L","ident":"PK","frequencyKHz":342,"showOnMap":false,"showInPlace":false,"lat":59.81,"lon":30.14966667,"coordinatesOriginal":"59°48.60′ N, 30°08.98′ E"},{"id":"pulkovo-bprm-10l","name":"Пулково БПРМ 10L","type":"NDB","role":"BPRM","runway":"10L","ident":"K","frequencyKHz":700,"showOnMap":false,"showInPlace":false,"lat":59.80716667,"lon":30.18883333,"coordinatesOriginal":"59°48.43′ N, 30°11.33′ E"},{"id":"pulkovo-dprm-10r","name":"Пулково ДПРМ 10R","type":"NDB","role":"DPRM","runway":"10R","ident":"PU","frequencyKHz":303,"showOnMap":false,"showInPlace":false,"lat":59.82166667,"lon":30.17466667,"coordinatesOriginal":"59°49.30′ N, 30°10.48′ E"},{"id":"pulkovo-bprm-10r","name":"Пулково БПРМ 10R","type":"NDB","role":"BPRM","runway":"10R","ident":"U","frequencyKHz":625,"showOnMap":false,"showInPlace":false,"lat":59.8025,"lon":30.20616667,"coordinatesOriginal":"59°48.15′ N, 30°12.37′ E"},{"id":"pulkovo-dprm-28l","name":"Пулково ДПРМ 28L","type":"NDB","role":"DPRM","runway":"28L","ident":"PO","frequencyKHz":277,"showOnMap":false,"showInPlace":false,"lat":59.78166667,"lon":30.35,"coordinatesOriginal":"59°46.90′ N, 30°21.00′ E"},{"id":"pulkovo-bprm-28l","name":"Пулково БПРМ 28L","type":"NDB","role":"BPRM","runway":"28L","ident":"PL","frequencyKHz":525,"showOnMap":false,"showInPlace":false,"lat":59.79166667,"lon":30.373,"coordinatesOriginal":"59°47.50′ N, 30°22.38′ E"},{"id":"levashovo-dprm-26","name":"Левашово ДПРМ 26","type":"NDB","role":"DPRM","runway":"26","ident":"MA","frequencyKHz":386,"showOnMap":false,"showInPlace":false,"lat":60.10016667,"lon":30.26083333,"coordinatesOriginal":"60°06.01′ N, 30°15.65′ E","coordinateQuality":"approximate-from-screenshot","note":"Координаты приведены приблизительно (знак ~ в источнике)."},{"id":"levashovo-bprm-26","name":"Левашово БПРМ 26","type":"NDB","role":"BPRM","runway":"26","ident":"M","frequencyKHz":785,"showOnMap":false,"showInPlace":false,"lat":60.09016667,"lon":30.20966667,"coordinatesOriginal":"60°05.41′ N, 30°12.58′ E","coordinateQuality":"approximate-from-screenshot","note":"Координаты приведены приблизительно (знак ~ в источнике)."}],"routes":[],"zones":[],"sectors":[],"approachInfo":[{"airportId":"pulkovo","runways":["10L","10R"],"landingCourseDeg":100,"navigationAidsIds":["pulkovo-dprm-10l","pulkovo-bprm-10l","pulkovo-dprm-10r","pulkovo-bprm-10r"]},{"airportId":"pulkovo","runways":["28L"],"landingCourseDeg":280,"navigationAidsIds":["pulkovo-dprm-28l","pulkovo-bprm-28l"]},{"airportId":"levashovo","runways":["26"],"landingCourseDeg":255,"navigationAidsIds":["levashovo-dprm-26","levashovo-bprm-26"]}]}</script>
 <script id="naebaciaEmbeddedLipetsk" type="application/json">{"id":"lipetsk","name":"Липецк","status":"draft-unverified","active":false,"dataNotice":"Справочные данные из предоставленных пользователем скриншотов. Сведения, частоты и положение КТА не проверены по действующему АИП/NOTAM. У приводов нет координат в источнике; координаты не добавлены. Не использовать в полётной навигации.","airfields":[{"id":"lipetsk","name":"Липецк","icao":"UUOL","iata":"LPK","referencePoint":{"lat":52.7028,"lon":39.5378},"alternativeReferencePoints":[{"lat":52.70333333,"lon":39.53833333,"sourceText":"52°42.2′ N, 39°32.3′ E","note":"Другой вариант в присланном скриншоте, не используется для звезды"}],"showOnMap":true,"showInPlace":false,"symbol":"red-star","runways":["15","33"],"runwayDimensionsFromScreenshot":"2343 × 45 м"}],"navigationAids":[{"id":"lipetsk-dprm-15","name":"Липецк ДПРМ 15","type":"NDB","role":"DPRM","runway":"15","ident":"DD","frequencyKHz":815,"showOnMap":false,"showInPlace":false,"coordinatesAvailable":false,"note":"В предоставленных данных координаты не указаны; не вычислялись."},{"id":"lipetsk-bprm-15","name":"Липецк БПРМ 15","type":"NDB","role":"BPRM","runway":"15","ident":"D","frequencyKHz":400,"showOnMap":false,"showInPlace":false,"coordinatesAvailable":false,"note":"В предоставленных данных координаты не указаны; не вычислялись."},{"id":"lipetsk-dprm-33","name":"Липецк ДПРМ 33","type":"NDB","role":"DPRM","runway":"33","ident":"IT","frequencyKHz":815,"showOnMap":false,"showInPlace":false,"coordinatesAvailable":false,"note":"В предоставленных данных координаты не указаны; не вычислялись."},{"id":"lipetsk-bprm-33","name":"Липецк БПРМ 33","type":"NDB","role":"BPRM","runway":"33","ident":"I","frequencyKHz":400,"showOnMap":false,"showInPlace":false,"coordinatesAvailable":false,"note":"В предоставленных данных координаты не указаны; не вычислялись."}],"approachInfo":[{"airportId":"lipetsk","runways":["15"],"landingCourseDeg":150,"navigationAidsIds":["lipetsk-dprm-15","lipetsk-bprm-15"]},{"airportId":"lipetsk","runways":["33"],"landingCourseDeg":330,"navigationAidsIds":["lipetsk-dprm-33","lipetsk-bprm-33"]}],"routes":[],"zones":[],"sectors":[]}</script>
 <script id="naebaciaEmbeddedSkins" type="text/plain">
-/* НАЕБАЦИЯ VI · независимая библиотека SVG-силуэтов, вид сверху.
-   Геометрия в координатах 60×60; нос каждого силуэта смотрит на север. */
+/* НАЕБАЦИЯ VI · SVG-ресурсы силуэтов в assets/aircraft/.
+   Настоящие отдельные SVG исходники загружаются один раз при старте,
+   затем встраиваются как пути в маркеры. Цвет и поворот задаются штатным
+   вызовом NAEBACIA_SKINS.svg(id, heading, color). */
 (function (root) {
   'use strict';
-  const skins = {
-    standard: {
-      label: 'Стандартный',
-      shapes: '<path d="M30 2 C27.9 2 27 5.1 27 8.4 L26.5 18.8 L4 18 Q1.7 18 1.7 20.2 L1.7 27.8 Q1.7 29.5 3.6 29.5 L26.4 28.6 L27.3 47.3 L18.3 49.7 Q17.6 50 17.6 51.2 L17.6 55.8 L27.9 54.4 L28.4 57.7 Q30 59 31.6 57.7 L32.1 54.4 L42.4 55.8 L42.4 51.2 Q42.4 50 41.7 49.7 L32.7 47.3 L33.6 28.6 L56.4 29.5 Q58.3 29.5 58.3 27.8 L58.3 20.2 Q58.3 18 56 18 L33.5 18.8 L33 8.4 C33 5.1 32.1 2 30 2Z"/>'
-    },
-    liner: {
-      label: 'Лайнер',
-      shapes: '<path d="M30 1 Q27.6 4 27.6 10 L26.8 19 L3.5 37.5 Q2.5 38.5 3.4 42.5 L26.5 33.5 L27.2 49 L17.5 54 L18 57 L29 53.8 L30 58 L31 53.8 L42 57 L42.5 54 L32.8 49 L33.5 33.5 L56.6 42.5 Q57.5 38.5 56.5 37.5 L33.2 19 L32.4 10 Q32.4 4 30 1 Z"/>'
-    },
-    fighter: {
-      label: 'Истребитель',
-      shapes: '<path d="M30 1 Q27 5 26.5 15 L25.5 22 L5 39 L5 45 L23.6 40 L24.8 51 L16.8 55.5 L16.5 58 L29.3 55.4 L30 58 L30.7 55.4 L43.5 58 L43.2 55.5 L35.2 51 L36.4 40 L55 45 L55 39 L34.5 22 L33.5 15 Q33 5 30 1Z"/><path d="M23.5 43 L28 45.5 L27 54.5 L23 54Z"/><path d="M36.5 43 L32 45.5 L33 54.5 L37 54Z"/><path d="M28 15 Q30 11 32 15 L32 30 L28 30Z"/>'
-    },
-    rocket: {
-      label: 'Ракета',
-      shapes: '<path d="M30 1 Q19 13 21 33 L22 40 L12 49 L12 58 L24 51 L27 55 L33 55 L36 51 L48 58 L48 49 L38 40 L39 33 Q41 13 30 1Z"/><circle cx="30" cy="22" r="4.8"/><path d="M26 54 L30 59 L34 54Z"/>'
-    },
-    funny: {
-      label: 'Писюн',
-      shapes: '<rect x="23" y="12" width="14" height="34" rx="7"/><path d="M23 16 Q20 7 30 4 Q40 7 37 16Z"/><circle cx="21" cy="48" r="10"/><circle cx="39" cy="48" r="10"/>'
-    }
-  };
-  function svg(id, heading, color) {
+  const entries = [["standard","Стандартный · Cessna"],["liner","Лайнер"],["tu154","Тушка"],["fighter","Истребитель"],["shuttle","Шаттл"],["rocket","Ракета"],["funny","Писюн"],["da40","Diamond DA40"],["da42","Diamond DA42"],["mi8","Ми-8"]];
+  const skins = Object.create(null);
+  for (const [id,label] of entries) skins[id] = {label, file: id+'.svg', shapes: ''};
+  const ids = entries.map(entry=>entry[0]);
+  // Единственная аварийная фигура, если ресурс временно не загрузился.
+  const fallback = '<path d="M50 4 Q47 4 47 11 L46 38 L5 48 Q3 49 4 55 L46 50 L47 83 L34 89 L34 95 L49 90 L51 90 L66 95 L66 89 L53 83 L54 50 L96 55 Q97 49 95 48 L54 38 L53 11 Q53 4 50 4Z"/>';
+  let loadPromise=null;
+  let failures=[];
+  function assetUrl(file){return new URL('./assets/aircraft/'+file, document.baseURI);}
+  async function load(){
+    if(loadPromise)return loadPromise;
+    loadPromise=(async()=>{
+      const problems=[];
+      await Promise.all(ids.map(async id=>{
+        try {
+          const res=await fetch(assetUrl(skins[id].file), {cache:'no-cache'});
+          if(!res.ok)throw new Error('HTTP '+res.status);
+          const raw=await res.text();
+          const doc=new DOMParser().parseFromString(raw,'image/svg+xml');
+          if(doc.querySelector('parsererror'))throw new Error('Ошибка XML');
+          const group=doc.querySelector('g[data-silhouette]');
+          if(!group || !group.children.length)throw new Error('Нет контура');
+          // Вся библиотека своя: разрешаем только простую SVG-геометрию.
+          for(const el of group.querySelectorAll('*')){
+            if(!['path','circle','rect','ellipse','polygon','polyline','line'].includes(el.tagName.toLowerCase()))throw new Error('Неизвестный SVG-элемент');
+            for(const attr of el.attributes){
+              if(attr.name.startsWith('on')||['href','style','src','filter'].includes(attr.name))throw new Error('Недопустимый атрибут');
+            }
+          }
+          skins[id].shapes=group.innerHTML;
+        } catch(err){problems.push(id);console.warn('[НАЕБАЦИЯ] Силуэт '+id+' не загружен:',err);}
+      }));
+      failures=problems;
+      return {loaded:ids.length-failures.length,failed:[...failures]};
+    })();
+    return loadPromise;
+  }
+  function svg(id, heading, color){
     const found=skins[id] || skins.standard;
     const deg=Number.isFinite(heading) ? ((heading%360)+360)%360 : 0;
     const safeColor=/^#[0-9a-fA-F]{3,8}$/.test(color||'')?color:'#08c';
-    return '<svg viewBox="0 0 60 60" width="52" height="52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" '+
-      'style="transform:rotate('+deg+'deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))">'+
-      '<g fill="'+safeColor+'" stroke="#fff" stroke-width="1.2" stroke-linejoin="round">'+found.shapes+'</g></svg>';
+    const shapes=found.shapes || (skins.standard.shapes || fallback);
+    return '<svg viewBox="0 0 100 100" width="52" height="52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" ' +
+      'style="transform:rotate('+deg+'deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))">' +
+      '<g fill="'+safeColor+'" stroke="#fff" stroke-width=".72" paint-order="stroke fill" stroke-linejoin="round">'+shapes+'</g></svg>';
   }
-  root.NAEBACIA_SKINS=Object.freeze({skins,svg,ids:Object.keys(skins)});
+  root.NAEBACIA_SKINS=Object.freeze({skins,ids,svg,load,get failures(){return [...failures]}});
 })(window);
 </script>
 <script id="naebaciaEmbeddedApp" type="text/plain">
@@ -6245,10 +6263,14 @@ window.addEventListener('pagehide', () => saveFlightLog(true));
     await ensureLeaflet();
     await ensureMapRotation();
     statusMessage('Запуск НАЕБАЦИИ VI…');
-    try {await loadScript('./aircraft-skins.js?v=1.63-r3');}
+    try {await loadScript('./assets/aircraft/aircraft-skins.js?v=1.63-r4');}
     catch(error){console.warn('Силуэты не загрузились, встроенная копия:',error);executeBuiltInSkins();}
+    if(window.NAEBACIA_SKINS && typeof window.NAEBACIA_SKINS.load==='function'){
+      const result=await window.NAEBACIA_SKINS.load();
+      if(result.failed.length)reportWarning('Не загрузились некоторые силуэты: '+result.failed.length+'. Проверьте папку assets/aircraft/.');
+    }
     try {
-      await loadScript('./app.js?v=1.63-r3');
+      await loadScript('./app.js?v=1.63-r4');
     } catch (error) {
       console.warn('app.js недоступен, запускаем резервную копию из HTML:',error);
       executeBuiltInApp();
