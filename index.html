@@ -2672,6 +2672,7 @@ function acceptNrtPosition(){
 // === БЛОК 26: STATION POPUPS, ОБЩАЯ БИБЛИОТЕКА НРТС ===
 const NAVAID_WORK_KEY='naebacia_work_navaids_v1';
 // Фикс АИП: переносим старые сохранённые ID на тот же физический маяк (по позывному).
+// Идентификаторы AD 2.19 прежние; миграция применяется только к доревизионным спискам.
 const NAVAID_CATALOG_REVISION='aip-2026-11-22';
 const NAVAID_ID_MIGRATION=Object.freeze({
   'pulkovo-dprm-10l':'pulkovo-dprm-10r', // ПК
@@ -2686,10 +2687,66 @@ const NAVAID_COLORS=['#2473b6','#e35050','#ef9c20','#20956c','#8e5bd8','#d26195'
 let navaidCatalog=[];
 let navaidWorkIds=[];
 let navaidLastRefreshAt=0;
+let navaidSpotlightId=null;
+let navaidEnrImportStatus='Каталог ENR 4.1 не загружен';
 function navaidHasCoordinates(a){return a && Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&Math.abs(a.lat)<=90&&Math.abs(a.lon)<=180;}
 function navaidFormatFrequency(a){return a.frequency||(Number.isFinite(a.frequencyKHz)?a.frequencyKHz+' кГц':Number.isFinite(a.frequencyMHz)?a.frequencyMHz.toFixed(2)+' МГц':'Частота не указана');}
-function navaidIsVor(a){return a.type==='VOR/DME'||a.type==='VOR';}
-function makeLibraryEntry(a,region){return {...a,region:a.region||region,frequency:navaidFormatFrequency(a),type:navaidIsVor(a)?'VOR':'NDB',color:navaidIsVor(a)?'#9b66e6':'#2779ae'};}
+function navaidIsVor(a){return !!a&&(a.type==='VOR'||a.type==='VOR/DME'||a.type==='DVOR/DME'||a.type==='DVOR');}
+function navaidIsDmeOnly(a){return !!a&&a.type==='DME';}
+function navaidTypeLabel(a){
+  if(navaidIsDmeOnly(a))return 'DME (только дальность)';
+  if(navaidIsVor(a))return (a.sourceType==='DVORDME'||a.sourceType==='DVOR+DME')?'DVOR/DME':a.sourceType==='DVOR'?'DVOR':'VOR/DME';
+  return 'ОПРС / NDB';
+}
+function makeLibraryEntry(a,region){
+  const type=navaidIsDmeOnly(a)?'DME':navaidIsVor(a)?'VOR':'NDB';
+  return {...a,region:a.region||region,frequency:navaidFormatFrequency(a),type,
+    color:type==='VOR'?'#9b66e6':type==='DME'?'#577e82':'#2779ae'};
+}
+function navaidNumberFrequency(a){
+  if(Number.isFinite(a.frequencyKHz))return a.frequencyKHz;
+  if(Number.isFinite(a.frequencyMHz))return a.frequencyMHz;
+  const m=String(a.frequency||'').replace(',','.').match(/[0-9]+(?:\.[0-9]+)?/);
+  return m?Number(m[0]):NaN;
+}
+function navaidSamePhysicalAid(a,b){
+  if(!navaidHasCoordinates(a)||!navaidHasCoordinates(b)||a.type!==b.type)return false;
+  const fa=navaidNumberFrequency(a),fb=navaidNumberFrequency(b);
+  if(!Number.isFinite(fa)||!Number.isFinite(fb)||Math.abs(fa-fb)>0.02)return false;
+  if(distance(a,b)>1200)return false;
+  // Совпадение географического положения и частоты: пользовательский ID из AD имеет приоритет.
+  // На одной частоте могут работать разные средства рядом; требуется также совпадение позывного
+  // или очень близкое (<100 м) положение антенны.
+  const idA=String(a.ident||'').toUpperCase().split(/[\s\/]+/).filter(Boolean);
+  const idB=String(b.ident||'').toUpperCase().split(/[\s\/]+/).filter(Boolean);
+  return idA.some(x=>idB.includes(x))||distance(a,b)<100;
+}
+function mergeEnr41Catalog(existing){
+  const feed=window.NAEBACIA_ENR41;
+  if(!feed||feed.format!=='naebacia-navaids-enr41'||!Array.isArray(feed.records)||feed.records.length<300){
+    navaidEnrImportStatus='ENR 4.1 недоступен; используются прежние НРТС';
+    return existing;
+  }
+  const merged=new Map(existing.map(a=>[a.id,a]));
+  let added=0,linked=0;
+  for(const raw of feed.records){
+    if(!raw||typeof raw.id!=='string'||!/^[a-z0-9-]+$/.test(raw.id)||
+      !['NDB','VOR','DME'].includes(raw.type)||!navaidHasCoordinates(raw))continue;
+    const a=makeLibraryEntry({...raw,catalogSource:'ENR4.1',region:'АИП России · ENR 4.1'},'АИП России · ENR 4.1');
+    const old=existing.find(other=>navaidSamePhysicalAid(other,a));
+    if(old){
+      // Дополняем справочные метаданные, но не меняем ID или точные координаты аэродромных средств.
+      old.enr41Id=a.id;
+      old.enr41SourcePage=a.sourcePage;
+      old.enr41Hours=a.hoursOfOperation;
+      linked++;
+    } else if(!merged.has(a.id)){
+      merged.set(a.id,a);added++;
+    }
+  }
+  navaidEnrImportStatus='ENR 4.1: '+feed.records.length+' записей; '+added+' добавлено, '+linked+' сопоставлено с аэродромной базой';
+  return Array.from(merged.values());
+}
 function loadNavaidCatalog(){
   const regions=[ACTIVE_PROFILE];
   for(const id of ['naebaciaEmbeddedSaintPetersburg','naebaciaEmbeddedLipetsk','naebaciaEmbeddedSasovo','naebaciaEmbeddedUlyanovsk','naebaciaEmbeddedBuguruslan']){
@@ -2704,7 +2761,7 @@ function loadNavaidCatalog(){
       byId.set(aid.id,makeLibraryEntry(aid,region.name));
     }
   }
-  navaidCatalog=Array.from(byId.values());
+  navaidCatalog=mergeEnr41Catalog(Array.from(byId.values()));
   let saved=null;
   try{saved=JSON.parse(localStorage.getItem(NAVAID_WORK_KEY)||'null');}catch(e){}
   if(saved && saved.version===1 && Array.isArray(saved.ids)){
@@ -2724,27 +2781,44 @@ function loadNavaidCatalog(){
 function saveNavaidWork(){
   try{localStorage.setItem(NAVAID_WORK_KEY,JSON.stringify({version:1,catalogRevision:NAVAID_CATALOG_REVISION,ids:navaidWorkIds}));}catch(e){console.warn('Рабочие НРТС не сохранены',e);}
 }
-function navaidSvg(isVor){
-  if(isVor)return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="5" width="30" height="30" fill="white" stroke="#3659a4" stroke-width="2.8"/><polygon points="20,9 29.5,14.5 29.5,25.5 20,31 10.5,25.5 10.5,14.5" fill="white" stroke="#3659a4" stroke-width="2.8"/><circle cx="20" cy="20" r="2.6" fill="#3659a4"/></svg>';
+function navaidSvg(type){
+  if(type==='DME')return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="6" width="28" height="28" rx="3" fill="white" stroke="#3659a4" stroke-width="2.8"/><circle cx="20" cy="20" r="7.5" fill="none" stroke="#3659a4" stroke-width="2.3"/><circle cx="20" cy="20" r="2.3" fill="#3659a4"/></svg>';
+  if(type==='VOR')return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="5" width="30" height="30" fill="white" stroke="#3659a4" stroke-width="2.8"/><polygon points="20,9 29.5,14.5 29.5,25.5 20,31 10.5,25.5 10.5,14.5" fill="white" stroke="#3659a4" stroke-width="2.8"/><circle cx="20" cy="20" r="2.6" fill="#3659a4"/></svg>';
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13" fill="none" stroke="#3659a4" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="1 6.3"/><circle cx="20" cy="20" r="8" fill="none" stroke="#3659a4" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="1 4"/><circle cx="20" cy="20" r="2.5" fill="#3659a4"/></svg>';
 }
 function renderNavaidMarkers(){
   navaidMapMarkers.forEach(l=>map.removeLayer(l));navaidMapMarkers=[];
-  navaidCatalog.filter(navaidHasCoordinates).forEach(a=>{
-    const icon=L.divIcon({className:'naebacia-navaid-icon',html:navaidSvg(navaidIsVor(a)),iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-12]});
+  // Всероссийский каталог не засыпает карту сотнями значков: только выбранные и открытый из поиска.
+  navaidCatalog.filter(a=>navaidHasCoordinates(a)&&
+    (a.catalogSource!=='ENR4.1'||navaidWorkIds.includes(a.id)||navaidSpotlightId===a.id)).forEach(a=>{
+    const icon=L.divIcon({className:'naebacia-navaid-icon',html:navaidSvg(a.type),iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-12]});
     const m=L.marker([a.lat,a.lon],{icon,zIndexOffset:80}).addTo(map);
+    m.naebaciaNavaidId=a.id;
     m.bindPopup(()=>{
       const cur=getCurrentPosition();
-      let label='<b>'+safeText(a.name)+'</b><br>'+safeText(navaidIsVor(a)?'VOR/DME':'ОПРС / NDB')+' · '+safeText(a.frequency);
+      let label='<b>'+safeText(a.name)+'</b><br>'+safeText(navaidTypeLabel(a))+' · '+safeText(a.frequency);
       if(a.ident)label+='<br>Позывной: '+safeText(a.ident);
-      if(cur)label+='<br>От '+safeText(cur.source)+': '+(distance(cur,a)/1000).toFixed(1)+' км';
+      if(a.dmeChannel)label+='<br>Канал DME: '+safeText(a.dmeChannel);
+      if(a.hoursOfOperation)label+='<br>Время работы (АИП): '+safeText(a.hoursOfOperation);
+      if(cur)label+='<br>От '+safeText(cur.source)+': '+(distance(cur,a)/1000).toFixed(1)+' км по карте';
+      if(a.catalogSource==='ENR4.1')label+='<br><small>Источник: ENR 4.1, стр. '+a.sourcePage+'; система '+safeText(a.coordinateSystem)+'.</small>';
+      if(navaidIsDmeOnly(a))label+='<br><small>DME выдаёт наклонную дальность; расчёт по карте не является показанием приёмника DME.</small>';
       if(a.coordinateQuality)label+='<br><small>⚠ Координаты предварительные</small>';
-      label+='<br><small>Сведения требуют сверки с действующим АИП.</small>';
+      label+='<br><small>Проверяйте действующие AIRAC/NOTAM перед полётом.</small>';
       if(!navaidWorkIds.includes(a.id))label+='<br><button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">＋ В рабочий список</button>';
       return label;
     });
     navaidMapMarkers.push(m);
   });
+}
+function showNavaidOnMap(id){
+  const a=navaidCatalog.find(x=>x.id===id);if(!navaidHasCoordinates(a))return;
+  navaidSpotlightId=id;
+  renderNavaidMarkers();
+  const library=document.getElementById('navaidLibrary');if(library)library.hidden=true;
+  if(map&&typeof map.setView==='function')map.setView([a.lat,a.lon],Math.max(9,map.getZoom()));
+  const marker=navaidMapMarkers.find(m=>m.naebaciaNavaidId===id);
+  if(marker&&typeof marker.openPopup==='function')marker.openPopup();
 }
 function buildStationPopup(idx){
   const a=PRESET[idx];if(!a)return '';
@@ -2753,6 +2827,7 @@ function buildStationPopup(idx){
   html+='<br>'+ddToDM(a.lat,true)+' '+ddToDM(a.lon,false);
   const cur=getCurrentPosition();
   if(!cur)return html+'<br><small>Нет известной расчётной позиции.</small>';
+  if(navaidIsDmeOnly(a))return html+'<hr><b>От '+safeText(cur.source)+':</b> '+(distance(cur,a)/1000).toFixed(1)+' км по карте<br><small>DME измеряет наклонную дальность; радиал и пеленг здесь не определяются.</small>'+freshnessWarning(cur);
   const decl=getDecl(), mpr=norm360(trueBearing(cur,a)-decl);
   html+='<hr><b>От '+safeText(cur.source)+':</b><br>МПР '+mpr.toFixed(0)+'° · '+(distance(cur,a)/1000).toFixed(1)+' км';
   return html+freshnessWarning(cur);
@@ -2770,10 +2845,16 @@ function syncWorkingNavaids(keepInputs=true){
   const box=document.getElementById('stationForms');if(!box)return;
   box.innerHTML=PRESET.map((a,i)=>{
     const vor=navaidIsVor(a),num=i+1,coords=navaidHasCoordinates(a),previous=snapshot[a.id]||{};
-    let title='<div class="navaid-work-head"><span class="navaid-meta"><b>'+(vor?'VOR/DME':'ОПРС')+' '+num+' · '+safeText(a.name)+'</b><small>'+safeText(a.frequency)+(a.ident?' · '+safeText(a.ident):'')+'</small></span><button type="button" title="Убрать только из рабочего списка" aria-label="Убрать '+safeText(a.name)+'" onclick="removeWorkingNavaid(\''+a.id+'\')">×</button></div>';
+    let title='<div class="navaid-work-head"><span class="navaid-meta"><b>'+safeText(navaidTypeLabel(a))+' '+num+' · '+safeText(a.name)+'</b><small>'+safeText(a.frequency)+(a.ident?' · '+safeText(a.ident):'')+'</small></span><button type="button" title="Убрать только из рабочего списка" aria-label="Убрать '+safeText(a.name)+'" onclick="removeWorkingNavaid(\''+a.id+'\')">×</button></div>';
     if(!coords)return '<div class="oprs navaid-work-block" id="block'+num+'">'+title+'<div class="navaid-work-missing">⚠ Координаты ещё не внесены. Радионавигационные расчёты недоступны.</div></div>';
+    if(navaidIsDmeOnly(a)){
+      const cur=getCurrentPosition();
+      const near=cur?(distance(cur,a)/1000).toFixed(1)+' км по карте':'нет известной позиции';
+      return '<div class="oprs navaid-work-block" id="block'+num+'">'+title+
+        '<div class="navaid-work-missing">DME-only · '+safeText(near)+'. Без радиала и МПР.<br><small>Фактическое показание DME (наклонная дальность) не моделируется.</small></div></div>';
+    }
     const input='<div class="row"><label>'+(vor?'Радиал':'МПР')+':</label> <input id="brg'+num+'" value="'+safeText(previous.brg||'')+'" placeholder="—" inputmode="numeric" oninput="preview()"> °</div>';
-    const dme=vor?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> км</div>':'';
+    const dme=vor&&a.sourceType!=='DVOR'?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> км</div>':'';
     return '<div class="oprs navaid-work-block'+(vor?' vor':'')+'" id="block'+num+'">'+title+input+dme+'<div class="calc-line" id="calc'+num+'"></div></div>';
   }).join('') || '<div class="hint">Список пуст. Добавьте маяки из библиотеки или нажмите «Обновить».</div>';
   document.getElementById('stationCount').textContent=PRESET.length+' в списке · '+navaidCatalog.length+' в библиотеке';
@@ -2782,12 +2863,12 @@ function syncWorkingNavaids(keepInputs=true){
 }
 function addWorkingNavaid(id){
   if(navaidWorkIds.includes(id)||!navaidCatalog.some(a=>a.id===id))return;
-  navaidWorkIds.push(id);saveNavaidWork();syncWorkingNavaids();
+  navaidWorkIds.push(id);saveNavaidWork();syncWorkingNavaids();renderNavaidMarkers();
   document.getElementById('stationUpdateHint').textContent='Добавлен маяк из библиотеки. Порядок останется прежним до «Обновить».';
   refreshOpenPopup();
 }
 function removeWorkingNavaid(id){
-  navaidWorkIds=navaidWorkIds.filter(x=>x!==id);saveNavaidWork();syncWorkingNavaids();
+  navaidWorkIds=navaidWorkIds.filter(x=>x!==id);saveNavaidWork();syncWorkingNavaids();renderNavaidMarkers();
   document.getElementById('stationUpdateHint').textContent='Маяк удалён только из рабочего списка. В библиотеке он остался.';
 }
 function toggleNavaidLibrary(){
@@ -2797,9 +2878,16 @@ function toggleNavaidLibrary(){
 function renderNavaidLibrary(){
   const el=document.getElementById('navaidLibraryList');if(!el)return;
   const filter=(document.getElementById('navaidSearch')?.value||'').trim().toLocaleLowerCase('ru');
-  const items=navaidCatalog.filter(a=>[a.name,a.ident,a.frequency,a.region].some(v=>String(v||'').toLocaleLowerCase('ru').includes(filter)));
-  el.innerHTML=items.map(a=>'<div class="navaid-library-item"><span class="navaid-meta"><b>'+safeText(a.name)+'</b><small>'+safeText(a.region)+' · '+safeText(a.frequency)+(navaidHasCoordinates(a)?'':' · ⚠ нет координат')+'</small></span>'+
-    (navaidWorkIds.includes(a.id)?'<small>✓ в списке</small>':'<button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">+ Добавить</button>')+'</div>').join('')||'<div class="hint">Маяков не найдено.</div>';
+  const items=navaidCatalog.filter(a=>[a.name,a.nameEn,a.ident,a.frequency,a.region,a.sourceType,a.type]
+    .some(v=>String(v||'').toLocaleLowerCase('ru').includes(filter)));
+  // На мобильном не создаём сотни DOM-элементов одновременно. Поиск работает по ВСЕМ записям.
+  const shown=items.slice(0,80);
+  const hint=items.length>shown.length?'<div class="hint">Показаны первые '+shown.length+' из '+items.length+'. Уточните название или позывной в поиске.</div>':'';
+  el.innerHTML=shown.map(a=>'<div class="navaid-library-item"><span class="navaid-meta"><b>'+safeText(a.name)+'</b><small>'+safeText(navaidTypeLabel(a))+' · '+safeText(a.frequency)+(a.ident?' · '+safeText(a.ident):'')+
+    (a.hoursOfOperation?' · '+safeText(a.hoursOfOperation):'')+(navaidHasCoordinates(a)?'':' · ⚠ нет координат')+'</small></span>'+
+    (navaidHasCoordinates(a)?'<button type="button" onclick="showNavaidOnMap(\''+a.id+'\')" title="Показать на карте">◎</button>':'')+
+    (navaidWorkIds.includes(a.id)?'<small>✓ в списке</small>':'<button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">+ Добавить</button>')+'</div>').join('')+
+    hint || '<div class="hint">Маяков не найдено.</div>';
 }
 function navaidDistanceSort(a,b,origin){
   const x=navaidHasCoordinates(a)?distance(origin,a):Infinity;
@@ -2808,7 +2896,7 @@ function navaidDistanceSort(a,b,origin){
 }
 function updateNearbyNavaids(){
   const origin=getCurrentPosition()||{...KTA_POINT};
-  const nearest=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&a.allowAutoNearest!==false&&a.operationalStatus!=='historical-unverified').sort((a,b)=>navaidDistanceSort(a,b,origin)).slice(0,5);
+  const nearest=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&!navaidIsDmeOnly(a)&&a.allowAutoNearest!==false&&a.operationalStatus!=='historical-unverified').sort((a,b)=>navaidDistanceSort(a,b,origin)).slice(0,5);
   const now=Date.now();
   const second=now-navaidLastRefreshAt<=10000;
   navaidLastRefreshAt=now;
@@ -2821,7 +2909,7 @@ function updateNearbyNavaids(){
   }
   const mapById=new Map(navaidCatalog.map(a=>[a.id,a]));
   navaidWorkIds.sort((x,y)=>navaidDistanceSort(mapById.get(x),mapById.get(y),origin));
-  saveNavaidWork();syncWorkingNavaids();
+  saveNavaidWork();syncWorkingNavaids();renderNavaidMarkers();
   document.getElementById('stationUpdateHint').textContent=(second?'Повторное обновление: добавлены отсутствующие из ближайшей пятёрки. ':'Обновлено: сортировка по дальности. ')+
     'Всего '+navaidWorkIds.length+' маяков. '+(!getCurrentPosition()?'Расчёт ближайших от КТА Красного Кута; нет позиции ВС. ':'')+
     (!second?'Нажмите ещё раз в течение 10 с для добавления ближайшей пятёрки.':'');
@@ -3408,6 +3496,7 @@ function clearGps() {
 function preview(){
   const decl=getDecl();
   PRESET.forEach((a,i)=>{
+    if(navaidIsDmeOnly(a))return;
     const input=document.getElementById('brg'+(i+1));
     const el=document.getElementById('calc'+(i+1));
     if(!input||!el)return;
@@ -3426,7 +3515,7 @@ function alignToGPS(){
   const gps=getLiveGpsPosition();
   if(!gps){resultEl.classList.add('error');resultEl.textContent='⚠️ Нет свежей достоверной позиции GPS для приведения пеленгов.';return;}
   PRESET.forEach((a,i)=>{
-    if(!navaidHasCoordinates(a))return;
+    if(!navaidHasCoordinates(a)||navaidIsDmeOnly(a))return;
     const input=document.getElementById('brg'+(i+1));if(!input)return;
     input.value=(navaidIsVor(a)?norm360(trueBearing(a,gps)-getDecl()):norm360(trueBearing(gps,a)-getDecl())).toFixed(0);
   });
@@ -4512,7 +4601,7 @@ function selectHSIRoute(key) {
 }
 function makeHSIReferenceOptions() {
   const items=[{key:'target',name:'Выбранная цель'}, {key:'position',name:'Положение при установке'}];
-  PRESET.filter(navaidHasCoordinates).forEach(p=>items.push({key:'stationid:'+p.id,name:p.name}));
+  PRESET.filter(a=>navaidHasCoordinates(a)&&!navaidIsDmeOnly(a)).forEach(p=>items.push({key:'stationid:'+p.id,name:p.name}));
   Object.entries(ROUTES).forEach(([key,r])=>(r.custom?r.points:r.points.slice(0,-1)).forEach((p,i)=>
     items.push({key:'route:'+key+':'+i,name:r.name+' · '+(i+1)+' '+p.name})));
   return items;
@@ -5721,6 +5810,7 @@ function getMyPosition() {
       const decl = getDecl();
       for (let i = 0; i < PRESET.length; i++) {
         const s = PRESET[i];
+        if(navaidIsDmeOnly(s))continue;
         const dkm = distance({ lat, lon }, s) / 1000;
         if (s.type === 'VOR') {
           const rad = norm360(trueBearing(s, { lat, lon }) - decl);
@@ -5766,7 +5856,7 @@ function calculate() {
   const sources = [];
 
   PRESET.forEach((a,i)=>{
-    if(!navaidHasCoordinates(a))return;
+    if(!navaidHasCoordinates(a)||navaidIsDmeOnly(a))return;
     const input=document.getElementById('brg'+(i+1));if(!input)return;
     const text=input.value.trim();if(!text)return;
     const value=Number(text.replace(',','.'));
@@ -6244,6 +6334,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => saveFlightLog(true));
 // === КОНЕЦ БЛОКА 38 ===
+
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
@@ -6340,14 +6431,26 @@ window.addEventListener('pagehide', () => saveFlightLog(true));
     await ensureLeaflet();
     await ensureMapRotation();
     statusMessage('Запуск НАЕБАЦИИ VI…');
-    try {await loadScript('./assets/aircraft/aircraft-skins.js?v=1.63-r6');}
+    try {await loadScript('./assets/aircraft/aircraft-skins.js?v=1.63-r7');}
     catch(error){console.warn('Силуэты не загрузились, встроенная копия:',error);executeBuiltInSkins();}
     if(window.NAEBACIA_SKINS && typeof window.NAEBACIA_SKINS.load==='function'){
       const result=await window.NAEBACIA_SKINS.load();
       if(result.failed.length)reportWarning('Не загрузились некоторые силуэты: '+result.failed.length+'. Проверьте папку assets/aircraft/.');
     }
+    // ENR 4.1 лежит отдельно от регионов: при недоступности каталога сохраняются прежние НРТС.
     try {
-      await loadScript('./app.js?v=1.63-r6');
+      const resp=await fetch(new URL('./assets/data/navaids-russia.json',document.baseURI),{cache:'no-cache'});
+      if(!resp.ok)throw new Error('HTTP '+resp.status);
+      const catalog=await resp.json();
+      if(catalog.format!=='naebacia-navaids-enr41'||!Array.isArray(catalog.records)||catalog.records.length<300)
+        throw new Error('Неполный каталог ENR 4.1');
+      window.NAEBACIA_ENR41=catalog;
+    }catch(error){
+      console.warn('Нет полного ENR 4.1, остаётся аэродромная библиотека:',error);
+      reportWarning('Каталог ENR 4.1 не загрузился. Проверьте папку assets/data/ и сеть.');
+    }
+    try {
+      await loadScript('./app.js?v=1.63-r7');
     } catch (error) {
       console.warn('app.js недоступен, запускаем резервную копию из HTML:',error);
       executeBuiltInApp();
