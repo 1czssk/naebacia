@@ -1,4 +1,4 @@
-/* НАЕБАЦИЯ v1.62 🚀. Исходная навигационная логика v1.58 сохранена. */
+/* НАЕБАЦИЯ v1.63 VI. Исходная навигационная логика v1.58 сохранена. */
 // === КОНЕЦ БЛОКА 10 ===
 
 // === БЛОК 11: CONFIG ===
@@ -95,6 +95,7 @@ function changeMenuSide(right) {
   document.getElementById('routeEditorBanner').classList.toggle('route-editor-menu-right', !!right);
   document.getElementById('menuButtonRight').checked = !!right;
   document.getElementById('gpsQualityBadge')?.classList.toggle('menu-right',!!right);
+  document.getElementById('simControlBtn')?.classList.toggle('menu-right',!!right);
   try { localStorage.setItem(MENU_SIDE_KEY, right ? 'right' : 'left'); } catch (e) {}
 }
 
@@ -106,6 +107,7 @@ function togglePanel() {
   closeFollowOptions();
   updateThemeShortcutVisibility();
   updateGpsQualityIndicator();
+  updateSimVisibility();
 }
 if (window.innerWidth <= 600) {
   document.getElementById('panel').classList.add('hidden');
@@ -151,7 +153,7 @@ function setBackupMessage(message, error=false) {
 async function importNaebaciaBackup(input) {
   const file=input.files&&input.files[0];input.value='';
   if (!file) return;
-  if (rtTracking) {setBackupMessage('Остановите РВ перед восстановлением данных.',true);return;}
+  if (rtTracking) {setBackupMessage('Остановите РВ или симулятор перед восстановлением данных.',true);return;}
   if (file.size>50*1024*1024) {setBackupMessage('Файл больше 50 МБ.',true);return;}
   try {
     const data=JSON.parse(await file.text());
@@ -233,6 +235,7 @@ function updateThemeShortcutVisibility(){
   btn.title=naebaciaTheme==='night'?'Вернуть предыдущую дневную тему':'Включить ночную тему';
   btn.setAttribute('aria-label',btn.title);
   const gpsBadge=document.getElementById('gpsQualityBadge');if(gpsBadge)gpsBadge.style.top=show?'170px':'116px';
+  const simBtn=document.getElementById('simControlBtn');if(simBtn)simBtn.style.top=show?'170px':'116px';
 }
 function toggleQuickNightTheme(){setNaebaciaTheme(naebaciaTheme==='night'?naebaciaDayTheme:'night');}
 // === Конец тем оформления ===
@@ -393,6 +396,11 @@ let targetEditMode = false;
 let rtTracking = false;
 let rtWatchId = null;
 let rtCurrentPosition = null;
+// SIM никогда не сохраняется как настоящий GPS-полёт или последняя достоверная GPS-точка.
+let simActive=false,simPaused=false,simPoint=null,simTrack=[],simTimer=null,simLastTick=0;
+let simTargetHeading=90,simTargetSpeed=160,simTargetAltitude=600;
+let simHeading=90,simSpeed=160,simAltitude=600,simControlsVisible=true;
+const SIM_SETTINGS_KEY='naebacia_sim_targets_vi';
 let rtTrack = [];
 let rtFlightLog = null;  // общий журнал с отдельными полётами; продолжается до очистки
 let rtLogSaveWarning = '';
@@ -649,13 +657,13 @@ let followOrientation=localStorage.getItem(FOLLOW_ORIENTATION_KEY)==='track'?'tr
 const mapRotationAvailable=typeof map.setBearing==='function' && typeof map.getBearing==='function';
 function mapBearing(){return mapRotationAvailable?map.getBearing():0;}
 function getReliableTrackTrue(){
-  if(!rtTracking||!rtCurrentPosition||gpsQualityState().level!=='good')return null;
+  if(!rtTracking||!rtCurrentPosition||(!simActive&&gpsQualityState().level!=='good'))return null;
   const cur=rtCurrentPosition;let speed=cur.speed;
   if(!Number.isFinite(speed)&&rtTrack.length>=2){
     const a=rtTrack[rtTrack.length-2],b=rtTrack[rtTrack.length-1];
     if(a.flightId===b.flightId&&b.t>a.t&&b.t-a.t<30000)speed=distance(a,b)/((b.t-a.t)/1000);
   }
-  if(!Number.isFinite(speed)||speed<8)return null; // GPS-путевой угол на малой скорости нестабилен.
+  if(!simActive&&(!Number.isFinite(speed)||speed<8))return null; // GPS-путевой угол на малой скорости нестабилен.
   let heading=cur.heading;
   if(!Number.isFinite(heading)&&rtTrack.length>=2){
     const a=rtTrack[rtTrack.length-2],b=rtTrack[rtTrack.length-1];
@@ -829,32 +837,24 @@ map.on('dragstart', () => {
 // === КОНЕЦ БЛОКА 23 ===
 
 // === БЛОК 24: ICONS ===
+const AIRCRAFT_SKIN_KEY='naebacia_aircraft_skin_vi';
+let aircraftSkin=localStorage.getItem(AIRCRAFT_SKIN_KEY)||'standard';
 function planeIconSvg(courseDeg, color) {
-  // Одноцветный силуэт лёгкой высокопланной Cessna, вид сверху.
-  // Нос направлен вверх, длинные почти прямые крылья, узкий фюзеляж,
-  // небольшой горизонтальный стабилизатор и хвостовое оперение.
-  const fill = color || '#2a7';
-  const displayedCourse=norm360(courseDeg+mapBearing()); // Значок не вращается вместе с тайлами.
-  return '<svg viewBox="0 0 60 60" width="52" height="52" ' +
-    'xmlns="http://www.w3.org/2000/svg" aria-hidden="true" ' +
-    'style="transform:rotate(' + displayedCourse + 'deg);transform-origin:50% 50%;' +
-    'filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));">' +
-    '<path d="M30 2 ' +
-      'C27.9 2 27 5.1 27 8.4 ' +
-      'L26.5 18.8 ' +
-      'L4 18.0 Q1.7 18.0 1.7 20.2 L1.7 27.8 ' +
-      'Q1.7 29.5 3.6 29.5 L26.4 28.6 ' +
-      'L27.3 47.3 L18.3 49.7 Q17.6 50.0 17.6 51.2 ' +
-      'L17.6 55.8 L27.9 54.4 L28.4 57.7 ' +
-      'Q30 59 31.6 57.7 L32.1 54.4 L42.4 55.8 ' +
-      'L42.4 51.2 Q42.4 50.0 41.7 49.7 L32.7 47.3 ' +
-      'L33.6 28.6 L56.4 29.5 ' +
-      'Q58.3 29.5 58.3 27.8 L58.3 20.2 ' +
-      'Q58.3 18.0 56 18.0 L33.5 18.8 ' +
-      'L33 8.4 C33 5.1 32.1 2 30 2 Z" ' +
-      'fill="' + fill + '" stroke="#fff" stroke-width="1.15" stroke-linejoin="round"/>' +
-    '</svg>';
+  return window.NAEBACIA_SKINS.svg(aircraftSkin,norm360(courseDeg+mapBearing()),color);
 }
+function changeAircraftSkin(id){
+  if(!window.NAEBACIA_SKINS.skins[id])return;
+  aircraftSkin=id;
+  try{localStorage.setItem(AIRCRAFT_SKIN_KEY,id);}catch(e){}
+  updateAircraftSkinUI();
+  renderTrack();renderRTMarker();updatePlaneVisualRotation();
+}
+function updateAircraftSkinUI(){
+  const menu=document.getElementById('aircraftSkin');if(menu)menu.value=aircraftSkin;
+  const preview=document.getElementById('aircraftSkinPreview');
+  if(preview)preview.innerHTML=window.NAEBACIA_SKINS.svg(aircraftSkin,0,'#08c');
+}
+
 function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [52, 52], iconAnchor: [26, 26] }); }
 function planeIconBlue(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#08c'), iconSize: [52, 52], iconAnchor: [26, 26] }); }
 
@@ -961,10 +961,11 @@ function getLastGpsPosition(){
   if(gpsTrack&&Number.isFinite(gpsTrack.t)&&(!last||gpsTrack.t>last.t))last=gpsTrack;
   const rvSample=rtTrack.length?rtTrack[rtTrack.length-1]:null;
   if(rvSample&&Number.isFinite(rvSample.t)&&navaidGpsValid(rvSample)&&(!last||rvSample.t>last.t))last=rvSample;
-  if(rtCurrentPosition&&Number.isFinite(rtCurrentPosition.t)&&navaidGpsValid(rtCurrentPosition)&&(!last||rtCurrentPosition.t>last.t))last=rtCurrentPosition;
+  if(!simActive&&rtCurrentPosition&&!rtCurrentPosition.sim&&Number.isFinite(rtCurrentPosition.t)&&navaidGpsValid(rtCurrentPosition)&&(!last||rtCurrentPosition.t>last.t))last=rtCurrentPosition;
   return last?{lat:last.lat,lon:last.lon,t:last.t,acc:last.acc,source:'Последняя GPS-точка',sourceType:'last'}:null;
 }
 function getLiveGpsPosition(){
+  if(simActive&&simPoint)return {...simPoint,source:'SIM · виртуальная позиция',sourceType:'sim'};
   const gps=getLastGpsPosition();
   if(!gps||!Number.isFinite(gps.t)||Date.now()-gps.t>GPS_STALE_SEC*1000||gps.t>Date.now()+3000)return null;
   if(Number.isFinite(gps.acc)&&gps.acc>GPS_REJECT_ACCURACY_M)return null;
@@ -979,6 +980,7 @@ function getManualPositionFor(mode){
   return {...p,source:labels[p.kind]||'Позиция вручную',sourceType:p.kind};
 }
 function getCurrentPosition(){
+  if(simActive&&simPoint)return {...simPoint,source:'SIM · виртуальный полёт',sourceType:'sim'};
   const live=getLiveGpsPosition(),last=getLastGpsPosition();
   const manual=getManualPositionFor('any');
   if(positionMode==='gps')return live;
@@ -994,7 +996,8 @@ function positionSourceText(p){
     const age=Math.max(0,Math.floor((Date.now()-p.t)/1000));
     text+=' · '+(age<60?age+' с назад':age<3600?Math.floor(age/60)+' мин назад':Math.floor(age/3600)+' ч назад');
   }
-  if(p.sourceType!=='gps')text+=' · расчётная/устаревшая позиция';
+  if(p.sourceType==='sim')text+=' · учебная симуляция';
+  else if(p.sourceType!=='gps')text+=' · расчётная/устаревшая позиция';
   return text;
 }
 function updateMyPositionUI(){
@@ -1005,7 +1008,7 @@ function updateMyPositionUI(){
   modeLabel.textContent=names[positionMode]||'Авто';
   const p=getCurrentPosition();
   el.textContent=(positionMode==='auto'?'Авто · сейчас: ':'Источник: ')+positionSourceText(p);
-  el.classList.toggle('position-uncertain',!p||p.sourceType!=='gps');
+  el.classList.toggle('position-uncertain',!p||!['gps','sim'].includes(p.sourceType));
   document.querySelectorAll('input[name="positionSource"]').forEach(r=>r.checked=r.value===positionMode);
   updateManualPositionMarker();
 }
@@ -2052,7 +2055,7 @@ function computeNav() {
 function buildNavPopupHtml() {
   const n = computeNav();
   if (!n) return '🎯 Цель';
-  let html = '<b>🎯 Цель</b><br>'+(n.cur.sourceType==='gps'?'':'<b>⚠ От '+safeText(n.cur.source)+' (не текущая позиция ВС)</b><br>');
+  let html = '<b>🎯 Цель</b><br>'+(['gps','sim'].includes(n.cur.sourceType)?'':'<b>⚠ От '+safeText(n.cur.source)+' (не текущая позиция ВС)</b><br>');
   html += '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
@@ -2068,7 +2071,7 @@ function buildNavPopupHtml() {
   }
 
   let etaSec = null;
-  const gpsSpeedKmh = n.cur.sourceType==='gps'?getGPSSpeedKmh():null;
+  const gpsSpeedKmh = ['gps','sim'].includes(n.cur.sourceType)?getGPSSpeedKmh():null;
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
     etaSec = (n.distKm / gpsSpeedKmh) * 3600;
   } else if (n.wind && n.wind.etaSec !== null) {
@@ -2124,7 +2127,7 @@ function updateNavUI() {
 
   const posEl = document.getElementById('nav-pos');
   if (cur) {
-    posEl.innerHTML = '<b>' + safeText(cur.source) + (cur.sourceType!=='gps'?' · ⚠ расчётная/устаревшая позиция':'') + '</b><br>' +
+    posEl.innerHTML = '<b>' + safeText(cur.source) + (!['gps','sim'].includes(cur.sourceType)?' · ⚠ расчётная/устаревшая позиция':'') + '</b><br>' +
                       ddToDM(cur.lat, true) + ' ' + ddToDM(cur.lon, false) +
                       freshnessWarning(cur);
   } else {
@@ -2167,7 +2170,7 @@ function updateNavUI() {
   const n = computeNav();
   if (!n) { resEl.innerHTML = '—'; return; }
 
-  let html = (n.cur.sourceType==='gps'?'':'<b class="position-uncertain">⚠ Расчёт от '+safeText(n.cur.source)+'; текущее положение ВС неизвестно.</b><br>') + '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
+  let html = (['gps','sim'].includes(n.cur.sourceType)?'':'<b class="position-uncertain">⚠ Расчёт от '+safeText(n.cur.source)+'; текущее положение ВС неизвестно.</b><br>') + '<b>Расстояние:</b> ' + n.distKm.toFixed(1) + ' км<br>';
   html += '<b>ЗМПУ:</b> ' + n.mpu.toFixed(0) + '°';
 
   if (navLineStart) {
@@ -2179,7 +2182,7 @@ function updateNavUI() {
   }
 
   let etaSec = null;
-  const gpsSpeedKmh = n.cur.sourceType==='gps'?getGPSSpeedKmh():null;
+  const gpsSpeedKmh = ['gps','sim'].includes(n.cur.sourceType)?getGPSSpeedKmh():null;
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) etaSec = (n.distKm / gpsSpeedKmh) * 3600;
   else if (n.wind && n.wind.etaSec !== null) etaSec = n.wind.etaSec;
 
@@ -2752,9 +2755,9 @@ function updateJokeMarker(){
 function hsiValidPoint(p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); }
 function hsiCurrentFix(){
   // Инструментальная CDI только от свежего GPS: выбранная вручную/старая позиция — НЕ реальная девиация.
-  if(getCurrentPosition()?.sourceType!=='gps')return null;
+  if(!['gps','sim'].includes(getCurrentPosition()?.sourceType))return null;
   const p=getLiveGpsPosition();
-  if(!p || (rtTracking && gpsQualityState().level==='red'))return null;
+  if(!p || (!simActive&&rtTracking && gpsQualityState().level==='red'))return null;
   return p;
 }
 function hsiDecl() { return getDecl(); }
@@ -3195,7 +3198,7 @@ function setupConfigurationTracking() {
 }
 
 // === БЛОК 35: RTNAV ===
-function toggleRT() { if (rtTracking) stopRT(); else startRT(); }
+function toggleRT() { if(simActive){stopSimulator();return;} if (rtTracking) stopRT(); else startRT(); }
 
 // Формат v2: один журнал смены, отдельный массив точек для каждого запуска РВ.
 // Дата создания журнала не меняется, пока не выполнена «Очистить трек РВ».
@@ -3238,6 +3241,7 @@ function rebuildVisibleTrack() {
 }
 
 function startRT() {
+  if(simActive){stopSimulator();}
   if (!navigator.geolocation) { alert('Геолокация не поддерживается.'); return; }
   if (rtTracking) return;
   if (rtLogSaveWarning && !rtFlightLog) {
@@ -3311,6 +3315,7 @@ function finiteOrNull(v) {
 
 // === Контроль качества GPS (индикатор и защита журнала) ===
 function gpsQualityState() {
+  if (simActive) return {level:'sim',label:'SIM · виртуальная позиция (без RAIM/GPS-проверок)'};
   if (!rtTracking) return {level:'off', label:'РВ выключена'};
   if (gpsSignalIssue) return {level:'red', label:gpsSignalIssue};
   if (!rtCurrentPosition) return {level:'red', label:'Нет подтверждённой позиции GPS'};
@@ -3335,11 +3340,11 @@ function updateGpsQualityIndicator() {
   }
   const text=document.getElementById('rt-gps-status');
   if (text) {
-    text.textContent=state.level==='good'?'🛰 GPS: сигнал пригоден':
+    text.textContent=state.level==='sim'?'🟣 SIM · виртуальная позиция (не GPS)':state.level==='good'?'🛰 GPS: сигнал пригоден':
       state.level==='off'?'':(state.level==='amber'?'🟡 🛰 ':'🔴 🛰 ')+state.label;
     text.className='gps-quality-text '+state.level;
   }
-  if(state.level!=='good'&&mapRotationAvailable&&typeof map.stopHeadingUp==='function')map.stopHeadingUp();
+  if(state.level!=='good'&&state.level!=='sim'&&mapRotationAvailable&&typeof map.stopHeadingUp==='function')map.stopHeadingUp();
 }
 function rejectGpsSample(reason) {
   gpsRejectedSamples++;
@@ -3361,7 +3366,7 @@ function gpsPointIsImplausible(last, lat, lon, t, speed, acc) {
 // === Конец контроля качества GPS ===
 
 function onRTPosition(pos) {
-  if (!rtTracking) return;
+  if (!rtTracking||simActive) return;
   const flight = getActiveFlight();
   if (!flight) return;
   const lat = pos.coords.latitude;
@@ -3440,6 +3445,7 @@ function onRTPosition(pos) {
 }
 
 function onRTError(err) {
+  if(simActive)return;
   let msg = '⚠️ Ошибка GPS: ';
   switch (err.code) {
     case err.PERMISSION_DENIED: msg += 'доступ к геолокации запрещён.'; break;
@@ -3557,6 +3563,10 @@ function loadRTTrack() {
 function saveRTTrack() { saveFlightLog(); }
 
 function clearRTTrack() {
+  if(simActive){
+    if(!confirm('Очистить только виртуальный трек SIM? Настоящий журнал РВ останется без изменений.'))return;
+    simTrack=[];simLastTraceAt=0;renderRTTrack();updateRTUI();return;
+  }
   if (getFlightPointCount() > 0) {
     if (!confirm('Очистить весь трек и все полёты в журнале? Убедитесь, что нужный JSON сохранён.')) return;
   }
@@ -3586,7 +3596,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 3, appVersion: '1.62',
+    version: 3, appVersion: '1.63',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -3652,7 +3662,8 @@ function updateFlightLogUI() {
     el.classList.add('warning');
   } else {
     el.classList.remove('warning');
-    if (!rtFlightLog || !flights) el.textContent = 'Нет записанного полёта.';
+    if (simActive) el.textContent = 'SIM: виртуальные точки не сохраняются. Реальных полётов в журнале: '+flights+'.';
+    else if (!rtFlightLog || !flights) el.textContent = 'Нет записанного полёта.';
     else if (rtTracking) el.textContent = 'Запись РВ · полётов: ' + flights + ' · точек: ' + count + '.';
     else el.textContent = 'Сохранено полётов: ' + flights + ' · точек: ' + count + '. Новый старт РВ добавит следующий полёт.';
   }
@@ -3674,9 +3685,9 @@ function altitudeSegmentColor(a, b, min, max) {
 }
 
 // Трек разбит на полёты: между разными запусками РВ линии не строятся.
-function splitRTTrack() {
+function splitRTTrack(points=rtTrack) {
   const segments = [];
-  for (const p of rtTrack) {
+  for (const p of points) {
     const last = segments[segments.length - 1];
     if (!last || last[0].flightId !== p.flightId || p.breakBefore) segments.push([p]);
     else last.push(p);
@@ -3688,18 +3699,19 @@ function renderRTTrack() {
   const show = currentTab === 'rtnav';
   if (rtLineLayer) { map.removeLayer(rtLineLayer); rtLineLayer = null; }
   if (rtStartMarker) { map.removeLayer(rtStartMarker); rtStartMarker = null; }
-  if (!show || rtTrack.length === 0) return;
+  const trace=simActive?simTrack:rtTrack;
+  if (!show || trace.length === 0) return;
   const colored = document.getElementById('toggleAltitudeColors').checked;
-  const altitudes = rtTrack.map(p => p.alt).filter(v => Number.isFinite(v));
+  const altitudes = trace.map(p => p.alt).filter(v => Number.isFinite(v));
   const min = altitudes.length ? Math.min(...altitudes) : 0;
   const max = altitudes.length ? Math.max(...altitudes) : 0;
   const lines = [], startMarkers = [];
-  for (const flightPts of splitRTTrack()) {
+  for (const flightPts of splitRTTrack(trace)) {
     if (!flightPts.length) continue;
     const first = flightPts[0];
     const fullFlight = rtFlightLog && rtFlightLog.flights.find(f => f.id === first.flightId);
     // Если первые точки очень длинного полёта уже вытеснены из карты, ложный «старт» не рисуем.
-    if (fullFlight && fullFlight.points.length && fullFlight.points[0].t === first.t) {
+    if ((simActive&&first===simTrack[0]) || (fullFlight && fullFlight.points.length && fullFlight.points[0].t === first.t)) {
       startMarkers.push(L.marker([first.lat, first.lon], { icon: rtStartIcon(), interactive: false }));
     }
     if (flightPts.length < 2) continue;
@@ -3729,7 +3741,7 @@ function renderRTTrack() {
 }
 
 function renderRTMarker() {
-  // Пока РВ запущен, самолёт отображается на любой вкладке.
+  // В режиме SIM тот же маркер используется для виртуального полёта.
   const show = rtTracking;
   if (!show || !rtCurrentPosition) {
     if (rtMarker) { map.removeLayer(rtMarker); rtMarker = null; }
@@ -3772,8 +3784,9 @@ function updateRTUI() {
   if (!rtCurrentPosition) {
     posEl.textContent = rtTracking ? 'Ожидание GPS...' : 'GPS не активен';
     spEl.textContent = '—'; hdEl.textContent = '—'; acEl.textContent = '—'; agEl.textContent = '—';
+    const altEl=document.getElementById('rt-alt');if(altEl)altEl.textContent='—';
   } else {
-    posEl.innerHTML = '<b>' + ddToDM(rtCurrentPosition.lat, true) + '</b><br>' +
+    posEl.innerHTML = (simActive?'<b>SIM · ВИРТУАЛЬНО</b><br>':'')+'<b>' + ddToDM(rtCurrentPosition.lat, true) + '</b><br>' +
                       '<b>' + ddToDM(rtCurrentPosition.lon, false) + '</b>';
     if (rtCurrentPosition.speed !== null && gpsQualityState().level!=='red') {
       const v = convertSpeed(rtCurrentPosition.speed);
@@ -3784,15 +3797,16 @@ function updateRTUI() {
     if (fmpu !== null) hdEl.textContent = fmpu.toFixed(0) + '°';
     else hdEl.textContent = '—';
 
-    acEl.textContent = Number.isFinite(rtCurrentPosition.acc) ? '±' + rtCurrentPosition.acc.toFixed(0) + ' м' : '—';
+    acEl.textContent = simActive?'SIM':Number.isFinite(rtCurrentPosition.acc) ? '±' + rtCurrentPosition.acc.toFixed(0) + ' м' : '—';
+    const altEl=document.getElementById('rt-alt');if(altEl)altEl.textContent=simActive?Math.round(simAltitude)+' м · SIM':Number.isFinite(rtCurrentPosition.alt)?Math.round(rtCurrentPosition.alt)+' м':'—';
     const age = (Date.now() - rtCurrentPosition.t) / 1000;
     agEl.textContent = age.toFixed(1) + ' с';
   }
 
-  ptEl.textContent = getFlightPointCount();
+  ptEl.textContent = simActive?simTrack.length:getFlightPointCount();
   let totalDist = 0, totalSec = 0;
   // Статистика учитывает весь журнал, а не только последние 10 000 видимых на карте точек.
-  const allFlights = rtFlightLog ? rtFlightLog.flights : [];
+  const allFlights = simActive?[{points:simTrack}]:rtFlightLog ? rtFlightLog.flights : [];
   for (const flight of allFlights) {
     const points = flight.points;
     if (points.length < 2) continue;
@@ -3854,7 +3868,7 @@ function updateRTUI() {
   if (gpsSpeedKmh !== null && gpsSpeedKmh > 1) {
     const v = convertSpeed(gpsSpeedKmh / 3.6);
     const etaSec = (n.distKm / gpsSpeedKmh) * 3600;
-    html += '<br><b>Путевая (GPS):</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
+    html += '<br><b>Путевая '+(simActive?'(SIM)':'(GPS)')+':</b> ' + v.toFixed(0) + ' ' + SPEED_UNITS[rtSpeedUnit].label;
     html += '<br><b>ETE:</b> ' + fmtDuration(etaSec);
     html += '<br><b>ETA:</b> ' + fmtEtaAbs(etaSec);
   }
@@ -4062,6 +4076,11 @@ function restoreWindMeasureButton() {
 // === БЛОК 36: GPS ONCE ===
 function getMyPosition() {
   const resultEl = document.getElementById('result');
+  if(simActive&&simPoint){
+    resultEl.classList.remove('error');
+    resultEl.innerHTML='<b>SIM · виртуальная позиция</b><br>'+ddToDM(simPoint.lat,true)+' '+ddToDM(simPoint.lon,false)+'<br>Не является GPS-измерением.';
+    refreshPositionConsumers();return;
+  }
   resultEl.classList.remove('error');
   if (!navigator.geolocation) {
     resultEl.classList.add('error');
@@ -4301,6 +4320,181 @@ function onCourseRTInput() {
 }
 // === КОНЕЦ БЛОКА 37 ===
 
+// === БЛОК 37-SIM: ВИРТУАЛЬНЫЙ НАВИГАЦИОННЫЙ ПОЛЁТ ===
+// Без физического GPS, записи в реальный полётный журнал и ложного статуса RAIM.
+let simSavedHSI=null,simSavedNavStart=null,simSavedNavTarget=null;
+let simSavedNeedsInitialLegFix=false,simSavedLastAdvance=0;
+let simLastTraceAt=0,simLastPaintAt=0;
+function simClamp(v,min,max){return Math.min(max,Math.max(min,v));}
+function loadSimPreferences(){
+  try{
+    const data=JSON.parse(localStorage.getItem(SIM_SETTINGS_KEY)||'{}');
+    if(Number.isFinite(data.heading))simTargetHeading=simClamp(Math.round(data.heading),0,359);
+    if(Number.isFinite(data.speed))simTargetSpeed=simClamp(Math.round(data.speed),0,400);
+    if(Number.isFinite(data.altitude))simTargetAltitude=simClamp(Math.round(data.altitude),0,12000);
+  }catch(e){}
+  syncSimControls();
+}
+function saveSimPreferences(){
+  try{localStorage.setItem(SIM_SETTINGS_KEY,JSON.stringify({heading:simTargetHeading,speed:simTargetSpeed,altitude:simTargetAltitude}));}catch(e){}
+}
+function syncSimControls(){
+  const ids={simHeadingInput:simTargetHeading,simHeadingSlider:simTargetHeading,
+    simSpeedInput:simTargetSpeed,simSpeedSlider:simTargetSpeed,
+    simAltitudeInput:simTargetAltitude,simAltitudeSlider:simTargetAltitude};
+  Object.entries(ids).forEach(([id,v])=>{
+    const el=document.getElementById(id);
+    if(el && el!==document.activeElement)el.value=v;
+  });
+  const heading=document.getElementById('simHeadingRead');
+  if(heading)heading.textContent=String(simTargetHeading).padStart(3,'0')+'°';
+  const spd=document.getElementById('simSpeedRead');if(spd)spd.textContent=simTargetSpeed+' км/ч';
+  const actual=document.getElementById('simActual');
+  if(actual)actual.textContent=simActive?
+    'Факт: '+Math.round(simSpeed)+' км/ч · '+String(Math.round(norm360(simHeading))).padStart(3,'0')+'° · '+Math.round(simAltitude)+' м':
+    'Стартовая точка — центр карты (или выбранная позиция). Высота условная.';
+  const pause=document.getElementById('simPauseBtn');if(pause)pause.textContent=simPaused?'▶ Продолжить':'⏸ Пауза';
+}
+function setSimTarget(which,raw){
+  const value=Number(String(raw).replace(',','.'));
+  if(!Number.isFinite(value))return false;
+  const n=Math.round(value);
+  if(which==='heading'){if(n<0||n>359)return false;simTargetHeading=n;}
+  else if(which==='speed'){if(n<0||n>400)return false;simTargetSpeed=n;}
+  else if(which==='altitude'){if(n<0||n>12000)return false;simTargetAltitude=n;}
+  else return false;
+  saveSimPreferences();syncSimControls();return true;
+}
+function stepSimHeading(step){setSimTarget('heading',norm360(simTargetHeading+step));}
+function stepSimSpeed(step){setSimTarget('speed',simClamp(simTargetSpeed+step,0,400));}
+function editSimHeading(){
+  const button=document.getElementById('simHeadingRead'),editor=document.getElementById('simHeadingEditor');
+  if(!button||!editor)return;
+  button.hidden=true;editor.hidden=false;editor.value=String(simTargetHeading);
+  editor.focus({preventScroll:true});editor.select(); // Цифры выделяются автоматически; стирать не нужно.
+}
+function finishSimHeading(cancel=false){
+  const editor=document.getElementById('simHeadingEditor'),button=document.getElementById('simHeadingRead');
+  if(!editor||editor.hidden)return;
+  if(!cancel&&!setSimTarget('heading',editor.value)){
+    editor.setCustomValidity('Введите курс от 0 до 359°');editor.reportValidity();
+    editor.value=String(simTargetHeading);editor.setCustomValidity('');
+  }
+  editor.hidden=true;button.hidden=false;syncSimControls();
+}
+function updateSimVisibility(){
+  const panel=document.getElementById('panel');
+  const menuHidden=!panel||panel.classList.contains('hidden');
+  const btn=document.getElementById('simControlBtn');
+  if(btn){btn.hidden=!simActive||!menuHidden;btn.setAttribute('aria-pressed',String(simControlsVisible));}
+  const controls=document.getElementById('simControls');
+  if(controls)controls.hidden=!simActive||!simControlsVisible;
+  document.body.classList.toggle('sim-active',simActive);
+  document.body.classList.toggle('sim-controls-visible',simActive&&simControlsVisible);
+  const cb=document.getElementById('simEnabled');if(cb)cb.checked=simActive;
+  const rt=document.getElementById('rtToggleBtn');
+  if(rt && simActive){rt.innerHTML='<b>■ Отключить SIM</b>';rt.classList.remove('gps');rt.classList.add('stop');}
+  const state=document.getElementById('simStateLabel');if(state)state.textContent=simActive?'ВКЛ · не GPS':'ВЫКЛ';
+}
+function toggleSimControls(){simControlsVisible=!simControlsVisible;updateSimVisibility();updateSpeedHudVisibility();}
+function toggleSimPaused(){if(!simActive)return;simPaused=!simPaused;simLastTick=Date.now();syncSimControls();}
+function simAtMapCenter(){
+  if(!simActive)return;
+  const p=map.getCenter();
+  simPoint.lat=p.lat;simPoint.lon=p.lng;simPoint.t=Date.now();
+  simTrack=[];simLastTraceAt=0;
+  publishSimPosition(true);
+}
+function startSimulator(){
+  if(simActive)return;
+  if(rtLogSaveWarning){
+    alert('Сначала сохраните резервную копию повреждённого GPS-журнала: SIM не должен менять эти данные.');return;
+  }
+  // При включении SIM корректно закрываем настоящий полёт и отпускаем GPS-наблюдение.
+  const lastPosition=getCurrentPosition();
+  if(rtTracking)stopRT();
+  const start=lastPosition&&Number.isFinite(lastPosition.lat)&&Number.isFinite(lastPosition.lon)?
+    {lat:lastPosition.lat,lon:lastPosition.lon}:map.getCenter();
+  simSavedNavStart=navLineStart?{...navLineStart}:null;
+  simSavedNavTarget=navTarget?{lat:navTarget.lat,lon:navTarget.lon}:null;
+  simSavedHSI=JSON.parse(JSON.stringify(hsiState));
+  simSavedNeedsInitialLegFix=hsiNeedsInitialLegFix;simSavedLastAdvance=hsiLastRouteAdvanceAt;
+  simActive=true;simPaused=false;simTrack=[];simLastTraceAt=0;simLastPaintAt=0;
+  simHeading=simTargetHeading;simSpeed=simTargetSpeed;simAltitude=simTargetAltitude;
+  simPoint={lat:start.lat,lon:Number.isFinite(start.lon)?start.lon:start.lng,t:Date.now(),
+    heading:norm360(simHeading+getDecl()),speed:simSpeed/3.6,alt:simAltitude,acc:0,sim:true};
+  rtCurrentPosition=simPoint;rtTracking=true;gpsSignalIssue='';
+  if(hsiState.mode==='direct'&&navTarget)navLineStart={lat:simPoint.lat,lon:simPoint.lon};
+  if(hsiState.mode==='route'&&hsiState.routeKey){
+    const route=ROUTES[hsiState.routeKey];
+    if(route){hsiState.legIndex=hsiRouteBestLeg(route,simPoint);hsiNeedsInitialLegFix=false;hsiState.awaitingRouteFix=0;}
+  }
+  updateSimVisibility();syncSimControls();
+  simLastTick=Date.now();
+  simTimer=setInterval(simTick,200);
+  renderHSIGuideLine();publishSimPosition(true);
+  updateSpeedHudVisibility();updateFlightLogUI();
+}
+function stopSimulator(){
+  if(!simActive)return;
+  if(windMeasuring)cancelWindMeasure();
+  clearInterval(simTimer);simTimer=null;simActive=false;simPaused=false;
+  rtTracking=false;rtCurrentPosition=null;simPoint=null;simTrack=[];
+  const targetStillSame=(!simSavedNavTarget&&!navTarget)||
+    (simSavedNavTarget&&navTarget&&simSavedNavTarget.lat===navTarget.lat&&simSavedNavTarget.lon===navTarget.lon);
+  navLineStart=targetStillSame?simSavedNavStart:null;
+  if(simSavedHSI){hsiState=simSavedHSI;persistHSISettings();}
+  hsiNeedsInitialLegFix=simSavedNeedsInitialLegFix;hsiLastRouteAdvanceAt=simSavedLastAdvance;
+  simSavedHSI=null;simSavedNavStart=null;simSavedNavTarget=null;
+  const rt=document.getElementById('rtToggleBtn');
+  if(rt){rt.innerHTML='<b>▶ Старт РВ</b>';rt.classList.remove('stop');rt.classList.add('gps');}
+  updateSimVisibility();syncSimControls();
+  renderRTTrack();renderRTMarker();updateNavUI();updateRTUI();updateMyPositionUI();
+  updateGpsQualityIndicator();updateMapOrientation();updateSpeedHudVisibility();
+  renderHSIGuideLine();refreshHSIPanel();updateFlightLogUI();
+}
+function toggleSimulator(){if(simActive)stopSimulator();else startSimulator();}
+function simTick(){
+  if(!simActive||!simPoint)return;
+  const now=Date.now();
+  const dt=simClamp((now-simLastTick)/1000,0,.35);simLastTick=now;
+  if(simPaused||document.visibilityState==='hidden')return;
+  const speedDelta=simTargetSpeed-simSpeed;
+  simSpeed+=Math.sign(speedDelta)*Math.min(Math.abs(speedDelta),18*dt); // плавная скорость
+  const difference=((simTargetHeading-simHeading+540)%360)-180;
+  simHeading=norm360(simHeading+Math.sign(difference)*Math.min(Math.abs(difference),3*dt)); // 3°/с
+  const altDelta=simTargetAltitude-simAltitude;
+  simAltitude+=Math.sign(altDelta)*Math.min(Math.abs(altDelta),3*dt); // 3 м/с, без физики
+  const trueHeading=norm360(simHeading+getDecl());
+  const traveled=simSpeed/3.6*dt;
+  if(traveled>0){const next=hsiPointAlong(simPoint,trueHeading,traveled);simPoint.lat=next.lat;simPoint.lon=next.lon;}
+  simPoint.t=now;simPoint.speed=simSpeed/3.6;simPoint.heading=trueHeading;simPoint.alt=simAltitude;
+  rtCurrentPosition=simPoint;
+  publishSimPosition(false);
+}
+function publishSimPosition(force){
+  if(!simActive||!simPoint)return;
+  const now=Date.now();
+  const previous=simTrack[simTrack.length-1];
+  if(force||!previous||distance(previous,simPoint)>=5||now-simLastTraceAt>=1000){
+    simTrack.push({...simPoint,flightId:'SIM'});
+    if(simTrack.length>RT_MAX_POINTS)simTrack.shift();
+    simLastTraceAt=now;
+    if(currentTab==='rtnav')renderRTTrack();
+  }
+  if(hsiState.mode==='route')maybeAdvanceHSIRoute(simPoint);
+  // Измерение ветра может использовать SIM-трек для проверки математики; в журнал он не попадает.
+  if(windMeasuring)windMeasureData.push({lat:simPoint.lat,lon:simPoint.lon,t:now});
+  if(!force&&now-simLastPaintAt<200)return;
+  simLastPaintAt=now;
+  updateGpsQualityIndicator();updateMapOrientation();renderRTMarker();
+  updateMyPositionUI();updateNavUI();updateRTUI();refreshHSIPanel();
+  if(isFollowOn()&&currentTab==='rtnav')centerFollowedAircraft(false);
+  if(force)refreshOpenPopup();
+  syncSimControls();
+}
+// === КОНЕЦ БЛОКА 37-SIM ===
+
 // === БЛОК 38: INIT ===
 setInterval(() => {
   if (rtTracking) {
@@ -4314,6 +4508,8 @@ setInterval(() => {
 
 document.getElementById('decl').value = String(ACTIVE_PROFILE.magneticDeclinationDeg);
 loadPreset();
+loadSimPreferences();
+updateAircraftSkinUI();
 loadTrack();
 loadTrackGps();
 loadRTTrack();
