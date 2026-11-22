@@ -4,7 +4,7 @@
      ================================================================ -->
 <head>
 <meta charset="utf-8">
-<title>НАЕБАЦИЯ v1.63 VI — PWA · Симулятор</title>
+<title>НАЕБАЦИЯ</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#101820">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('naebacia_theme_v1')||'day';}catch(e){}</script>
@@ -83,10 +83,10 @@
   };
 })();
 </script>
-<meta name="application-name" content="НАЕБАЦИЯ VI">
+<meta name="application-name" content="НАЕБАЦИЯ">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="НАЕБАЦИЯ VI">
+<meta name="apple-mobile-web-app-title" content="НАЕБАЦИЯ">
 <link rel="manifest" href="./manifest.json">
 <style id="naebaciaPulkovoStarStyle">
 .naebacia-airfield-star { background: transparent; border: 0; text-align: center;
@@ -541,9 +541,12 @@
   #nightQuickBtn.menu-right {left:auto;right:10px;}
   #nightQuickBtn[hidden] {display:none!important;}
   .theme-details {padding:0!important;}
-  .theme-details summary {cursor:pointer;padding:10px 8px;list-style:disclosure-closed;font-weight:700;}
+  .theme-details summary {cursor:pointer;padding:10px 8px;list-style:none;display:flex;align-items:center;gap:5px;font-weight:700;}
+  .theme-details summary::-webkit-details-marker{display:none;}
+  .theme-details summary::before{content:'▸';flex:0 0 13px;text-align:center;}
+  .theme-details[open] summary::before{content:'▾';}
   .theme-details[open] summary {border-bottom:1px solid var(--naeb-border,#cfd5da);}
-  #currentThemeLabel {float:right;font-size:11px;font-weight:500;opacity:.78;margin-right:5px;}
+  #currentThemeLabel {margin-left:auto;float:none;min-width:0;font-size:11px;font-weight:500;opacity:.78;white-space:nowrap;}
   .theme-options {display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:9px;}
   .theme-options label {display:flex;align-items:center;gap:5px;padding:9px 4px;
     border-radius:6px;font-size:12px;white-space:nowrap;cursor:pointer;}
@@ -805,7 +808,7 @@
     border-radius:9px;padding:3px;font-size:22px;box-shadow:0 2px 8px #0007;cursor:pointer;}
   #simControlBtn.menu-right {left:auto;right:10px;}
   #simControlBtn[hidden],#simControls[hidden],#simHeadingRead[hidden],#simHeadingEditor[hidden]{display:none!important;}
-  #simControlBtn[aria-pressed=false]{background:#33465a;opacity:.83;}
+
   #simControls {position:fixed;left:50%;bottom:calc(7px + env(safe-area-inset-bottom,0px));
     transform:translateX(-50%);z-index:1350;display:grid;grid-template-columns:1fr 1fr;
     gap:7px;width:min(550px,calc(100vw - 14px));padding:7px;box-sizing:border-box;
@@ -826,10 +829,28 @@
   body.sim-controls-visible #hsiPanel {bottom:calc(180px + env(safe-area-inset-bottom,0px));max-height:calc(100dvh - 195px);}
   body.sim-controls-visible #hsiPanel.no-hud {bottom:calc(86px + env(safe-area-inset-bottom,0px));max-height:calc(100dvh - 103px);}
   .aircraft-details summary,.sim-details summary {cursor:pointer;font-weight:750;padding:6px 2px;}
-  .aircraft-chooser {display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;}
-  .aircraft-chooser select {max-width:170px;padding:8px 6px;border-radius:7px;border:1px solid #a4b6c0;
-    background:var(--naeb-input,#fff);color:var(--naeb-ink,#26313b);font-size:14px;}
-  .aircraft-preview {height:57px;width:57px;display:grid;place-items:center;border:1px solid var(--naeb-border,#d9e0e6);border-radius:9px;}
+  .aircraft-skin-gallery {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:10px 2px 5px;}
+  #panel .aircraft-skin-option {width:100%;min-width:0;aspect-ratio:1/1;min-height:48px;display:grid;place-items:center;
+    padding:2px;border:2px solid var(--naeb-border,#b5c4d0);border-radius:9px;
+    background:var(--naeb-input,#fff);cursor:pointer;box-sizing:border-box;}
+  #panel .aircraft-skin-option svg {width:100%;height:100%;max-width:48px;max-height:48px;}
+  #panel .aircraft-skin-option.selected {border-color:#c248ca!important;box-shadow:0 0 0 2px #c248ca55 inset;background:var(--naeb-selected,#e6d2f1)!important;}
+  #panel .aircraft-skin-option:focus-visible{outline:3px solid #945aca;outline-offset:2px;}
+  #simSettingsOverlay[hidden]{display:none!important;}
+  #simSettingsOverlay{position:fixed;inset:0;z-index:2200;overflow:auto;background:rgba(8,17,25,.72);
+    display:grid;place-items:center;padding:12px;box-sizing:border-box;}
+  #simSettingsDialog{width:min(460px,100%);max-height:calc(100dvh - 24px);overflow-y:auto;
+    border:1px solid var(--naeb-border,#bac6d1);border-radius:14px;padding:15px;
+    box-sizing:border-box;background:var(--naeb-card,#f7f8fb);color:var(--naeb-ink,#233442);
+    box-shadow:0 10px 40px #0009;font:14px sans-serif;}
+  .sim-settings-titlebar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;font-size:17px;}
+  #simSettingsClose{width:43px;height:43px;min-width:43px;border:1px solid #8da2b3;border-radius:9px;
+    background:var(--naeb-input,#fff);color:var(--naeb-ink,#253340);font-size:28px;line-height:1;cursor:pointer;}
+  .sim-layer-toggle .sim-enable{justify-content:space-between;gap:8px;}
+  #simStateLabel{margin-left:auto;font-weight:600;font-size:11px;opacity:.8;white-space:nowrap;}
+  .menu-brand{top:10px;line-height:20px;}
+  .menu-app-name{display:block;font-size:18px;line-height:21px;}
+  .menu-app-meta{display:block;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.4px;}
   .sim-enable {display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px;}
   .sim-enable input {min-width:20px;min-height:20px;accent-color:#a555c6;}
   .sim-setting {display:grid;grid-template-columns:1fr 80px;gap:5px 7px;align-items:center;margin:9px 0;}
@@ -859,7 +880,7 @@
 <!-- === БЛОК 6: BODY: КНОПКА МЕНЮ === -->
 <button id="toggleBtn" onclick="togglePanel()" aria-label="Открыть или закрыть меню">☰</button>
 <button id="infoBtn" type="button" onclick="openInstallHelp()" title="Как установить НАЕБАЦИЮ" aria-label="Как установить приложение" aria-haspopup="dialog" aria-expanded="false" hidden>ⓘ</button>
-<button id="simControlBtn" type="button" onclick="toggleSimControls()" title="Показать или скрыть управление SIM" aria-label="Управление симулятором" aria-pressed="true" hidden>🎛</button>
+<button id="simControlBtn" type="button" onclick="openSimSettings()" title="Настройки симулятора" aria-label="Открыть настройки симулятора" hidden>🎛</button>
 <button id="nightQuickBtn" type="button" onclick="toggleQuickNightTheme()" aria-label="Переключить ночной режим" title="Ночной режим" hidden>🌙</button>
 <span id="gpsQualityBadge" class="gps-quality-badge" role="status" aria-live="polite" hidden aria-label="GPS" title="GPS">🛰</span>
 <div id="installHelpOverlay" hidden onclick="if(event.target===this)closeInstallHelp()">
@@ -925,7 +946,7 @@
 
 <!-- === БЛОК 8: BODY: ПАНЕЛЬ === -->
 <div id="panel">
-  <div id="menuBrand" class="menu-brand" aria-label="НАЕБАЦИЯ VI">НАЕБАЦИЯ <span class="naeb-vi" aria-label="VI">VI</span></div>
+  <div id="menuBrand" class="menu-brand" aria-label="НАЕБАЦИЯ, версия 1.63 VI"><span class="menu-app-name">НАЕБАЦИЯ</span><span class="menu-app-meta">v1.63 <span class="naeb-vi" aria-label="VI">VI</span></span></div>
   <div class="tabs">
     <button class="tab-btn active" id="tabBtnPlace" onclick="switchTab('place')">📍 Место</button>
     <button class="tab-btn" id="tabBtnNav" onclick="switchTab('nav')">🧭 Навигация</button>
@@ -1046,6 +1067,7 @@
         <input id="airspeed" placeholder="180" value="180" inputmode="decimal" oninput="updateNavUI()"> км/ч
       </div>
       <div class="hint">δ — магнитное направление, ОТКУДА дует ветер</div>
+      <div class="hint" id="simTasNavHint" hidden>SIM: для расчётов используется текущая TAS симулятора. Поле V останется для обычного режима.</div>
     </div>
 
     <div class="oprs nav-box" id="myRouteNavBox">
@@ -1303,33 +1325,27 @@
       </div>
     </details>
     <details class="oprs aircraft-details" id="aircraftDetails">
-      <summary>✈ Самолётик <span class="hint">· любой режим</span></summary>
-      <div class="aircraft-chooser">
-        <div id="aircraftSkinPreview" class="aircraft-preview" aria-hidden="true"></div>
-        <label for="aircraftSkin">Силуэт на карте</label>
-        <select id="aircraftSkin" onchange="changeAircraftSkin(this.value)">
-          <option value="standard">Стандартный</option>
-          <option value="tushka">Тушка</option>
-          <option value="liner">Современный лайнер</option>
-          <option value="fighter">Истребитель</option>
-          <option value="rocket">Ракета</option>
-          <option value="funny">Писюн</option>
-        </select>
-      </div>
-      <div class="subhint">Скин работает и с настоящим GPS, и в симуляторе. Навигационные расчёты не затрагивает.</div>
+      <summary>✈ Самолётик</summary>
+      <div class="aircraft-skin-gallery" id="aircraftSkinGallery" role="group" aria-label="Выберите силуэт самолёта"></div>
     </details>
     <div class="oprs">
       <label class="route-toggle"><input type="checkbox" id="toggleJokeArrow" onchange="toggleJokeArrow()"> Для геев</label>
     </div>
-    <details class="oprs sim-details" id="simDetails" open>
-      <summary>🎛 Симулятор <span id="simStateLabel">ВЫКЛ</span></summary>
-      <label class="sim-enable"><input type="checkbox" id="simEnabled" onchange="toggleSimulator()"> <b>Включить ручной полёт</b></label>
-      <p class="subhint">Виртуальная позиция для HSI, РВ, карты и навигации. RAIM/GPS-контроль отключён только в SIM. Реальный журнал не записывается.</p>
+    <div class="oprs sim-layer-toggle">
+      <label class="sim-enable"><input type="checkbox" id="simEnabled" onchange="toggleSimulator()"> <b>🎛 Симулятор</b> <span id="simStateLabel" aria-live="polite">ВЫКЛ</span></label>
+    </div>
+  </div>
+</div>
+<div id="simSettingsOverlay" hidden onclick="if(event.target===this)closeSimSettings()">
+  <section id="simSettingsDialog" role="dialog" aria-modal="true" aria-labelledby="simSettingsTitle">
+    <div class="sim-settings-titlebar"><strong id="simSettingsTitle">🎛 Настройки симулятора</strong><button id="simSettingsClose" type="button" onclick="closeSimSettings()" aria-label="Закрыть настройки">×</button></div>
+    <p class="subhint">Виртуальная позиция для HSI, РВ, карты и навигации. Скорость здесь — TAS; ветер берётся из «Навигации» и меняет ФМПУ и путевую скорость. GPS/RAIM не подменяются. Реальный журнал не записывается.</p>
+    <label class="sim-enable"><input type="checkbox" id="simControlsToggle" checked onchange="setSimControlsVisible(this.checked)"> <b>Показывать панель управления внизу</b></label>
       <div class="sim-setting"><label for="simHeadingInput">Заданный курс · °</label>
         <input id="simHeadingInput" type="number" inputmode="numeric" min="0" max="359" step="1" value="90" onchange="setSimTarget('heading',this.value)">
         <input id="simHeadingSlider" type="range" min="0" max="359" step="1" value="90" oninput="setSimTarget('heading',this.value)">
       </div>
-      <div class="sim-setting"><label for="simSpeedInput">Заданная скорость · км/ч</label>
+      <div class="sim-setting"><label for="simSpeedInput">Истинная воздушная скорость (TAS) · км/ч</label>
         <input id="simSpeedInput" type="number" inputmode="numeric" min="0" max="400" step="1" value="160" onchange="setSimTarget('speed',this.value)">
         <input id="simSpeedSlider" type="range" min="0" max="400" step="5" value="160" oninput="setSimTarget('speed',this.value)">
       </div>
@@ -1342,9 +1358,8 @@
         <button type="button" onclick="simAtMapCenter()">📍 Поставить в центр карты</button>
         <button type="button" id="simPauseBtn" onclick="toggleSimPaused()">⏸ Пауза</button>
       </div>
-      <div class="subhint">Если нет выбранной позиции, старт — в центре карты. Курс и скорость достигаются плавно, высота меняется линейно. При сворачивании приложения симуляция ставится на паузу по времени.</div>
-    </details>
-  </div>
+    <div class="subhint">Если нет выбранной позиции, старт — в центре карты. Курс и TAS достигаются плавно, высота меняется линейно. Ветер берётся из «Навигации» (δ — откуда дует); пустые или некорректные значения означают штиль. При сворачивании приложения симуляция ставится на паузу по времени.</div>
+  </section>
 </div>
 <div id="routeEditorBanner" hidden aria-label="Управление редактированием маршрута">
   <div class="route-editor-head">
@@ -1360,10 +1375,10 @@
 <!-- === КОНЕЦ БЛОКА 8 === -->
 
 <div id="simControls" hidden aria-label="Управление симулятором">
-  <div class="sim-control-group" role="group" aria-label="Скорость симулятора">
-    <button type="button" onclick="stepSimSpeed(-10)" aria-label="Скорость минус 10 километров в час">−</button>
-    <span id="simSpeedRead" aria-live="off">160 км/ч</span>
-    <button type="button" onclick="stepSimSpeed(10)" aria-label="Скорость плюс 10 километров в час">+</button>
+  <div class="sim-control-group" role="group" aria-label="Истинная воздушная скорость симулятора">
+    <button type="button" onclick="stepSimSpeed(-10)" aria-label="TAS минус 10 километров в час">−</button>
+    <span id="simSpeedRead" aria-live="off">TAS 160 км/ч</span>
+    <button type="button" onclick="stepSimSpeed(10)" aria-label="TAS плюс 10 километров в час">+</button>
   </div>
   <div class="sim-control-group" role="group" aria-label="Курс симулятора">
     <button type="button" onclick="stepSimHeading(-1)" aria-label="Курс минус один градус">−</button>
@@ -1438,17 +1453,13 @@
       label: 'Стандартный',
       shapes: '<path d="M30 2 C27.9 2 27 5.1 27 8.4 L26.5 18.8 L4 18 Q1.7 18 1.7 20.2 L1.7 27.8 Q1.7 29.5 3.6 29.5 L26.4 28.6 L27.3 47.3 L18.3 49.7 Q17.6 50 17.6 51.2 L17.6 55.8 L27.9 54.4 L28.4 57.7 Q30 59 31.6 57.7 L32.1 54.4 L42.4 55.8 L42.4 51.2 Q42.4 50 41.7 49.7 L32.7 47.3 L33.6 28.6 L56.4 29.5 Q58.3 29.5 58.3 27.8 L58.3 20.2 Q58.3 18 56 18 L33.5 18.8 L33 8.4 C33 5.1 32.1 2 30 2Z"/>'
     },
-    tushka: {
-      label: 'Тушка',
-      shapes: '<path d="M30 1 Q27 4 27 9 L26 21 L2.4 38 L2 44 L26 34 L27 50 L18 55 L18 58 L29 55 L30 59 L31 55 L42 58 L42 55 L33 50 L34 34 L58 44 L57.6 38 L34 21 L33 9 Q33 4 30 1Z"/><path d="M19.5 39 Q16 39 16 42 L16 52 Q18 55 20.5 52 L21 42 Q21 40 19.5 39Z"/><path d="M40.5 39 Q44 39 44 42 L44 52 Q42 55 39.5 52 L39 42 Q39 40 40.5 39Z"/><path d="M28.6 43 L31.4 43 L33 55 L27 55Z"/>'
-    },
     liner: {
       label: 'Лайнер',
-      shapes: '<path d="M30 1 Q27 3 27 10 L26 20 L3 36 L3 42 L26 33 L27.2 49 L18 54 L18 57 L29 54 L30 58 L31 54 L42 57 L42 54 L32.8 49 L34 33 L57 42 L57 36 L34 20 L33 10 Q33 3 30 1Z"/><ellipse cx="18" cy="37" rx="4" ry="8"/><ellipse cx="42" cy="37" rx="4" ry="8"/>'
+      shapes: '<path d="M30 1 Q27.6 4 27.6 10 L26.8 19 L3.5 37.5 Q2.5 38.5 3.4 42.5 L26.5 33.5 L27.2 49 L17.5 54 L18 57 L29 53.8 L30 58 L31 53.8 L42 57 L42.5 54 L32.8 49 L33.5 33.5 L56.6 42.5 Q57.5 38.5 56.5 37.5 L33.2 19 L32.4 10 Q32.4 4 30 1 Z"/>'
     },
     fighter: {
       label: 'Истребитель',
-      shapes: '<path d="M30 1 L34 15 L35 22 L54 39 L55 47 L37 40 L38 53 L47 57 L44 59 L32 56 L30 59 L28 56 L16 59 L13 57 L22 53 L23 40 L5 47 L6 39 L25 22 L26 15Z"/><path d="M27 15 L30 9 L33 15 L33 29 L27 29Z"/>'
+      shapes: '<path d="M30 1 Q27 5 26.5 15 L25.5 22 L5 39 L5 45 L23.6 40 L24.8 51 L16.8 55.5 L16.5 58 L29.3 55.4 L30 58 L30.7 55.4 L43.5 58 L43.2 55.5 L35.2 51 L36.4 40 L55 45 L55 39 L34.5 22 L33.5 15 Q33 5 30 1Z"/><path d="M23.5 43 L28 45.5 L27 54.5 L23 54Z"/><path d="M36.5 43 L32 45.5 L33 54.5 L37 54Z"/><path d="M28 15 Q30 11 32 15 L32 30 L28 30Z"/>'
     },
     rocket: {
       label: 'Ракета',
@@ -1874,6 +1885,7 @@ let simActive=false,simPaused=false,simPoint=null,simTrack=[],simTimer=null,simL
 let simTargetHeading=90,simTargetSpeed=160,simTargetAltitude=600;
 let simHeading=90,simSpeed=160,simAltitude=600,simControlsVisible=true;
 const SIM_SETTINGS_KEY='naebacia_sim_targets_vi';
+const SIM_CONTROLS_KEY='naebacia_sim_controls_vi';
 let rtTrack = [];
 let rtFlightLog = null;  // общий журнал с отдельными полётами; продолжается до очистки
 let rtLogSaveWarning = '';
@@ -2312,6 +2324,8 @@ map.on('dragstart', () => {
 // === БЛОК 24: ICONS ===
 const AIRCRAFT_SKIN_KEY='naebacia_aircraft_skin_vi';
 let aircraftSkin=localStorage.getItem(AIRCRAFT_SKIN_KEY)||'standard';
+if(aircraftSkin==='tushka')aircraftSkin='liner';
+if(!window.NAEBACIA_SKINS.skins[aircraftSkin])aircraftSkin='standard';
 function planeIconSvg(courseDeg, color) {
   return window.NAEBACIA_SKINS.svg(aircraftSkin,norm360(courseDeg+mapBearing()),color);
 }
@@ -2323,9 +2337,25 @@ function changeAircraftSkin(id){
   renderTrack();renderRTMarker();updatePlaneVisualRotation();
 }
 function updateAircraftSkinUI(){
-  const menu=document.getElementById('aircraftSkin');if(menu)menu.value=aircraftSkin;
-  const preview=document.getElementById('aircraftSkinPreview');
-  if(preview)preview.innerHTML=window.NAEBACIA_SKINS.svg(aircraftSkin,0,'#08c');
+  const gallery=document.getElementById('aircraftSkinGallery');
+  if(!gallery)return;
+  if(!gallery.childElementCount){
+    for(const id of window.NAEBACIA_SKINS.ids){
+      const skin=window.NAEBACIA_SKINS.skins[id];
+      const button=document.createElement('button');
+      button.type='button';button.className='aircraft-skin-option';
+      button.dataset.skin=id;button.title=skin.label;
+      button.setAttribute('aria-label',skin.label);
+      button.innerHTML=window.NAEBACIA_SKINS.svg(id,0,'#08c');
+      button.addEventListener('click',()=>changeAircraftSkin(id));
+      gallery.appendChild(button);
+    }
+  }
+  gallery.querySelectorAll('[data-skin]').forEach(button=>{
+    const selected=button.dataset.skin===aircraftSkin;
+    button.classList.toggle('selected',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
 }
 
 function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [52, 52], iconAnchor: [26, 26] }); }
@@ -3403,6 +3433,7 @@ function getGPSHeadingMag() {
   if (!rtTracking || !rtCurrentPosition || gpsQualityState().level==='red') return null;
   let heading = rtCurrentPosition.heading;
   if (heading === null || heading === undefined || isNaN(heading)) {
+    if (simActive) return null; // при нулевой путевой скорости не брать ФМПУ из реального GPS-трека
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
       const b = rtTrack[rtTrack.length - 1];
@@ -3422,6 +3453,8 @@ function getGPSSpeedKmh() {
 
 function getCurrentSpeedKmh(targetPt) {
   const gpsV = getGPSSpeedKmh();
+  // В SIM даже нулевая путевая скорость важнее расчёта по полю V из Навигации.
+  if (simActive && gpsV !== null) return gpsV;
   if (gpsV !== null && gpsV > 1) return gpsV;
 
   const wdRaw = document.getElementById('windDir').value.trim();
@@ -3507,7 +3540,7 @@ function computeNav() {
   const asRaw = document.getElementById('airspeed').value.trim();
   const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
   const ws = getWindSpeedKmh();
-  const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
+  const as = simActive ? simSpeed : (asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.')));
 
   let wind = null;
   if (!isNaN(wd) && !isNaN(ws) && !isNaN(as) && as > 0) {
@@ -5221,7 +5254,9 @@ function renderRTMarker() {
     updateJokeMarker();
     return;
   }
-  let course = rtCurrentPosition.heading;
+  // Ветер меняет траекторию/FМПУ, но маркер самолёта должен показывать направление носа.
+  let course = simActive && Number.isFinite(rtCurrentPosition.aircraftHeadingTrue)
+    ? rtCurrentPosition.aircraftHeadingTrue : rtCurrentPosition.heading;
   if (course === null || course === undefined || isNaN(course)) {
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
@@ -5800,6 +5835,7 @@ let simSavedNeedsInitialLegFix=false,simSavedLastAdvance=0;
 let simLastTraceAt=0,simLastPaintAt=0;
 function simClamp(v,min,max){return Math.min(max,Math.max(min,v));}
 function loadSimPreferences(){
+  try{simControlsVisible=localStorage.getItem(SIM_CONTROLS_KEY)!=='0';}catch(e){}
   try{
     const data=JSON.parse(localStorage.getItem(SIM_SETTINGS_KEY)||'{}');
     if(Number.isFinite(data.heading))simTargetHeading=simClamp(Math.round(data.heading),0,359);
@@ -5821,11 +5857,18 @@ function syncSimControls(){
   });
   const heading=document.getElementById('simHeadingRead');
   if(heading)heading.textContent=String(simTargetHeading).padStart(3,'0')+'°';
-  const spd=document.getElementById('simSpeedRead');if(spd)spd.textContent=simTargetSpeed+' км/ч';
+  const spd=document.getElementById('simSpeedRead');if(spd)spd.textContent='TAS '+simTargetSpeed+' км/ч';
   const actual=document.getElementById('simActual');
-  if(actual)actual.textContent=simActive?
-    'Факт: '+Math.round(simSpeed)+' км/ч · '+String(Math.round(norm360(simHeading))).padStart(3,'0')+'° · '+Math.round(simAltitude)+' м':
-    'Стартовая точка — центр карты (или выбранная позиция). Высота условная.';
+  if(actual){
+    if(simActive){
+      const gs=simPoint&&Number.isFinite(simPoint.speed)?Math.round(simPoint.speed*3.6):0;
+      const track=simPoint&&Number.isFinite(simPoint.heading)?
+        String(Math.round(norm360(simPoint.heading-getDecl()))).padStart(3,'0')+'°':'—';
+      actual.textContent='TAS '+Math.round(simSpeed)+' км/ч · МК '+
+        String(Math.round(norm360(simHeading))).padStart(3,'0')+'° · ФМПУ '+track+
+        ' · Путевая '+gs+' км/ч · '+Math.round(simAltitude)+' м';
+    }else actual.textContent='Стартовая точка — центр карты (или выбранная позиция). Высота условная.';
+  }
   const pause=document.getElementById('simPauseBtn');if(pause)pause.textContent=simPaused?'▶ Продолжить':'⏸ Пауза';
 }
 function setSimTarget(which,raw){
@@ -5855,21 +5898,48 @@ function finishSimHeading(cancel=false){
   }
   editor.hidden=true;button.hidden=false;syncSimControls();
 }
+let simSettingsReturnFocus=null;
+function openSimSettings(){
+  if(!simActive)return;
+  const overlay=document.getElementById('simSettingsOverlay');
+  if(!overlay)return;
+  simSettingsReturnFocus=document.activeElement;
+  overlay.hidden=false;
+  syncSimControls();
+  document.getElementById('simSettingsClose').focus();
+}
+function closeSimSettings(){
+  const overlay=document.getElementById('simSettingsOverlay');
+  if(!overlay||overlay.hidden)return;
+  overlay.hidden=true;
+  if(simSettingsReturnFocus&&simSettingsReturnFocus.isConnected&&!simSettingsReturnFocus.hidden)simSettingsReturnFocus.focus();
+  simSettingsReturnFocus=null;
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!document.getElementById('simSettingsOverlay').hidden){e.preventDefault();closeSimSettings();}
+});
 function updateSimVisibility(){
   const panel=document.getElementById('panel');
   const menuHidden=!panel||panel.classList.contains('hidden');
   const btn=document.getElementById('simControlBtn');
-  if(btn){btn.hidden=!simActive||!menuHidden;btn.setAttribute('aria-pressed',String(simControlsVisible));}
+  if(btn)btn.hidden=!simActive||!menuHidden;
   const controls=document.getElementById('simControls');
   if(controls)controls.hidden=!simActive||!simControlsVisible;
   document.body.classList.toggle('sim-active',simActive);
   document.body.classList.toggle('sim-controls-visible',simActive&&simControlsVisible);
   const cb=document.getElementById('simEnabled');if(cb)cb.checked=simActive;
+  const panelCheckbox=document.getElementById('simControlsToggle');if(panelCheckbox)panelCheckbox.checked=simControlsVisible;
   const rt=document.getElementById('rtToggleBtn');
   if(rt && simActive){rt.innerHTML='<b>■ Отключить SIM</b>';rt.classList.remove('gps');rt.classList.add('stop');}
   const state=document.getElementById('simStateLabel');if(state)state.textContent=simActive?'ВКЛ · не GPS':'ВЫКЛ';
+  const navTasHint=document.getElementById('simTasNavHint');if(navTasHint)navTasHint.hidden=!simActive;
+  if(!simActive)closeSimSettings();
 }
-function toggleSimControls(){simControlsVisible=!simControlsVisible;updateSimVisibility();updateSpeedHudVisibility();}
+function setSimControlsVisible(visible){
+  simControlsVisible=!!visible;
+  try{localStorage.setItem(SIM_CONTROLS_KEY,simControlsVisible?'1':'0');}catch(e){}
+  updateSimVisibility();updateSpeedHudVisibility();
+}
 function toggleSimPaused(){if(!simActive)return;simPaused=!simPaused;simLastTick=Date.now();syncSimControls();}
 function simAtMapCenter(){
   if(!simActive)return;
@@ -5877,6 +5947,41 @@ function simAtMapCenter(){
   simPoint.lat=p.lat;simPoint.lon=p.lng;simPoint.t=Date.now();
   simTrack=[];simLastTraceAt=0;
   publishSimPosition(true);
+}
+// Вектор движения SIM: магнитный курс и δ (направление, ОТКУДА дует ветер)
+// переводим в истинные направления по текущему склонению, затем складываем скорости.
+// Все скорости здесь в км/ч, а результат для rtCurrentPosition.speed переводится в м/с.
+function simGroundVector(magneticHeadingDeg,tasKmh,windFromMagDeg,windSpeedKmh,declinationDeg){
+  const noseTrue=norm360(magneticHeadingDeg+declinationDeg);
+  const hasWind=Number.isFinite(windFromMagDeg)&&windFromMagDeg>=0&&windFromMagDeg<=360&&
+    Number.isFinite(windSpeedKmh)&&windSpeedKmh>=0;
+  const windToTrue=norm360(windFromMagDeg+180+declinationDeg);
+  const east=tasKmh*Math.sin(toRad(noseTrue))+
+    (hasWind?windSpeedKmh*Math.sin(toRad(windToTrue)):0);
+  const north=tasKmh*Math.cos(toRad(noseTrue))+
+    (hasWind?windSpeedKmh*Math.cos(toRad(windToTrue)):0);
+  const groundSpeedKmh=Math.hypot(east,north);
+  // Нет перемещения — нет ФМПУ, но нос самолёта всё ещё смотрит по заданному курсу.
+  const trackTrue=groundSpeedKmh>0.001?norm360(toDeg(Math.atan2(east,north))):null;
+  return {noseTrue,trackTrue,groundSpeedKmh};
+}
+function simCurrentGroundVector(){
+  const windRaw=document.getElementById('windDir').value.trim().replace(',','.');
+  const windFrom=windRaw!==''?Number(windRaw):NaN;
+  const windSpeed=getWindSpeedKmh(); // учитывает км/ч ↔ м/с в Навигации
+  return simGroundVector(simHeading,simSpeed,windFrom,windSpeed,getDecl());
+}
+function simUpdateGroundPosition(dt){
+  const motion=simCurrentGroundVector();
+  const traveled=motion.groundSpeedKmh/3.6*dt;
+  if(traveled>0 && motion.trackTrue!==null){
+    const next=hsiPointAlong(simPoint,motion.trackTrue,traveled);
+    simPoint.lat=next.lat;simPoint.lon=next.lon;
+  }
+  // ФМПУ и путевая скорость — от вектора земли, а не от носа или TAS.
+  simPoint.heading=motion.trackTrue;
+  simPoint.aircraftHeadingTrue=motion.noseTrue;
+  simPoint.speed=motion.groundSpeedKmh/3.6;
 }
 function startSimulator(){
   if(simActive)return;
@@ -5895,7 +6000,8 @@ function startSimulator(){
   simActive=true;simPaused=false;simTrack=[];simLastTraceAt=0;simLastPaintAt=0;
   simHeading=simTargetHeading;simSpeed=simTargetSpeed;simAltitude=simTargetAltitude;
   simPoint={lat:start.lat,lon:Number.isFinite(start.lon)?start.lon:start.lng,t:Date.now(),
-    heading:norm360(simHeading+getDecl()),speed:simSpeed/3.6,alt:simAltitude,acc:0,sim:true};
+    heading:null,speed:0,alt:simAltitude,acc:0,sim:true};
+  simUpdateGroundPosition(0); // рассчитанные ФМПУ и путевая доступны сразу после включения SIM
   rtCurrentPosition=simPoint;rtTracking=true;gpsSignalIssue='';
   if(hsiState.mode==='direct'&&navTarget)navLineStart={lat:simPoint.lat,lon:simPoint.lon};
   if(hsiState.mode==='route'&&hsiState.routeKey){
@@ -5938,10 +6044,8 @@ function simTick(){
   simHeading=norm360(simHeading+Math.sign(difference)*Math.min(Math.abs(difference),3*dt)); // 3°/с
   const altDelta=simTargetAltitude-simAltitude;
   simAltitude+=Math.sign(altDelta)*Math.min(Math.abs(altDelta),3*dt); // 3 м/с, без физики
-  const trueHeading=norm360(simHeading+getDecl());
-  const traveled=simSpeed/3.6*dt;
-  if(traveled>0){const next=hsiPointAlong(simPoint,trueHeading,traveled);simPoint.lat=next.lat;simPoint.lon=next.lon;}
-  simPoint.t=now;simPoint.speed=simSpeed/3.6;simPoint.heading=trueHeading;simPoint.alt=simAltitude;
+  simUpdateGroundPosition(dt);
+  simPoint.t=now;simPoint.alt=simAltitude;
   rtCurrentPosition=simPoint;
   publishSimPosition(false);
 }
@@ -6141,10 +6245,10 @@ window.addEventListener('pagehide', () => saveFlightLog(true));
     await ensureLeaflet();
     await ensureMapRotation();
     statusMessage('Запуск НАЕБАЦИИ VI…');
-    try {await loadScript('./aircraft-skins.js?v=1.63-r1');}
+    try {await loadScript('./aircraft-skins.js?v=1.63-r3');}
     catch(error){console.warn('Силуэты не загрузились, встроенная копия:',error);executeBuiltInSkins();}
     try {
-      await loadScript('./app.js?v=1.63-r1');
+      await loadScript('./app.js?v=1.63-r3');
     } catch (error) {
       console.warn('app.js недоступен, запускаем резервную копию из HTML:',error);
       executeBuiltInApp();

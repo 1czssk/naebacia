@@ -401,6 +401,7 @@ let simActive=false,simPaused=false,simPoint=null,simTrack=[],simTimer=null,simL
 let simTargetHeading=90,simTargetSpeed=160,simTargetAltitude=600;
 let simHeading=90,simSpeed=160,simAltitude=600,simControlsVisible=true;
 const SIM_SETTINGS_KEY='naebacia_sim_targets_vi';
+const SIM_CONTROLS_KEY='naebacia_sim_controls_vi';
 let rtTrack = [];
 let rtFlightLog = null;  // общий журнал с отдельными полётами; продолжается до очистки
 let rtLogSaveWarning = '';
@@ -839,6 +840,8 @@ map.on('dragstart', () => {
 // === БЛОК 24: ICONS ===
 const AIRCRAFT_SKIN_KEY='naebacia_aircraft_skin_vi';
 let aircraftSkin=localStorage.getItem(AIRCRAFT_SKIN_KEY)||'standard';
+if(aircraftSkin==='tushka')aircraftSkin='liner';
+if(!window.NAEBACIA_SKINS.skins[aircraftSkin])aircraftSkin='standard';
 function planeIconSvg(courseDeg, color) {
   return window.NAEBACIA_SKINS.svg(aircraftSkin,norm360(courseDeg+mapBearing()),color);
 }
@@ -850,9 +853,25 @@ function changeAircraftSkin(id){
   renderTrack();renderRTMarker();updatePlaneVisualRotation();
 }
 function updateAircraftSkinUI(){
-  const menu=document.getElementById('aircraftSkin');if(menu)menu.value=aircraftSkin;
-  const preview=document.getElementById('aircraftSkinPreview');
-  if(preview)preview.innerHTML=window.NAEBACIA_SKINS.svg(aircraftSkin,0,'#08c');
+  const gallery=document.getElementById('aircraftSkinGallery');
+  if(!gallery)return;
+  if(!gallery.childElementCount){
+    for(const id of window.NAEBACIA_SKINS.ids){
+      const skin=window.NAEBACIA_SKINS.skins[id];
+      const button=document.createElement('button');
+      button.type='button';button.className='aircraft-skin-option';
+      button.dataset.skin=id;button.title=skin.label;
+      button.setAttribute('aria-label',skin.label);
+      button.innerHTML=window.NAEBACIA_SKINS.svg(id,0,'#08c');
+      button.addEventListener('click',()=>changeAircraftSkin(id));
+      gallery.appendChild(button);
+    }
+  }
+  gallery.querySelectorAll('[data-skin]').forEach(button=>{
+    const selected=button.dataset.skin===aircraftSkin;
+    button.classList.toggle('selected',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
 }
 
 function planeIcon(c) { return L.divIcon({ className: '', html: planeIconSvg(c, '#2a7'), iconSize: [52, 52], iconAnchor: [26, 26] }); }
@@ -1930,6 +1949,7 @@ function getGPSHeadingMag() {
   if (!rtTracking || !rtCurrentPosition || gpsQualityState().level==='red') return null;
   let heading = rtCurrentPosition.heading;
   if (heading === null || heading === undefined || isNaN(heading)) {
+    if (simActive) return null; // при нулевой путевой скорости не брать ФМПУ из реального GPS-трека
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
       const b = rtTrack[rtTrack.length - 1];
@@ -1949,6 +1969,8 @@ function getGPSSpeedKmh() {
 
 function getCurrentSpeedKmh(targetPt) {
   const gpsV = getGPSSpeedKmh();
+  // В SIM даже нулевая путевая скорость важнее расчёта по полю V из Навигации.
+  if (simActive && gpsV !== null) return gpsV;
   if (gpsV !== null && gpsV > 1) return gpsV;
 
   const wdRaw = document.getElementById('windDir').value.trim();
@@ -2034,7 +2056,7 @@ function computeNav() {
   const asRaw = document.getElementById('airspeed').value.trim();
   const wd = wdRaw === '' ? NaN : parseFloat(wdRaw);
   const ws = getWindSpeedKmh();
-  const as = asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.'));
+  const as = simActive ? simSpeed : (asRaw === '' ? NaN : parseFloat(asRaw.replace(',', '.')));
 
   let wind = null;
   if (!isNaN(wd) && !isNaN(ws) && !isNaN(as) && as > 0) {
@@ -3748,7 +3770,9 @@ function renderRTMarker() {
     updateJokeMarker();
     return;
   }
-  let course = rtCurrentPosition.heading;
+  // Ветер меняет траекторию/FМПУ, но маркер самолёта должен показывать направление носа.
+  let course = simActive && Number.isFinite(rtCurrentPosition.aircraftHeadingTrue)
+    ? rtCurrentPosition.aircraftHeadingTrue : rtCurrentPosition.heading;
   if (course === null || course === undefined || isNaN(course)) {
     if (rtTrack.length >= 2) {
       const a = rtTrack[rtTrack.length - 2];
@@ -4327,6 +4351,7 @@ let simSavedNeedsInitialLegFix=false,simSavedLastAdvance=0;
 let simLastTraceAt=0,simLastPaintAt=0;
 function simClamp(v,min,max){return Math.min(max,Math.max(min,v));}
 function loadSimPreferences(){
+  try{simControlsVisible=localStorage.getItem(SIM_CONTROLS_KEY)!=='0';}catch(e){}
   try{
     const data=JSON.parse(localStorage.getItem(SIM_SETTINGS_KEY)||'{}');
     if(Number.isFinite(data.heading))simTargetHeading=simClamp(Math.round(data.heading),0,359);
@@ -4348,11 +4373,18 @@ function syncSimControls(){
   });
   const heading=document.getElementById('simHeadingRead');
   if(heading)heading.textContent=String(simTargetHeading).padStart(3,'0')+'°';
-  const spd=document.getElementById('simSpeedRead');if(spd)spd.textContent=simTargetSpeed+' км/ч';
+  const spd=document.getElementById('simSpeedRead');if(spd)spd.textContent='TAS '+simTargetSpeed+' км/ч';
   const actual=document.getElementById('simActual');
-  if(actual)actual.textContent=simActive?
-    'Факт: '+Math.round(simSpeed)+' км/ч · '+String(Math.round(norm360(simHeading))).padStart(3,'0')+'° · '+Math.round(simAltitude)+' м':
-    'Стартовая точка — центр карты (или выбранная позиция). Высота условная.';
+  if(actual){
+    if(simActive){
+      const gs=simPoint&&Number.isFinite(simPoint.speed)?Math.round(simPoint.speed*3.6):0;
+      const track=simPoint&&Number.isFinite(simPoint.heading)?
+        String(Math.round(norm360(simPoint.heading-getDecl()))).padStart(3,'0')+'°':'—';
+      actual.textContent='TAS '+Math.round(simSpeed)+' км/ч · МК '+
+        String(Math.round(norm360(simHeading))).padStart(3,'0')+'° · ФМПУ '+track+
+        ' · Путевая '+gs+' км/ч · '+Math.round(simAltitude)+' м';
+    }else actual.textContent='Стартовая точка — центр карты (или выбранная позиция). Высота условная.';
+  }
   const pause=document.getElementById('simPauseBtn');if(pause)pause.textContent=simPaused?'▶ Продолжить':'⏸ Пауза';
 }
 function setSimTarget(which,raw){
@@ -4382,21 +4414,48 @@ function finishSimHeading(cancel=false){
   }
   editor.hidden=true;button.hidden=false;syncSimControls();
 }
+let simSettingsReturnFocus=null;
+function openSimSettings(){
+  if(!simActive)return;
+  const overlay=document.getElementById('simSettingsOverlay');
+  if(!overlay)return;
+  simSettingsReturnFocus=document.activeElement;
+  overlay.hidden=false;
+  syncSimControls();
+  document.getElementById('simSettingsClose').focus();
+}
+function closeSimSettings(){
+  const overlay=document.getElementById('simSettingsOverlay');
+  if(!overlay||overlay.hidden)return;
+  overlay.hidden=true;
+  if(simSettingsReturnFocus&&simSettingsReturnFocus.isConnected&&!simSettingsReturnFocus.hidden)simSettingsReturnFocus.focus();
+  simSettingsReturnFocus=null;
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!document.getElementById('simSettingsOverlay').hidden){e.preventDefault();closeSimSettings();}
+});
 function updateSimVisibility(){
   const panel=document.getElementById('panel');
   const menuHidden=!panel||panel.classList.contains('hidden');
   const btn=document.getElementById('simControlBtn');
-  if(btn){btn.hidden=!simActive||!menuHidden;btn.setAttribute('aria-pressed',String(simControlsVisible));}
+  if(btn)btn.hidden=!simActive||!menuHidden;
   const controls=document.getElementById('simControls');
   if(controls)controls.hidden=!simActive||!simControlsVisible;
   document.body.classList.toggle('sim-active',simActive);
   document.body.classList.toggle('sim-controls-visible',simActive&&simControlsVisible);
   const cb=document.getElementById('simEnabled');if(cb)cb.checked=simActive;
+  const panelCheckbox=document.getElementById('simControlsToggle');if(panelCheckbox)panelCheckbox.checked=simControlsVisible;
   const rt=document.getElementById('rtToggleBtn');
   if(rt && simActive){rt.innerHTML='<b>■ Отключить SIM</b>';rt.classList.remove('gps');rt.classList.add('stop');}
   const state=document.getElementById('simStateLabel');if(state)state.textContent=simActive?'ВКЛ · не GPS':'ВЫКЛ';
+  const navTasHint=document.getElementById('simTasNavHint');if(navTasHint)navTasHint.hidden=!simActive;
+  if(!simActive)closeSimSettings();
 }
-function toggleSimControls(){simControlsVisible=!simControlsVisible;updateSimVisibility();updateSpeedHudVisibility();}
+function setSimControlsVisible(visible){
+  simControlsVisible=!!visible;
+  try{localStorage.setItem(SIM_CONTROLS_KEY,simControlsVisible?'1':'0');}catch(e){}
+  updateSimVisibility();updateSpeedHudVisibility();
+}
 function toggleSimPaused(){if(!simActive)return;simPaused=!simPaused;simLastTick=Date.now();syncSimControls();}
 function simAtMapCenter(){
   if(!simActive)return;
@@ -4404,6 +4463,41 @@ function simAtMapCenter(){
   simPoint.lat=p.lat;simPoint.lon=p.lng;simPoint.t=Date.now();
   simTrack=[];simLastTraceAt=0;
   publishSimPosition(true);
+}
+// Вектор движения SIM: магнитный курс и δ (направление, ОТКУДА дует ветер)
+// переводим в истинные направления по текущему склонению, затем складываем скорости.
+// Все скорости здесь в км/ч, а результат для rtCurrentPosition.speed переводится в м/с.
+function simGroundVector(magneticHeadingDeg,tasKmh,windFromMagDeg,windSpeedKmh,declinationDeg){
+  const noseTrue=norm360(magneticHeadingDeg+declinationDeg);
+  const hasWind=Number.isFinite(windFromMagDeg)&&windFromMagDeg>=0&&windFromMagDeg<=360&&
+    Number.isFinite(windSpeedKmh)&&windSpeedKmh>=0;
+  const windToTrue=norm360(windFromMagDeg+180+declinationDeg);
+  const east=tasKmh*Math.sin(toRad(noseTrue))+
+    (hasWind?windSpeedKmh*Math.sin(toRad(windToTrue)):0);
+  const north=tasKmh*Math.cos(toRad(noseTrue))+
+    (hasWind?windSpeedKmh*Math.cos(toRad(windToTrue)):0);
+  const groundSpeedKmh=Math.hypot(east,north);
+  // Нет перемещения — нет ФМПУ, но нос самолёта всё ещё смотрит по заданному курсу.
+  const trackTrue=groundSpeedKmh>0.001?norm360(toDeg(Math.atan2(east,north))):null;
+  return {noseTrue,trackTrue,groundSpeedKmh};
+}
+function simCurrentGroundVector(){
+  const windRaw=document.getElementById('windDir').value.trim().replace(',','.');
+  const windFrom=windRaw!==''?Number(windRaw):NaN;
+  const windSpeed=getWindSpeedKmh(); // учитывает км/ч ↔ м/с в Навигации
+  return simGroundVector(simHeading,simSpeed,windFrom,windSpeed,getDecl());
+}
+function simUpdateGroundPosition(dt){
+  const motion=simCurrentGroundVector();
+  const traveled=motion.groundSpeedKmh/3.6*dt;
+  if(traveled>0 && motion.trackTrue!==null){
+    const next=hsiPointAlong(simPoint,motion.trackTrue,traveled);
+    simPoint.lat=next.lat;simPoint.lon=next.lon;
+  }
+  // ФМПУ и путевая скорость — от вектора земли, а не от носа или TAS.
+  simPoint.heading=motion.trackTrue;
+  simPoint.aircraftHeadingTrue=motion.noseTrue;
+  simPoint.speed=motion.groundSpeedKmh/3.6;
 }
 function startSimulator(){
   if(simActive)return;
@@ -4422,7 +4516,8 @@ function startSimulator(){
   simActive=true;simPaused=false;simTrack=[];simLastTraceAt=0;simLastPaintAt=0;
   simHeading=simTargetHeading;simSpeed=simTargetSpeed;simAltitude=simTargetAltitude;
   simPoint={lat:start.lat,lon:Number.isFinite(start.lon)?start.lon:start.lng,t:Date.now(),
-    heading:norm360(simHeading+getDecl()),speed:simSpeed/3.6,alt:simAltitude,acc:0,sim:true};
+    heading:null,speed:0,alt:simAltitude,acc:0,sim:true};
+  simUpdateGroundPosition(0); // рассчитанные ФМПУ и путевая доступны сразу после включения SIM
   rtCurrentPosition=simPoint;rtTracking=true;gpsSignalIssue='';
   if(hsiState.mode==='direct'&&navTarget)navLineStart={lat:simPoint.lat,lon:simPoint.lon};
   if(hsiState.mode==='route'&&hsiState.routeKey){
@@ -4465,10 +4560,8 @@ function simTick(){
   simHeading=norm360(simHeading+Math.sign(difference)*Math.min(Math.abs(difference),3*dt)); // 3°/с
   const altDelta=simTargetAltitude-simAltitude;
   simAltitude+=Math.sign(altDelta)*Math.min(Math.abs(altDelta),3*dt); // 3 м/с, без физики
-  const trueHeading=norm360(simHeading+getDecl());
-  const traveled=simSpeed/3.6*dt;
-  if(traveled>0){const next=hsiPointAlong(simPoint,trueHeading,traveled);simPoint.lat=next.lat;simPoint.lon=next.lon;}
-  simPoint.t=now;simPoint.speed=simSpeed/3.6;simPoint.heading=trueHeading;simPoint.alt=simAltitude;
+  simUpdateGroundPosition(dt);
+  simPoint.t=now;simPoint.alt=simAltitude;
   rtCurrentPosition=simPoint;
   publishSimPosition(false);
 }
