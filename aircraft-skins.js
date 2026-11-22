@@ -9,11 +9,15 @@
     },
     liner: {
       label: 'Лайнер',
-      shapes: '<path d="M30 1 Q27.6 4 27.6 10 L26.8 19 L3.5 37.5 Q2.5 38.5 3.4 42.5 L26.5 33.5 L27.2 49 L17.5 54 L18 57 L29 53.8 L30 58 L31 53.8 L42 57 L42.5 54 L32.8 49 L33.5 33.5 L56.6 42.5 Q57.5 38.5 56.5 37.5 L33.2 19 L32.4 10 Q32.4 4 30 1 Z"/>'
+      shapes: '<path d="M30 1 C26.8 1 25 4.2 25 8.8 L24.9 16.5 L15.8 20.3 L3.6 25.9 Q1.5 26.8 1.9 30.4 L24.9 27.7 L25.7 47.1 L18.2 51.1 L18.2 56.5 L27.8 53.8 L28.7 58 L31.3 58 L32.2 53.8 L41.8 56.5 L41.8 51.1 L34.3 47.1 L35.1 27.7 L58.1 30.4 Q58.5 26.8 56.4 25.9 L44.2 20.3 L35.1 16.5 L35 8.8 C35 4.2 33.2 1 30 1 Z"/><path d="M27.3 16.5 L27.3 4.2 Q27.3 2.3 30 2.3 Q32.7 2.3 32.7 4.2 L32.7 16.5Z"/><path d="M27.4 42.5 L27.4 54.6 L32.6 54.6 L32.6 42.5Z"/>'
     },
     fighter: {
       label: 'Истребитель',
-      shapes: '<path d="M30 1 Q27 5 26.5 15 L25.5 22 L5 39 L5 45 L23.6 40 L24.8 51 L16.8 55.5 L16.5 58 L29.3 55.4 L30 58 L30.7 55.4 L43.5 58 L43.2 55.5 L35.2 51 L36.4 40 L55 45 L55 39 L34.5 22 L33.5 15 Q33 5 30 1Z"/><path d="M23.5 43 L28 45.5 L27 54.5 L23 54Z"/><path d="M36.5 43 L32 45.5 L33 54.5 L37 54Z"/><path d="M28 15 Q30 11 32 15 L32 30 L28 30Z"/>'
+      shapes: '<path d="M30 1 L26.8 8.5 L18.5 14.2 L16.1 24.4 L6.2 31.8 L6.6 38.5 L18.2 35.5 L22.8 44.4 L17.8 52.4 L18.4 58 L27.8 51.6 L27.8 40.5 L25.1 33 L25.1 26.8 L34.9 26.8 L34.9 33 L32.2 40.5 L32.2 51.6 L41.6 58 L42.2 52.4 L37.2 44.4 L41.8 35.5 L53.4 38.5 L53.8 31.8 L43.9 24.4 L41.5 14.2 L33.2 8.5 Z"/><path d="M27.7 3.2 Q30 0.8 32.3 3.2 L31.4 11 L28.6 11Z"/><path d="M26 55 L30 58 L34 55 Z"/>'
+    },
+    shuttle: {
+      label: 'Шаттл',
+      shapes: '<path d="M30 1 C26.6 1 24.8 3.7 24.8 8.7 L24.8 19.2 L18.7 24.1 L9.8 30.8 Q7.8 32.3 8.2 37.8 L24.9 35.1 L25.5 49.3 L20.8 53.7 L20.8 58 L27.4 55.6 L28.2 58 L31.8 58 L32.6 55.6 L39.2 58 L39.2 53.7 L34.5 49.3 L35.1 35.1 L51.8 37.8 Q52.2 32.3 50.2 30.8 L41.3 24.1 L35.2 19.2 L35.2 8.7 C35.2 3.7 33.4 1 30 1 Z"/><path d="M27.8 11.5 Q30 9.2 32.2 11.5 L31.5 18.4 L28.5 18.4Z"/>'
     },
     rocket: {
       label: 'Ракета',
@@ -25,12 +29,12 @@
     }
   };
   function svg(id, heading, color) {
-    const found=skins[id] || skins.standard;
-    const deg=Number.isFinite(heading) ? ((heading%360)+360)%360 : 0;
-    const safeColor=/^#[0-9a-fA-F]{3,8}$/.test(color||'')?color:'#08c';
-    return '<svg viewBox="0 0 60 60" width="52" height="52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" '+
-      'style="transform:rotate('+deg+'deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))">'+
-      '<g fill="'+safeColor+'" stroke="#fff" stroke-width="1.2" stroke-linejoin="round">'+found.shapes+'</g></svg>';
+    const found = skins[id] || skins.standard;
+    const deg = Number.isFinite(heading) ? ((heading % 360) + 360) % 360 : 0;
+    const safeColor = /^#[0-9a-fA-F]{3,8}$/.test(color || '') ? color : '#08c';
+    return '<svg viewBox="0 0 60 60" width="52" height="52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" ' +
+      'style="transform:rotate(' + deg + 'deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))">' +
+      '<g fill="' + safeColor + '" stroke="#fff" stroke-width="1.2" stroke-linejoin="round">' + found.shapes + '</g></svg>';
   }
-  root.NAEBACIA_SKINS=Object.freeze({skins,svg,ids:Object.keys(skins)});
+  root.NAEBACIA_SKINS = Object.freeze({ skins, svg, ids: Object.keys(skins) });
 })(window);
