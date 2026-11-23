@@ -6815,7 +6815,7 @@ window.addEventListener('pagehide', () => saveFlightLog(true));
     await ensureLeaflet();
     await ensureMapRotation();
     statusMessage('Запуск НАЕБАЦИИ…');
-    try {await loadScript('./assets/aircraft/aircraft-skins.js?v=1.64-r2-skins');}
+    try {await loadScript('./assets/aircraft/aircraft-skins.js?v=1.64-r4-approved-skins');}
     catch(error){console.warn('Силуэты не загрузились, встроенная копия:',error);executeBuiltInSkins();}
     if(window.NAEBACIA_SKINS && typeof window.NAEBACIA_SKINS.load==='function'){
       const result=await window.NAEBACIA_SKINS.load();
