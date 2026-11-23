@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#111111">
+  <title>Жигули · ВАЗ-2107</title>
+  <g data-silhouette="zhiguli">
+  <!-- Front is UP: headlamps/grille and long bonnet at y=4..34; boot at bottom. -->
+  <path fill-rule="evenodd" d="M31 4 L69 4 L73 9 L74 29 L75 40 L75 80 L73 94 L70 97 L30 97 L27 94 L25 80 L25 40 L26 29 L27 9Z
+    M30 8 L39 8 L39 14 L30 14Z M61 8 L70 8 L70 14 L61 14Z
+    M41 10 L59 10 L59 12.5 L41 12.5Z
+    M30 37 L70 37 L68 46 L32 46Z
+    M32 49 L46.5 49 L46.5 72 L32 72Z M53.5 49 L68 49 L68 72 L53.5 72Z
+    M33 77 L67 77 L69 83 L31 83Z
+    M31 91 L69 91 L69 93 L31 93Z"/>
+  <path d="M24.5 21 L22 22 L22 33 L25 34Z M75.5 21 L78 22 L78 33 L75 34Z M25 69 L22 70 L22 84 L26 85Z M75 69 L78 70 L78 84 L74 85Z"/>
+  <path d="M25 43 L20 41 L20 47 L25 49Z M75 43 L80 41 L80 47 L75 49Z"/>
+</g>
+</svg>

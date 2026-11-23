@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#111111">
+  <title>SR-71</title>
+  <g data-silhouette="sr71">
+  <path fill-rule="evenodd" d="M50 2 Q52 5 53 13 L54 33 L59 37 L62 26 L69 23 L72 38 L89 62 L94 79 L77 73 L70 84 L63 77 L58 91 L53 97 L50 91 L47 97 L42 91 L37 77 L30 84 L23 73 L6 79 L11 62 L28 38 L31 23 L38 26 L41 37 L46 33 L47 13 Q48 5 50 2Z
+    M49 15 L51 15 L52 31 L48 31Z"/>
+  <path d="M32 43 L38 43 L43 54 L42 81 L36 79 L27 62Z M62 43 L68 43 L73 62 L64 79 L58 81 L57 54Z"/>
+</g>
+</svg>

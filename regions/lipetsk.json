@@ -3,7 +3,7 @@
   "name": "Липецк",
   "status": "aip-excerpt-supplied-not-current-verified",
   "active": false,
-  "dataNotice": "КТА и ОПРМ Д/И по присланному АИП УУОЛ AD 2.2/2.19; DD/IT (815 кГц) из прежней базы без новых подтверждений. Действующий AIRAC/NOTAM не проверен.",
+  "dataNotice": "КТА и действующие по предоставленным данным ОПРМ Д/И по АИП УУОЛ AD 2.2/2.19. Устаревшие ДПРМ DD/IT удалены по сообщению пользователя. Действующий AIRAC/NOTAM не проверен.",
   "airfields": [
     {
       "id": "lipetsk",
@@ -43,38 +43,6 @@
     }
   ],
   "navigationAids": [
-    {
-      "id": "lipetsk-dprm-15",
-      "name": "Липецк ДПРМ 15",
-      "type": "NDB",
-      "role": "DPRM",
-      "runway": "15",
-      "ident": "DD",
-      "frequencyKHz": 815,
-      "showOnMap": false,
-      "showInPlace": false,
-      "coordinatesAvailable": false,
-      "note": "Прежняя запись DD/IT 815 кГц: в предоставленных АИП AD 2.19 этих НРТС нет; координаты не установлены.",
-      "status": "legacy-unconfirmed",
-      "operationalStatus": "historical-unverified",
-      "allowAutoNearest": false
-    },
-    {
-      "id": "lipetsk-dprm-33",
-      "name": "Липецк ДПРМ 33",
-      "type": "NDB",
-      "role": "DPRM",
-      "runway": "33",
-      "ident": "IT",
-      "frequencyKHz": 815,
-      "showOnMap": false,
-      "showInPlace": false,
-      "coordinatesAvailable": false,
-      "note": "Прежняя запись DD/IT 815 кГц: в предоставленных АИП AD 2.19 этих НРТС нет; координаты не установлены.",
-      "status": "legacy-unconfirmed",
-      "operationalStatus": "historical-unverified",
-      "allowAutoNearest": false
-    },
     {
       "id": "lipetsk-oprm-15",
       "name": "Липецк ОПРМ 15 (Д)",

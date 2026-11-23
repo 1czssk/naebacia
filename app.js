@@ -1,4 +1,4 @@
-/* НАЕБАЦИЯ v1.63 VI. Исходная навигационная логика v1.58 сохранена. */
+/* НАЕБАЦИЯ v1.64. Исходная навигационная логика v1.58 сохранена. */
 // === КОНЕЦ БЛОКА 10 ===
 
 // === БЛОК 11: CONFIG ===
@@ -23,6 +23,7 @@ const ALT_COLORS_KEY = 'naebacia_alt_colors_v1';
 const WIND_SPEED_UNIT_KEY = 'naebacia_wind_speed_unit_v1';
 const HUD_HEADING_KEY = 'naebacia_hud_heading_v1';
 const MENU_SIDE_KEY = 'naebacia_menu_side_v1';
+const MENU_PANEL_SIDE_KEY = 'naebacia_menu_panel_side_v164';
 const FLIGHT_SAVE_INTERVAL_MS = 5000;
 const WIND_NAV_KEY = 'naebacia_wind_nav_v1';
 const HSI_SETTINGS_KEY = 'naebacia_hsi_state_v1';
@@ -100,6 +101,14 @@ function changeMenuSide(right) {
   try { localStorage.setItem(MENU_SIDE_KEY, right ? 'right' : 'left'); } catch (e) {}
 }
 
+function changePanelSide(right) {
+  const panel=document.getElementById('panel');
+  if(panel)panel.classList.toggle('menu-panel-right',!!right);
+  const cb=document.getElementById('menuPanelRight');
+  if(cb)cb.checked=!!right;
+  try {localStorage.setItem(MENU_PANEL_SIDE_KEY,right?'right':'left');}catch(e){}
+}
+
 function togglePanel() {
   const p = document.getElementById('panel');
   p.classList.toggle('hidden');
@@ -136,7 +145,7 @@ function exportNaebaciaBackup() {
     }
     // При переполнении localStorage сохраняем ещё и последнюю копию журнала из памяти.
     if (rtFlightLog) storage[FLIGHT_LOG_KEY]=JSON.stringify(rtFlightLog);
-    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.62',
+    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.64',
       exportedAt:new Date().toISOString(),storage};
     const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json;charset=utf-8'});
     const url=URL.createObjectURL(blob);
@@ -260,74 +269,148 @@ function switchMap() {
 }
 switchMap();
 
-// КТА Красного Кута: постоянно видимая красная звезда, НЕ подменяющая ДПРМ.
-// Источник положения — действующий профиль Красного Кута, без смены начального центра карты.
+// v1.64: общий попап — только для объектов, маркеры которых реально накладываются.
+// Слой карты, тип объекта и исходный конструктор содержимого сохраняются без подмены.
+const unifiedPopupItems = new Map();
+let unifiedPopupState = null;
+function registerUnifiedPopupItem(layer, item) {
+  if (!layer || !item || !Number.isFinite(item.lat) || !Number.isFinite(item.lon) ||
+      typeof item.render !== 'function') return layer;
+  unifiedPopupItems.set(layer, {...item, layer});
+  layer.on('remove', () => unifiedPopupItems.delete(layer));
+  return layer;
+}
+function findUnifiedPopupItems(source) {
+  const clicked = unifiedPopupItems.get(source);
+  if (!clicked) return [];
+  let clickedPixel = null;
+  try {clickedPixel = map.latLngToContainerPoint([clicked.lat, clicked.lon]);} catch(e) {}
+  const found = [clicked];
+  for (const [layer, item] of unifiedPopupItems) {
+    if (layer === source || !map.hasLayer(layer)) continue;
+    // На дальних масштабах не считаем разнесённые километрами объекты одним объектом.
+    const metres = distance(clicked, item);
+    if (metres > 500) continue;
+    if (clickedPixel) {
+      const point = map.latLngToContainerPoint([item.lat, item.lon]);
+      const separation = Math.hypot(point.x - clickedPixel.x, point.y - clickedPixel.y);
+      if (separation > 24) continue;
+    } else if (metres > 20) continue;
+    found.push(item);
+  }
+  // Одна и та же сущность не должна повторяться из-за нескольких отрисованных слоёв.
+  const distinct = [];
+  const keys = new Set();
+  for (const item of found) {
+    const key = [item.kind, item.routeKey || '', item.title, item.lat.toFixed(5), item.lon.toFixed(5)].join('|');
+    if (keys.has(key)) continue;
+    keys.add(key);
+    distinct.push(item);
+  }
+  return distinct;
+}
+function renderUnifiedPopup() {
+  const state = unifiedPopupState;
+  if (!state) return '';
+  const list = state.items;
+  const tabs = list.map((item, i) => {
+    const selected = i === state.selected;
+    return '<button type="button" role="tab" aria-selected="' + selected + '" ' +
+      'class="naebacia-unified-option' + (selected ? ' selected' : '') + '" ' +
+      'onclick="naebaciaChooseUnifiedPopup(' + i + ')">' + safeText(item.title) + '</button>';
+  }).join('');
+  let body = '';
+  try { body = String(list[state.selected].render()); }
+  catch (e) { console.warn('Ошибка содержимого попапа', e); body = 'Нет информации по объекту'; }
+  return '<div class="naebacia-unified-popup">' +
+    '<div class="naebacia-unified-hint">Совпадающие объекты · ' + list.length + '</div>' +
+    '<div class="naebacia-unified-options" role="tablist" aria-label="Выбрать объект на карте">' + tabs + '</div>' +
+    '<div class="naebacia-unified-content" role="tabpanel">' + body + '</div></div>';
+}
+function naebaciaChooseUnifiedPopup(index) {
+  const state = unifiedPopupState;
+  if (!state || !Number.isInteger(index) || index < 0 || index >= state.items.length) return;
+  state.selected = index;
+  try {state.popup.setContent(renderUnifiedPopup());}
+  catch (e) {console.warn('Попап уже закрыт', e);}
+}
+function openUnifiedPopupIfNeeded(popup, source) {
+  const items = findUnifiedPopupItems(source);
+  if (items.length < 2) {unifiedPopupState = null;return;}
+  // Маршрутный ППМ должен открываться первым, если активен маршрут HSI.
+  const activeIdx = items.findIndex(item => item.kind === 'route' &&
+    hsiState.mode === 'route' && hsiState.routeKey === item.routeKey);
+  const clicked = items.findIndex(item => item.layer === source);
+  unifiedPopupState = {popup, source, items, selected: activeIdx >= 0 ? activeIdx : Math.max(0, clicked)};
+  popup.setContent(renderUnifiedPopup());
+}
+
+// Единый формат попапа для аэродромов, без автоматической смены склонения.
+function buildAirfieldPopup(airfield,region) {
+  const point=airfield.referencePoint;
+  const code=airfield.icao?' ('+safeText(airfield.icao)+')':'';
+  let html='<b>★ '+safeText(airfield.name||'Аэродром')+code+'</b><br>'+
+    point.lat.toFixed(6)+'° N, '+point.lon.toFixed(6)+'° E';
+  if(Number.isFinite(airfield.elevationM))html+='<br>Превышение: <b>'+airfield.elevationM+' м</b>';
+  const m=airfield.aipMagneticVariationReference;
+  if(m&&Number.isFinite(m.degreesEast))html+='<br>Склонение АИП: '+(m.degreesEast>=0?'+':'')+m.degreesEast+'° ('+safeText(m.sourceYear)+') · справочно';
+  let comms=[];
+  if(region){
+    const raw=region.communications||region.aipCommunications;
+    comms=Array.isArray(raw)?raw:(raw&&(raw[airfield.id]||raw[airfield.icao?.toLowerCase()]||[]))||[];
+  }
+  if(airfield.radio){
+    for(const [key,item] of Object.entries(airfield.radio))if(item&&item.display)comms.unshift({service:key==='tower'?'Вышка':key==='atis'?'АТИС':key,display:item.display});
+  }
+  // Важные частоты сверху; остальные справочные записи — ниже.
+  comms=[...comms].filter(c=>c&&Number.isFinite(c.frequencyMHz)||c?.display)
+    .sort((a,b)=>/(вышка|старт|круг|tower)/i.test(a.service||'')?-1:/(вышка|старт|круг|tower)/i.test(b.service||'')?1:0);
+  if(comms.length)html+='<hr style="margin:5px 0">'+comms.slice(0,9).map(c=>
+    safeText(c.service||'Связь')+': <b>'+safeText(c.display||(Number(c.frequencyMHz).toFixed(3)+' МГц'))+'</b>').join('<br>');
+  else html+='<br><small>Частота Вышки не указана в имеющихся данных.</small>';
+  html+='<br><small>Справочно: сверяйте с действующими AIP/NOTAM. Склонение не изменяется.</small>';
+  html+='<br><button type="button" onclick="naebaciaSetPopupTarget('+point.lat+','+point.lon+')">🎯 Задать как цель</button>';
+  return html+routePopupAddControl(airfield.name,point.lat,point.lon);
+}
+function addAirfieldMarker(airfield,region) {
+  const pt=airfield?.referencePoint;
+  if(!airfield||airfield.showOnMap!==true||!pt||!Number.isFinite(pt.lat)||!Number.isFinite(pt.lon)||Math.abs(pt.lat)>90||Math.abs(pt.lon)>180)return;
+  const icon=L.divIcon({className:'naebacia-airfield-star',html:'<span aria-hidden="true">★</span>',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]});
+  const marker=L.marker([pt.lat,pt.lon],{icon,zIndexOffset:350}).addTo(map);
+  const render=()=>buildAirfieldPopup(airfield,region);
+  marker.bindPopup(render);
+  registerUnifiedPopupItem(marker,{kind:'airfield',title:'Аэродром · '+(airfield.name||airfield.icao||'Без названия'),
+    lat:pt.lat,lon:pt.lon,render});
+}
 function addActiveAirfieldKTA() {
-  const ref = ACTIVE_PROFILE.airfield && ACTIVE_PROFILE.airfield.kta;
-  if (!ref || !Number.isFinite(ref.lat) || !Number.isFinite(ref.lon)) return;
-  const icon = L.divIcon({
-    className:'naebacia-airfield-star',html:'<span aria-hidden="true">★</span>',
-    iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]
-  });
-  const radio = ACTIVE_PROFILE.airfield.radio || {};
-  // Частоты — справочные; из них нельзя делать вывод об актуальности радиосвязи.
-  const tower = radio.tower && radio.tower.display || '127.800 МГц';
-  const atis = radio.atis && radio.atis.display || '122.700 МГц';
-  const popup = '<b>★ КТА Красный Кут</b><br>' +
-    ref.lat.toFixed(6) + '° N, ' + ref.lon.toFixed(6) + '° E<br>' +
-    'Красный Кут Вышка — <b>' + tower + '</b><br>' +
-    'Красный Кут АТИС — <b>' + atis + '</b><br>' +
-    '<small>Частоты и координаты уточняйте по действующему АИП.</small><br>' +
-    '<button type="button" style="margin-top:8px;padding:9px;font-weight:bold" ' +
-    'onclick="naebaciaSetPopupTarget(' + ref.lat + ',' + ref.lon + ')">🎯 Задать как цель</button>';
-  L.marker([ref.lat,ref.lon],{icon,zIndexOffset:350}).addTo(map).bindPopup(popup);
+  if(Array.isArray(ACTIVE_PROFILE.airfields)&&ACTIVE_PROFILE.airfields.length){
+    ACTIVE_PROFILE.airfields.forEach(a=>addAirfieldMarker(a,ACTIVE_PROFILE));
+    return;
+  }
+  addAirfieldMarker({id:'krasny-kut',name:'Красный Кут',icao:'UWSK',showOnMap:true,
+    referencePoint:ACTIVE_PROFILE.airfield.kta,radio:ACTIVE_PROFILE.airfield.radio},ACTIVE_PROFILE);
 }
 addActiveAirfieldKTA();
 
-// Необязательные справочные регионы. Активный район остаётся Красный Кут.
-// Показываются ТОЛЬКО красные звёзды аэродромов; приводные маяки хранятся
-// в JSON и НЕ добавляются в «Место», HSI или в панель «Слои».
-// Отсутствующий внешний JSON не блокирует запуск: есть резерв в index.html.
+// Вторичные справочные районы без автопереключения активного региона.
 async function loadSupplementaryRegion(path, expectedId, backupElementId) {
-  let region = null;
-  try {
-    const response = await fetch(new URL(path, document.baseURI), {cache:'no-cache'});
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    region = await response.json();
-  } catch (error) {
-    console.warn('Справочный регион ' + expectedId + ' недоступен, пробуем резерв:',error);
-    const backup = document.getElementById(backupElementId);
-    if (backup) {
-      try { region = JSON.parse(backup.textContent); }
-      catch (backupError) { console.warn('Повреждён резерв ' + expectedId,backupError); }
-    }
+  let region=null;
+  try {const response=await fetch(new URL(path,document.baseURI),{cache:'no-cache'});
+    if(!response.ok)throw new Error('HTTP '+response.status);region=await response.json();
+  } catch(error) {
+    console.warn('Резервный справочный регион '+expectedId,error);
+    const el=document.getElementById(backupElementId);
+    if(el)try{region=JSON.parse(el.textContent);}catch(e){console.warn(e);}
   }
-  if (!region || region.id !== expectedId || !Array.isArray(region.airfields)) return;
-  region.airfields.forEach(airfield => {
-    const point = airfield && airfield.referencePoint;
-    if (!airfield || airfield.showOnMap !== true || !point ||
-        !Number.isFinite(point.lat) || !Number.isFinite(point.lon) ||
-        Math.abs(point.lat) > 90 || Math.abs(point.lon) > 180) return;
-    // Безопасно формируем HTML даже при повреждённом пользовательском JSON.
-    const safeName = String(airfield.name || 'Аэродром').replace(/[&<>"']/g,c =>
-      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const icon = L.divIcon({
-      className:'naebacia-airfield-star',html:'<span aria-hidden="true">★</span>',
-      iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-15]
-    });
-    const marker = L.marker([point.lat,point.lon],{icon,zIndexOffset:350}).addTo(map);
-    marker.bindPopup('<b>★ ' + safeName + '</b><br>Справочная точка аэродрома<br>' +
-      point.lat.toFixed(5) + '° N, ' + point.lon.toFixed(5) + '° E' +
-      '<br><small>Координаты требуют сверки с действующим АИП.</small>');
-  });
-  // Намеренно НЕ меняем map.setView(), zoom, flyTo() или fitBounds().
+  if(region?.id!==expectedId || !Array.isArray(region.airfields))return;
+  region.airfields.forEach(a=>addAirfieldMarker(a,region));
 }
-loadSupplementaryRegion('./regions/saint-petersburg.json', 'saint-petersburg',
-  'naebaciaEmbeddedSaintPetersburg').catch(e => console.warn('Звёзды СПб:',e));
-loadSupplementaryRegion('./regions/lipetsk.json', 'lipetsk',
-  'naebaciaEmbeddedLipetsk').catch(e => console.warn('Звезда Липецка:',e));
-loadSupplementaryRegion('./regions/sasovo.json', 'sasovo',
-  'naebaciaEmbeddedSasovo').catch(e => console.warn('Звезда Сасово:',e));
+for(const [path,id,el] of [
+  ['./regions/saint-petersburg.json','saint-petersburg','naebaciaEmbeddedSaintPetersburg'],
+  ['./regions/lipetsk.json','lipetsk','naebaciaEmbeddedLipetsk'],
+  ['./regions/sasovo.json','sasovo','naebaciaEmbeddedSasovo'],
+  ['./regions/ulyanovsk.json','ulyanovsk','naebaciaEmbeddedUlyanovsk']
+])loadSupplementaryRegion(path,id,el).catch(e=>console.warn('Аэродром',id,e));
 // === КОНЕЦ БЛОКА 13 ===
 
 // === БЛОК 14: DATA: ОПРС ===
@@ -392,6 +475,9 @@ let hsiGuideLine = null;
 let hsiState = { mode:'direct', routeKey:'', legIndex:0, obsCourse:0,
   obsRef:'target', obsAnchor:null, scaleKm:5, awaitingRouteFix:0 };
 let hsiLastRouteAdvanceAt = 0;
+let hsiManualLegHoldUntil=0;
+let hsiSnapCandidate=null;
+
 let hsiNeedsInitialLegFix = false;
 let windChangeDebounce = null;
 let targetEditMode = false;
@@ -596,6 +682,10 @@ function bindLivePopup(layer, content, options) {
 }
 
 function refreshOpenPopup() {
+  if (unifiedPopupState) {
+    try {unifiedPopupState.popup.setContent(renderUnifiedPopup());} catch (e) {}
+    return;
+  }
   if (!openPopupLayer) return;
   const fn = popupContentFns.get(openPopupLayer);
   if (!fn) return;
@@ -623,6 +713,7 @@ function makeClickableLine(latlngs, options, popupContent) {
 
 map.on('popupopen', (e) => {
   openPopupLayer = e.popup._source || null;
+  openUnifiedPopupIfNeeded(e.popup, openPopupLayer);
   if (followMode) {
     followMode = false;
     localStorage.setItem(FOLLOW_KEY, '0');
@@ -631,7 +722,8 @@ map.on('popupopen', (e) => {
   }
 });
 
-map.on('popupclose', () => {
+map.on('popupclose', (e) => {
+  if (unifiedPopupState && unifiedPopupState.popup === e.popup) unifiedPopupState = null;
   openPopupLayer = null;
 });
 // === КОНЕЦ БЛОКА 19 ===
@@ -875,7 +967,7 @@ document.addEventListener('pointerdown', e => {
 
 function updateSpeedHudVisibility() {
   const hud = document.getElementById('hudContainer');
-  if (currentTab === 'rtnav' && rtTracking) {
+  if (currentTab !== 'place' && rtTracking) {
     hud.classList.remove('hidden');
     updateFollowBtn();
   } else {
@@ -1165,6 +1257,11 @@ function acceptNrtPosition(){
 
 // === БЛОК 26: STATION POPUPS, ОБЩАЯ БИБЛИОТЕКА НРТС ===
 const NAVAID_WORK_KEY='naebacia_work_navaids_v1';
+const NAVAID_MAP_ALL_KEY='naebacia_enr_map_visible_v1';
+let navaidCatalogVisibleOnMap=true;
+try { navaidCatalogVisibleOnMap=localStorage.getItem(NAVAID_MAP_ALL_KEY)!=='0'; } catch(e) {}
+let navaidLibraryLimit=80;
+let navaidRefreshPresses=[];
 // Фикс АИП: переносим старые сохранённые ID на тот же физический маяк (по позывному).
 // Идентификаторы AD 2.19 прежние; миграция применяется только к доревизионным спискам.
 const NAVAID_CATALOG_REVISION='aip-2026-11-22';
@@ -1255,6 +1352,8 @@ function loadNavaidCatalog(){
       byId.set(aid.id,makeLibraryEntry(aid,region.name));
     }
   }
+  // Липецк: старые DD и IT (815 кГц) более не существуют, исключаем из НРТС.
+  for(const oldId of ['lipetsk-dprm-15','lipetsk-dprm-33'])byId.delete(oldId);
   navaidCatalog=mergeEnr41Catalog(Array.from(byId.values()));
   let saved=null;
   try{saved=JSON.parse(localStorage.getItem(NAVAID_WORK_KEY)||'null');}catch(e){}
@@ -1270,6 +1369,8 @@ function loadNavaidCatalog(){
     saveNavaidWork();
   }
   syncWorkingNavaids(false);
+  const mapToggle=document.getElementById('toggleCatalogNavaids');
+  if(mapToggle)mapToggle.checked=navaidCatalogVisibleOnMap;
   renderNavaidMarkers();
 }
 function saveNavaidWork(){
@@ -1280,15 +1381,45 @@ function navaidSvg(type){
   if(type==='VOR')return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="5" width="30" height="30" fill="white" stroke="#3659a4" stroke-width="2.8"/><polygon points="20,9 29.5,14.5 29.5,25.5 20,31 10.5,25.5 10.5,14.5" fill="white" stroke="#3659a4" stroke-width="2.8"/><circle cx="20" cy="20" r="2.6" fill="#3659a4"/></svg>';
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13" fill="none" stroke="#3659a4" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="1 6.3"/><circle cx="20" cy="20" r="8" fill="none" stroke="#3659a4" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="1 4"/><circle cx="20" cy="20" r="2.5" fill="#3659a4"/></svg>';
 }
+function setCatalogMapVisible(visible){
+  navaidCatalogVisibleOnMap=!!visible;
+  try{localStorage.setItem(NAVAID_MAP_ALL_KEY,visible?'1':'0');}catch(e){}
+  renderNavaidMarkers();
+}
 function renderNavaidMarkers(){
-  navaidMapMarkers.forEach(l=>map.removeLayer(l));navaidMapMarkers=[];
-  // Всероссийский каталог не засыпает карту сотнями значков: только выбранные и открытый из поиска.
-  navaidCatalog.filter(a=>navaidHasCoordinates(a)&&
-    (a.catalogSource!=='ENR4.1'||navaidWorkIds.includes(a.id)||navaidSpotlightId===a.id)).forEach(a=>{
+  const previous=new Map(navaidMapMarkers.map(m=>[m.naebaciaNavaidId,m]));
+  const zoom=typeof map.getZoom==='function'?map.getZoom():0;
+  const bounds=navaidCatalogVisibleOnMap&&zoom>=6&&typeof map.getBounds==='function'
+    ?map.getBounds().pad(0.1):null;
+  const selected=new Set(navaidWorkIds);
+  if(navaidSpotlightId)selected.add(navaidSpotlightId);
+  // На общем масштабе не создаём сотни маркеров. При приближении показываем
+  // все маршрутные NDB/VOR внутри экрана (не DME-only); пользовательские — всегда.
+  let nearby=bounds?navaidCatalog.filter(a=>a.catalogSource==='ENR4.1'&&
+    navaidHasCoordinates(a)&&!navaidIsDmeOnly(a)&&
+    bounds.contains([a.lat,a.lon])&&!selected.has(a.id)):[];
+  const available=nearby.length;
+  if(nearby.length>180){
+    const center=map.getCenter();
+    nearby=nearby.sort((a,b)=>distance(a,center)-distance(b,center)).slice(0,180);
+  }
+  const hint=document.getElementById('navaidMapHint');
+  if(hint){
+    hint.textContent=!navaidCatalogVisibleOnMap?'Показываются только выбранные маяки.':
+      zoom<6?'Приблизьте карту до масштаба 6+, чтобы увидеть NDB/VOR из АИП.':
+      'На карте: '+nearby.length+(available>180?' из '+available:'')+' дополнительных NDB/VOR в видимой области.';
+  }
+  const visible=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&
+    (a.catalogSource!=='ENR4.1'||selected.has(a.id))).concat(nearby);
+  const desired=new Set(visible.map(a=>a.id));
+  for(const [id,marker] of previous)if(!desired.has(id)){map.removeLayer(marker);previous.delete(id);}
+  navaidMapMarkers=[];
+  visible.forEach(a=>{
+    if(previous.has(a.id)){navaidMapMarkers.push(previous.get(a.id));return;}
     const icon=L.divIcon({className:'naebacia-navaid-icon',html:navaidSvg(a.type),iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-12]});
     const m=L.marker([a.lat,a.lon],{icon,zIndexOffset:80}).addTo(map);
     m.naebaciaNavaidId=a.id;
-    m.bindPopup(()=>{
+    const render=()=>{
       const cur=getCurrentPosition();
       let label='<b>'+safeText(a.name)+'</b><br>'+safeText(navaidTypeLabel(a))+' · '+safeText(a.frequency);
       if(a.ident)label+='<br>Позывной: '+safeText(a.ident);
@@ -1300,11 +1431,17 @@ function renderNavaidMarkers(){
       if(a.coordinateQuality)label+='<br><small>⚠ Координаты предварительные</small>';
       label+='<br><small>Проверяйте действующие AIRAC/NOTAM перед полётом.</small>';
       if(!navaidWorkIds.includes(a.id))label+='<br><button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">＋ В рабочий список</button>';
+      label+=routePopupAddControl(a.name,a.lat,a.lon);
       return label;
-    });
+    };
+    m.bindPopup(render);
+    const kindTitle=(a.role==='DPRM'?'ДПРМ':a.role==='BPRM'?'БПРМ':'НРТС');
+    registerUnifiedPopupItem(m,{kind:'navaid',title:kindTitle+' · '+a.name,
+      lat:a.lat,lon:a.lon,render});
     navaidMapMarkers.push(m);
   });
 }
+
 function showNavaidOnMap(id){
   const a=navaidCatalog.find(x=>x.id===id);if(!navaidHasCoordinates(a))return;
   navaidSpotlightId=id;
@@ -1324,7 +1461,7 @@ function buildStationPopup(idx){
   if(navaidIsDmeOnly(a))return html+'<hr><b>От '+safeText(cur.source)+':</b> '+(distance(cur,a)/1000).toFixed(1)+' км по карте<br><small>DME измеряет наклонную дальность; радиал и пеленг здесь не определяются.</small>'+freshnessWarning(cur);
   const decl=getDecl(), mpr=norm360(trueBearing(cur,a)-decl);
   html+='<hr><b>От '+safeText(cur.source)+':</b><br>МПР '+mpr.toFixed(0)+'° · '+(distance(cur,a)/1000).toFixed(1)+' км';
-  return html+freshnessWarning(cur);
+  return html+freshnessWarning(cur)+routePopupAddControl(a.name,a.lat,a.lon);
 }
 function stationInputSnapshot(){
   const values={};
@@ -1367,28 +1504,46 @@ function removeWorkingNavaid(id){
 }
 function toggleNavaidLibrary(){
   const p=document.getElementById('navaidLibrary');p.hidden=!p.hidden;
-  if(!p.hidden)renderNavaidLibrary();
+  if(!p.hidden){navaidLibraryLimit=80;renderNavaidLibrary();}
 }
+function changeNavaidLibraryFilter(){navaidLibraryLimit=80;renderNavaidLibrary();}
+function showMoreNavaids(){navaidLibraryLimit+=80;renderNavaidLibrary();}
 function renderNavaidLibrary(){
   const el=document.getElementById('navaidLibraryList');if(!el)return;
   const filter=(document.getElementById('navaidSearch')?.value||'').trim().toLocaleLowerCase('ru');
-  const items=navaidCatalog.filter(a=>[a.name,a.nameEn,a.ident,a.frequency,a.region,a.sourceType,a.type]
+  const typeFilter=document.getElementById('navaidTypeFilter')?.value||'all';
+  const items=navaidCatalog.filter(a=>(typeFilter==='all'||
+    (typeFilter==='NDB'&&!navaidIsVor(a)&&!navaidIsDmeOnly(a))||
+    (typeFilter==='VOR'&&navaidIsVor(a))||
+    (typeFilter==='DME'&&navaidIsDmeOnly(a)))&&
+    [a.name,a.nameEn,a.ident,a.frequency,a.region,a.sourceType,a.type]
     .some(v=>String(v||'').toLocaleLowerCase('ru').includes(filter)));
-  // На мобильном не создаём сотни DOM-элементов одновременно. Поиск работает по ВСЕМ записям.
-  const shown=items.slice(0,80);
-  const hint=items.length>shown.length?'<div class="hint">Показаны первые '+shown.length+' из '+items.length+'. Уточните название или позывной в поиске.</div>':'';
-  el.innerHTML=shown.map(a=>'<div class="navaid-library-item"><span class="navaid-meta"><b>'+safeText(a.name)+'</b><small>'+safeText(navaidTypeLabel(a))+' · '+safeText(a.frequency)+(a.ident?' · '+safeText(a.ident):'')+
+  // Постраничная выдача: весь каталог доступен даже при пустом поисковом запросе.
+  const shown=items.slice(0,navaidLibraryLimit);
+  const hint=items.length>shown.length?'<button type="button" class="smallbtn" onclick="showMoreNavaids()">Показать ещё 80 (осталось '+(items.length-shown.length)+')</button>':'';
+  el.innerHTML='<div class="hint">'+safeText(navaidEnrImportStatus)+' · найдено '+items.length+'</div>'+
+    shown.map(a=>'<div class="navaid-library-item"><span class="navaid-meta"><b>'+safeText(a.name)+'</b><small>'+safeText(navaidTypeLabel(a))+' · '+safeText(a.frequency)+(a.ident?' · '+safeText(a.ident):'')+
     (a.hoursOfOperation?' · '+safeText(a.hoursOfOperation):'')+(navaidHasCoordinates(a)?'':' · ⚠ нет координат')+'</small></span>'+
     (navaidHasCoordinates(a)?'<button type="button" onclick="showNavaidOnMap(\''+a.id+'\')" title="Показать на карте">◎</button>':'')+
     (navaidWorkIds.includes(a.id)?'<small>✓ в списке</small>':'<button type="button" onclick="addWorkingNavaid(\''+a.id+'\')">+ Добавить</button>')+'</div>').join('')+
-    hint || '<div class="hint">Маяков не найдено.</div>';
+    (items.length?hint:'<div class="hint">Маяков не найдено.</div>');
 }
+
 function navaidDistanceSort(a,b,origin){
   const x=navaidHasCoordinates(a)?distance(origin,a):Infinity;
   const y=navaidHasCoordinates(b)?distance(origin,b):Infinity;
   return x-y;
 }
 function updateNearbyNavaids(){
+  const pressAt=Date.now();
+  navaidRefreshPresses=navaidRefreshPresses.filter(t=>pressAt-t<60000);
+  navaidRefreshPresses.push(pressAt);
+  if(navaidRefreshPresses.length>=20){
+    navaidRefreshPresses=[];
+    document.getElementById('navaidRefreshOverlay').hidden=false;
+    document.getElementById('navaidRefreshCancel').focus();
+    return;
+  }
   const origin=getCurrentPosition()||{...KTA_POINT};
   const nearest=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&!navaidIsDmeOnly(a)&&a.allowAutoNearest!==false&&a.operationalStatus!=='historical-unverified').sort((a,b)=>navaidDistanceSort(a,b,origin)).slice(0,5);
   const now=Date.now();
@@ -1408,8 +1563,58 @@ function updateNearbyNavaids(){
     'Всего '+navaidWorkIds.length+' маяков. '+(!getCurrentPosition()?'Расчёт ближайших от КТА Красного Кута; нет позиции ВС. ':'')+
     (!second?'Нажмите ещё раз в течение 10 с для добавления ближайшей пятёрки.':'');
 }
+function closeNavaidRefreshDialog(){
+  document.getElementById('navaidRefreshOverlay').hidden=true;
+  navaidRefreshPresses=[];
+}
+// «Полностью обновить»: сбросить НАСТРОЙКИ, но не стирать пользовательские
+// маршруты, GPS-треки и журнал РВ. Выбранные маяки и склонение — настройки.
+async function performNavaidRefresh(full){
+  const status=document.getElementById('navaidRefreshStatus');
+  const dialog=document.getElementById('navaidRefreshOverlay');
+  if(full && (rtTracking || simActive)){
+    status.textContent='Сначала остановите РВ или симулятор, чтобы не потерять текущий полёт.';
+    return;
+  }
+  if(!navigator.onLine){
+    status.textContent='Для принудительного обновления нужна сеть. Проверьте подключение.';
+    return;
+  }
+  for(const btn of dialog.querySelectorAll('button'))btn.disabled=true;
+  status.textContent=full?'Сбрасываем настройки и кэш…':'Проверяем обновления…';
+  try{
+    if(full){
+      const keep=new Set([FLIGHT_LOG_KEY,USER_ROUTES_KEY,TRACK_KEY,TRACK_GPS_KEY,RT_TRACK_KEY]);
+      const keys=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && /^(naebacia_|oprs_)/.test(k) && !keep.has(k))keys.push(k);
+      }
+      for(const k of keys)localStorage.removeItem(k);
+      if('caches' in window){
+        const names=await caches.keys();
+        await Promise.all(names.filter(name=>name.startsWith('naebacia-')).map(name=>caches.delete(name)));
+      }
+    }
+    if('serviceWorker' in navigator){
+      const registration=await navigator.serviceWorker.getRegistration();
+      if(registration){
+        if(full)await registration.unregister();
+        else await registration.update();
+      }
+    }
+    const url=new URL(location.href);
+    url.searchParams.set('naebaciaReload',String(Date.now()));
+    location.replace(url.href);
+  }catch(e){
+    status.textContent='Не удалось завершить обновление: '+e.message;
+    for(const btn of dialog.querySelectorAll('button'))btn.disabled=false;
+  }
+}
 function loadPreset(){
   loadNavaidCatalog();
+  map.on('moveend',()=>{if(!map._popup)renderNavaidMarkers();});
+  map.on('popupclose',renderNavaidMarkers);
   const points=PRESET.filter(navaidHasCoordinates).slice(0,3).map(a=>[a.lat,a.lon]);
   if(points.length>=2)map.fitBounds(points,{padding:[60,60]});
 }
@@ -1538,7 +1743,7 @@ function buildRoutePointPopup(routeKey, idx, allIndices) {
   } else {
     html += '<br><span style="color:#888;font-size:11px">Нет текущего местоположения</span>';
   }
-  return html;
+  return html+routePopupAddControl(pt.name,pt.lat,pt.lon);
 }
 
 function renderRoutes() {
@@ -1564,7 +1769,10 @@ function renderRoutes() {
     uniquePoints.forEach(({ pt, indices }) => {
       const primaryIdx = indices[0];
       const m = L.marker([pt.lat, pt.lon], { icon: routeDotIcon(route.color) }).addTo(map);
-      bindLivePopup(m, () => buildRoutePointPopup(key, primaryIdx, indices), { autoPan: true });
+      const render=()=>buildRoutePointPopup(key,primaryIdx,indices);
+      bindLivePopup(m,render,{autoPan:true});
+      registerUnifiedPopupItem(m,{kind:'route',routeKey:key,
+        title:'ППМ '+key+' · '+pt.name,lat:pt.lat,lon:pt.lon,render});
       routeLayers[key].push(m);
     });
   });
@@ -1616,7 +1824,7 @@ function buildZonePopup(z) {
   html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
   html += 'Удаление от КТА: <b>' + z.s + ' км</b><br>';
   html += 'ЗМПУ в зону: <b>' + fmtZmpu(z.zmpu) + '</b>';
-  return html;
+  return html+routePopupAddControl(z.id+' '+z.name,z.lat,z.lon);
 }
 
 function buildSectorPopup(s) {
@@ -1624,7 +1832,7 @@ function buildSectorPopup(s) {
   html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
   html += 'Удаление от ДПРМ: <b>' + s.s + ' км</b><br>';
   html += 'ЗМПУ в зону: <b>' + fmtZmpu(s.zmpu) + '</b>';
-  return html;
+  return html+routePopupAddControl(s.id+' '+s.name,s.lat,s.lon);
 }
 
 function renderAreas() {
@@ -2012,8 +2220,10 @@ function alignToGPS(){
     if(!navaidHasCoordinates(a)||navaidIsDmeOnly(a))return;
     const input=document.getElementById('brg'+(i+1));if(!input)return;
     input.value=(navaidIsVor(a)?norm360(trueBearing(a,gps)-getDecl()):norm360(trueBearing(gps,a)-getDecl())).toFixed(0);
+    const distInput=document.getElementById('vorDist'+(i+1));
+    if(navaidIsVor(a)&&distInput)distInput.value=(distance(gps,a)/1000).toFixed(2);
   });
-  preview();resultEl.textContent='Пеленги приведены к достоверному GPS. Нажмите «Рассчитать» для проверки.';
+  preview();resultEl.textContent='Пеленги, радиалы и доступные дальности приведены к достоверному GPS (расстояние по карте, не наклонная DME). Нажмите «Рассчитать» для проверки.';
 }
 // === КОНЕЦ БЛОКА 32 ===
 // === КОНЕЦ БЛОКА 32 ===
@@ -2401,11 +2611,31 @@ let mapLongPressTimer = null;
 let mapLongPressStart = null;
 let mapContextSuppressClickUntil = 0;
 let lastMapContextShownAt = 0;
+function routePopupAddControl(name,lat,lon) {
+  if(!Number.isFinite(lat)||!Number.isFinite(lon))return '';
+  const encoded=encodeURIComponent(String(name||'Объект')).replace(/'/g,'%27');
+  return '<br><button type="button" style="margin-top:6px" onclick="editorAddMapObject('+lat+','+lon+',\''+encoded+'\')">＋ В маршрут</button>';
+}
+function editorAddMapObject(lat,lon,encodedName) {
+  if(!validRoutePoint({lat,lon}))return;
+  const name=decodeURIComponent(String(encodedName||'Объект')).slice(0,65);
+  if(!routeEditorDraft){editorCreate();if(!routeEditorDraft)return;}
+  if(routeEditorDraft.points.length>=150){alert('Максимум 150 ППМ');return;}
+  editorCommit(d=>d.points.push({name,lat,lon}));
+  map.closePopup();showMapContextNotice('ППМ «'+name+'» добавлен в черновик маршрута');
+}
 function naebaciaSetPopupTarget(lat,lon) {
   if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return;
   map.closePopup();
   setNavTarget(lat,lon); // Вся прежняя математика DIRECT, HSI и запись настройки сохраняются.
   showMapContextNotice('🎯 Цель задана: '+lat.toFixed(5)+'°, '+lon.toFixed(5)+'°');
+}
+// Только в активном симуляторе: переносим виртуальное ВС, не затрагивая GPS.
+function naebaciaSetPopupSimPosition(lat,lon) {
+  if(!simActive)return;
+  if(!simAtPosition(lat,lon))return;
+  map.closePopup();
+  showMapContextNotice('✈ SIM: ВС установлено в '+lat.toFixed(5)+'°, '+lon.toFixed(5)+'°');
 }
 function showMapContextNotice(text) {
   let el=document.getElementById('mapContextNotice');
@@ -2440,8 +2670,11 @@ function openMapContextAt(lat,lon) {
     Math.abs(lon).toFixed(6)+'° '+ew+'<br>'+
     '<button type="button" style="display:block;margin:9px 0 5px;padding:9px;width:100%" ' +
       'onclick="naebaciaSetPopupTarget('+latitude+','+longitude+')">🎯 Задать как цель</button>'+
-    '<button type="button" style="display:block;margin:5px 0;padding:9px;width:100%;font-weight:bold" ' +
-      'onclick="naebaciaSetPopupOwnPosition('+latitude+','+longitude+')">📍 Моё место</button>'+
+    (simActive
+      ? '<button type="button" style="display:block;margin:5px 0;padding:9px;width:100%;font-weight:bold" ' +
+        'onclick="naebaciaSetPopupSimPosition('+latitude+','+longitude+')">✈ Установить ВС здесь · SIM</button>'
+      : '<button type="button" style="display:block;margin:5px 0;padding:9px;width:100%;font-weight:bold" ' +
+        'onclick="naebaciaSetPopupOwnPosition('+latitude+','+longitude+')">📍 Моё место</button>')+
     '<button type="button" style="display:block;padding:9px;width:100%" ' +
       'onclick="naebaciaCopyPopupCoords('+latitude+','+longitude+')">Копировать координаты</button></div>';
   L.popup({closeButton:true,maxWidth:265}).setLatLng([lat,lon]).setContent(content).openOn(map);
@@ -2595,7 +2828,11 @@ function renderUserRoutes() {
     }
     r.points.forEach((p,i)=>{
       const marker=L.marker([p.lat,p.lon],{icon:routeDotIcon('#ef871e')}).addTo(map);
-      bindLivePopup(marker,()=>buildRoutePointPopup(r.id,i,[i]),{autoPan:true});layers.push(marker);
+      const render=()=>buildRoutePointPopup(r.id,i,[i]);
+      bindLivePopup(marker,render,{autoPan:true});
+      registerUnifiedPopupItem(marker,{kind:'route',routeKey:r.id,
+        title:'ППМ '+r.name+' · '+p.name,lat:p.lat,lon:p.lon,render});
+      layers.push(marker);
     });
   }
 }
@@ -3027,10 +3264,55 @@ function hsiRouteBestLeg(route,p) {
   }
   return best.idx;
 }
+function selectHSILeg(index) {
+  const route=ROUTES[hsiState.routeKey],n=route?routeLegCount(route):0;
+  if(hsiState.mode!=='route'||!Number.isInteger(index)||index<0||index>=n)return;
+  hsiState.legIndex=index;hsiState.awaitingRouteFix=0;hsiNeedsInitialLegFix=false;
+  hsiManualLegHoldUntil=Date.now()+15000;
+  hsiLastRouteAdvanceAt=Date.now();hsiSnapCandidate=null;
+  const picker=document.getElementById('hsiLegPicker');if(picker)picker.hidden=true;
+  persistHSISettings();recordConfigurationEvent('route-leg-manual');
+  renderHSIGuideLine();updateNavUI();updateRTUI();refreshHSIPanel();
+}
+function toggleHSILegPicker() {
+  if(hsiState.mode!=='route')return;
+  const picker=document.getElementById('hsiLegPicker');if(!picker)return;
+  picker.hidden=!picker.hidden;
+  if(!picker.hidden)document.getElementById('hsiLegSelect')?.focus();
+}
+function maybeLatchHSIRoute(p, currentLeg) {
+  const now=Date.now();
+  if(now<hsiManualLegHoldUntil||now-hsiLastRouteAdvanceAt<9000||
+     !Number.isFinite(p.speed)||p.speed<5||!Number.isFinite(p.heading)||
+     (Number.isFinite(p.acc)&&p.acc>250)) {hsiSnapCandidate=null;return;}
+  const route=currentLeg.route,currOff=computeOffset(p,currentLeg.A,currentLeg.B);
+  const count=routeLegCount(route);
+  let chosen=null;
+  for(let i=0;i<count;i++){
+    if(i===currentLeg.idx)continue;
+    const A=route.points[i],B=route.points[(i+1)%route.points.length];
+    const off=computeOffset(p,A,B);
+    if(!off||off.t<.03||off.t>.98||off.lbu>700)continue;
+    const diff=Math.abs(((p.heading-trueBearing(A,B)+540)%360)-180);
+    if(diff>28)continue;
+    // Не перебиваем правильный текущий участок на пересечениях линий.
+    if(currOff&&currOff.t>=0&&currOff.t<=1&&currOff.lbu<350&&off.lbu>=currOff.lbu-120)continue;
+    const score=off.lbu+diff*12;
+    if(!chosen||score<chosen.score)chosen={idx:i,score};
+  }
+  if(!chosen){hsiSnapCandidate=null;return;}
+  if(!hsiSnapCandidate||hsiSnapCandidate.idx!==chosen.idx){hsiSnapCandidate={idx:chosen.idx,since:now,count:1};return;}
+  hsiSnapCandidate.count++;
+  if(now-hsiSnapCandidate.since<10000||hsiSnapCandidate.count<3)return;
+  hsiState.legIndex=chosen.idx;hsiLastRouteAdvanceAt=now;
+  hsiState.awaitingRouteFix=0;hsiSnapCandidate=null;
+  persistHSISettings();recordConfigurationEvent('route-leg-snap');
+  renderHSIGuideLine();updateNavUI();updateRTUI();refreshHSIPanel();
+}
 function maybeAdvanceHSIRoute(p) {
   if (hsiState.mode!=='route' || !rtTracking || !hsiValidPoint(p) || hsiNeedsInitialLegFix) return;
   const leg=hsiRouteInfo();
-  if (!leg || (!leg.route.closed && leg.idx>=routeLegCount(leg.route)-1)) return;
+  if (!leg) return;
   const off=computeOffset(p,leg.A,leg.B);
   if (!off) return;
   // Защита от случайного переключения при стоянке или скачке GPS.
@@ -3040,10 +3322,14 @@ function maybeAdvanceHSIRoute(p) {
   const courseOK=!Number.isFinite(p.heading)||
     Math.abs(((p.heading-trueBearing(leg.A,leg.B)+540)%360)-180)<100;
   const near=moving && accurate && courseOK && off.lbu<=2500 && off.t>=.985 && distance(p,leg.B)<=3500;
-  if (!near) { hsiState.awaitingRouteFix=0; return; }
+  if (!near) { hsiState.awaitingRouteFix=0;maybeLatchHSIRoute(p,leg);return; }
+  hsiSnapCandidate=null;
+  if(!leg.route.closed && leg.idx>=routeLegCount(leg.route)-1)return;
+  if(Date.now()<hsiManualLegHoldUntil)return;
   hsiState.awaitingRouteFix++;
   if (hsiState.awaitingRouteFix<2 || Date.now()-hsiLastRouteAdvanceAt<7000) return;
   hsiState.legIndex=(leg.idx+1)%routeLegCount(leg.route);
+  hsiSnapCandidate=null;
   hsiState.awaitingRouteFix=0;
   hsiLastRouteAdvanceAt=Date.now();
   persistHSISettings();
@@ -3089,7 +3375,7 @@ function selectHSIRoute(key) {
     if(toggle && !toggle.checked){toggle.checked=true;renderRoutes();}
   }
   hsiState.awaitingRouteFix=0;
-  hsiLastRouteAdvanceAt=0;
+  hsiLastRouteAdvanceAt=0;hsiManualLegHoldUntil=0;hsiSnapCandidate=null;
   persistHSISettings();recordConfigurationEvent('route-selected');
   updateNavUI();updateRTUI();renderHSIGuideLine();refreshHSIPanel();
 }
@@ -3140,7 +3426,10 @@ function startHSICourseHold(e, n) {
   stepHSICourse(n);
   hsiRepeatDelay = setTimeout(() => {
     hsiRepeatDelay = null;
-    hsiRepeatInterval = setInterval(() => stepHSICourse(n), 90);
+    hsiRepeatInterval = setInterval(() => {
+      const seconds=(Date.now()-hsiPointerStepAt)/1000;
+      stepHSICourse(n*(seconds>=2?3:1));
+    }, 90);
   }, 430);
 }
 function clickHSICourse(e, n) {
@@ -3209,6 +3498,17 @@ function buildHSISelects() {
     Object.entries(ROUTES).forEach(([key,route])=>r.add(new Option(route.name,key)));
     r.dataset.signature=routeSignature;
   }
+  const legSelect=document.getElementById('hsiLegSelect');
+  const selectedRoute=ROUTES[hsiState.routeKey];
+  const legSignature=hsiState.routeKey+':'+(selectedRoute?.points.length||0)+':'+(selectedRoute?.closed?'1':'0');
+  if(legSelect&&legSelect.dataset.signature!==legSignature){
+    legSelect.innerHTML='';
+    if(selectedRoute)for(let i=0;i<routeLegCount(selectedRoute);i++){
+      const a=selectedRoute.points[i],b=selectedRoute.points[(i+1)%selectedRoute.points.length];
+      legSelect.add(new Option((i+1)+'. '+a.name+' → '+b.name,String(i)));
+    }
+    legSelect.dataset.signature=legSignature;
+  }
   const ref=document.getElementById('hsiObsReference');
   if(ref.dataset.signature!==routeSignature){
     ref.innerHTML='';
@@ -3240,6 +3540,7 @@ function refreshHSIPanel() {
   document.getElementById('hsiLegRead').textContent=leg
     ? (leg.idx+1)+'. '+leg.A.name+' → '+leg.B.name
     : '—';
+  const legSelect=document.getElementById('hsiLegSelect');if(legSelect&&leg)legSelect.value=String(leg.idx);
   const obsRefSelect=document.getElementById('hsiObsReference');
   if([...obsRefSelect.options].some(o=>o.value===hsiState.obsRef))obsRefSelect.value=hsiState.obsRef;
   document.getElementById('hsiCourseManual').hidden=hsiState.mode!=='obs';
@@ -3257,7 +3558,7 @@ function refreshHSIPanel() {
   document.getElementById('hsiFromToName').textContent=g?g.name:'Нет активной ЛЗП';
   document.getElementById('hsiToFrom').textContent=d?d.toFrom:'—';
   const label=d?(d.absKm<1?(d.absKm*1000).toFixed(0)+' м':d.absKm.toFixed(2)+' км'):'—';
-  txt.textContent='ЛБУ '+label+(d?(d.side==='left'?' · СЛЕВА':d.side==='right'?' · СПРАВА':' · НА ЛИНИИ'):'');
+  txt.textContent='ЛБУ '+label+(d?(d.side==='left'?' · ЛЕВЕЕ':d.side==='right'?' · ПРАВЕЕ':''):'');
   const x=d?Math.max(-140,Math.min(140,d.signedKm/hsiState.scaleKm*140)):0;
   document.getElementById('hsiCdiNeedle').setAttribute('transform','translate('+x.toFixed(1)+' 0)');
   // CDI-планка отклоняется к ЛЗП: самолёт левее линии => планка справа.
@@ -3780,7 +4081,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 3, appVersion: '1.63',
+    version: 3, appVersion: '1.64',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -4620,12 +4921,34 @@ function setSimControlsVisible(visible){
   updateSimVisibility();updateSpeedHudVisibility();
 }
 function toggleSimPaused(){if(!simActive)return;simPaused=!simPaused;simLastTick=Date.now();syncSimControls();}
+// Телепортация доступна только в SIM. Старый виртуальный трек не соединяется
+// с новой точкой, а реальная GPS-позиция и журнал полётов не изменяются.
+function simAtPosition(lat,lon){
+  if(!simActive||!simPoint||!Number.isFinite(lat)||!Number.isFinite(lon)||
+     Math.abs(lat)>90||Math.abs(lon)>180)return false;
+  if(windMeasuring)cancelWindMeasure(); // прыжок не должен попасть в измерение ветра
+  simPoint.lat=lat;simPoint.lon=lon;simPoint.t=Date.now();simPoint.alt=simAltitude;
+  simUpdateGroundPosition(0);
+  rtCurrentPosition=simPoint;
+  simTrack=[];simLastTraceAt=0;simLastPaintAt=0;simLastTick=Date.now();
+  if(hsiState.mode==='route'&&hsiState.routeKey){
+    const route=ROUTES[hsiState.routeKey];
+    if(route){
+      hsiState.legIndex=hsiRouteBestLeg(route,simPoint);
+      hsiState.awaitingRouteFix=0;hsiNeedsInitialLegFix=false;
+      hsiLastRouteAdvanceAt=Date.now();
+      persistHSISettings();
+    }
+  }else if(hsiState.mode==='direct'&&navTarget){
+    navLineStart={lat,lon};
+  }
+  renderRTTrack();renderHSIGuideLine();publishSimPosition(true);
+  return true;
+}
 function simAtMapCenter(){
   if(!simActive)return;
   const p=map.getCenter();
-  simPoint.lat=p.lat;simPoint.lon=p.lng;simPoint.t=Date.now();
-  simTrack=[];simLastTraceAt=0;
-  publishSimPosition(true);
+  simAtPosition(p.lat,p.lng);
 }
 // Вектор движения SIM: магнитный курс и δ (направление, ОТКУДА дует ветер)
 // переводим в истинные направления по текущему склонению, затем складываем скорости.
@@ -4773,6 +5096,7 @@ loadUserRoutes();
 loadHSISettings();
 buildHSISelects();
 changeMenuSide(localStorage.getItem(MENU_SIDE_KEY) === 'right');
+changePanelSide(localStorage.getItem(MENU_PANEL_SIDE_KEY) === 'right');
 setNaebaciaTheme(naebaciaTheme);
 setInterval(updateThemeShortcutVisibility,60000);
 document.getElementById('windSpeedUnit').checked = localStorage.getItem(WIND_SPEED_UNIT_KEY) === 'ms';

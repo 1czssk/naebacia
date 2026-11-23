@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#111111">
+  <title>Яхта</title>
+  <g data-silhouette="yacht">
+  <path fill-rule="evenodd" d="M50 2 Q65 7 74 22 L79 42 L79 82 Q77 93 69 96 L31 96 Q23 93 21 82 L21 42 L26 22 Q35 7 50 2Z
+    M50 10 Q61 14 66 23 L67 27 L33 27 L34 23 Q39 14 50 10Z
+    M31 36 L69 36 L68 44 L32 44Z
+    M32 49 L40 49 L40 69 L32 69Z M43 48 L57 48 L57 69 L43 69Z M60 49 L68 49 L68 69 L60 69Z
+    M30 79 L70 79 L70 86 L30 86Z"/>
+  <path d="M28 91 L72 91 L68 94 L32 94Z"/>
+</g>
+</svg>

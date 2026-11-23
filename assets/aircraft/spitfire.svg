@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#111111">
+  <title>Spitfire</title>
+  <g data-silhouette="spitfire">
+  <path d="M50 3 Q54 6 54 13 L54 35 Q65 36 82 39 Q93 40 97 46 Q99 52 94 57 Q86 60 74 60 Q64 60 54 57 L54 80 L64 85 Q68 88 66 93 Q61 98 50 95 Q39 98 34 93 Q32 88 36 85 L46 80 L46 57 Q36 60 26 60 Q14 60 6 57 Q1 52 3 46 Q7 40 18 39 Q35 36 46 35 L46 13 Q46 6 50 3Z"/>
+  <path d="M49 27 L51 27 L52 43 L48 43Z"/>
+</g>
+</svg>

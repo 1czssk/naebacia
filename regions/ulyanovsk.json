@@ -2,11 +2,118 @@
   "id": "ulyanovsk",
   "name": "Ульяновск",
   "active": false,
-  "status": "empty-draft",
-  "dataNotice": "Заготовка профиля. Координаты, аэродромы, радиомаяки, маршруты и зоны пока не внесены; не использовать в навигационных расчётах.",
-  "airfields": [],
-  "navigationAids": [],
+  "status": "aip-excerpt-supplied-not-current-verified",
+  "dataNotice": "УВЛЛ UWLL, предоставленные выдержки AIP AD 2.2/2.18/2.19. Проверяйте актуальные AIP/NOTAM.",
+  "airfields": [
+    {
+      "id": "ulyanovsk",
+      "name": "Ульяновск (Баратаевка)",
+      "icao": "UWLL",
+      "referencePoint": {
+        "lat": 54.27111111111111,
+        "lon": 48.22666666666667
+      },
+      "elevationM": 137,
+      "showOnMap": true,
+      "showInPlace": false,
+      "coordinateSystem": "ПЗ-90.02",
+      "aipMagneticVariationReference": {
+        "degreesEast": 13,
+        "sourceYear": 2019,
+        "note": "Справочно, не применять автоматически"
+      },
+      "source": "Предоставленный АИП UWLL AD 2.2"
+    }
+  ],
+  "navigationAids": [
+    {
+      "id": "uwll-vor-bmk",
+      "name": "Ульяновск VOR/DME (БМК)",
+      "type": "VOR",
+      "ident": "БМК",
+      "frequencyMHz": 113.4,
+      "frequencyKHz": null,
+      "lat": 54.262972222222224,
+      "lon": 48.225500000000004,
+      "role": "VOR/DME",
+      "coordinateSystem": "ПЗ-90.02",
+      "source": "Предоставленный AIP AD 2.19; статус не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
+    },
+    {
+      "id": "uwll-oprm-02-m",
+      "name": "Ульяновск ОПРМ 02 (М)",
+      "type": "NDB",
+      "ident": "М",
+      "frequencyMHz": null,
+      "frequencyKHz": 680,
+      "lat": 54.25080555555556,
+      "lon": 48.204750000000004,
+      "role": "OPRM",
+      "coordinateSystem": "ПЗ-90.02",
+      "source": "Предоставленный AIP AD 2.19; статус не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
+    },
+    {
+      "id": "uwll-dprm-20-ls",
+      "name": "Ульяновск ДПРМ 20 (ЛС)",
+      "type": "NDB",
+      "ident": "ЛС",
+      "frequencyMHz": null,
+      "frequencyKHz": 332,
+      "lat": 54.313138888888886,
+      "lon": 48.27180555555555,
+      "role": "DPRM",
+      "coordinateSystem": "ПЗ-90.02",
+      "source": "Предоставленный AIP AD 2.19; статус не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
+    },
+    {
+      "id": "uwll-bprm-20-l",
+      "name": "Ульяновск БПРМ 20 (Л)",
+      "type": "NDB",
+      "ident": "Л",
+      "frequencyMHz": null,
+      "frequencyKHz": 680,
+      "lat": 54.29,
+      "lon": 48.246972222222226,
+      "role": "BPRM",
+      "coordinateSystem": "ПЗ-90.02",
+      "source": "Предоставленный AIP AD 2.19; статус не проверен",
+      "operationalStatus": "requires-current-AIP-NOTAM-check"
+    }
+  ],
   "routes": {},
   "zones": [],
-  "sectors": []
+  "sectors": [],
+  "communications": [
+    {
+      "service": "Ульяновск-Подход",
+      "frequencyMHz": 127.3
+    },
+    {
+      "service": "Ульяновск-Круг",
+      "frequencyMHz": 120.8
+    },
+    {
+      "service": "Ульяновск-Старт",
+      "frequencyMHz": 120.4
+    }
+  ],
+  "landingAids": [
+    {
+      "runway": "02",
+      "locIdent": "IMR",
+      "locFrequencyMHz": 110.3,
+      "gpFrequencyMHz": 335.0,
+      "dmeChannel": "40X"
+    },
+    {
+      "runway": "20",
+      "locIdent": "ILS",
+      "locFrequencyMHz": 111.3,
+      "gpFrequencyMHz": 332.3,
+      "dmeChannel": "50X"
+    }
+  ]
 }

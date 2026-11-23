@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#111111">
+  <title>Авианосец</title>
+  <g data-silhouette="carrier">
+  <path fill-rule="evenodd" d="M33 4 L65 4 Q73 5 75 13 L77 24 L77 90 Q72 97 62 98 L32 98 Q23 95 23 88 L23 18 Q24 9 33 4Z
+    M30 15 L35 15 L35 81 L30 81Z
+    M46 11 L50 11 L50 84 L46 84Z
+    M58 16 L61 16 L61 78 L58 78Z"/>
+  <path d="M74 29 L83 29 L88 33 L88 50 L83 55 L76 55Z"/>
+  <path d="M80 34 L84 35 L84 47 L80 49Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
+</g>
+</svg>

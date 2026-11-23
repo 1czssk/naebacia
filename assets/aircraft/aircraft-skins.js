@@ -1,10 +1,10 @@
-/* НАЕБАЦИЯ VI · SVG-ресурсы силуэтов в assets/aircraft/.
+/* НАЕБАЦИЯ · SVG-ресурсы силуэтов в assets/aircraft/.
    Настоящие отдельные SVG исходники загружаются один раз при старте,
    затем встраиваются как пути в маркеры. Цвет и поворот задаются штатным
    вызовом NAEBACIA_SKINS.svg(id, heading, color). */
 (function (root) {
   'use strict';
-  const entries = [["standard","Стандартный · Cessna"],["liner","Лайнер"],["tu154","Тушка"],["fighter","Истребитель"],["shuttle","Шаттл"],["rocket","Ракета"],["funny","Писюн"],["da40","Diamond DA40"],["da42","Diamond DA42"],["mi8","Ми-8"]];
+  const entries = [["standard","Стандартный · Cessna"],["liner","Лайнер"],["tu154","Тушка"],["fighter","Истребитель"],["shuttle","Шаттл"],["rocket","Ракета"],["funny","Писюн"],["da40","Diamond DA40"],["da42","Diamond DA42"],["mi8","Ми-8"],["yacht","Яхта"],["carrier","Авианосец"],["f117","F-117"],["spitfire","Spitfire"],["sr71","SR-71"],["s37","С-37"],["zhiguli","Жигули"],["a380","A380"],["b787","B787"],["mriya","Мрия"]];
   const skins = Object.create(null);
   for (const [id,label] of entries) skins[id] = {label, file: id+'.svg', shapes: ''};
   const ids = entries.map(entry=>entry[0]);

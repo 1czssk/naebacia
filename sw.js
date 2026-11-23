@@ -1,9 +1,9 @@
-/* НАЕБАЦИЯ v1.63 VI — редактор маршрутов, обновлённый PWA-кэш */
-const CACHE = 'naebacia-v1-63-r7';
+/* НАЕБАЦИЯ v1.64 — редактор маршрутов, обновлённый PWA-кэш */
+const CACHE = 'naebacia-v1-64-r3-unified-popup';
 const SHELL = ['./','./index.html','./app.js','./assets/aircraft/aircraft-skins.js','./manifest.json','./assets/data/navaids-russia.json',
   './regions/krasny-kut.json','./regions/saint-petersburg.json','./regions/lipetsk.json',
   './regions/sasovo.json','./regions/ulyanovsk.json','./regions/buguruslan.json','./assets/icons/icon-192.png','./assets/icons/icon-512.png',
-  './assets/aircraft/standard.svg', './assets/aircraft/liner.svg', './assets/aircraft/tu154.svg', './assets/aircraft/fighter.svg', './assets/aircraft/shuttle.svg', './assets/aircraft/rocket.svg', './assets/aircraft/funny.svg', './assets/aircraft/da40.svg', './assets/aircraft/da42.svg', './assets/aircraft/mi8.svg']; 
+  './assets/aircraft/standard.svg', './assets/aircraft/liner.svg', './assets/aircraft/tu154.svg', './assets/aircraft/fighter.svg', './assets/aircraft/shuttle.svg', './assets/aircraft/rocket.svg', './assets/aircraft/funny.svg', './assets/aircraft/da40.svg', './assets/aircraft/da42.svg', './assets/aircraft/mi8.svg', './assets/aircraft/yacht.svg', './assets/aircraft/carrier.svg', './assets/aircraft/f117.svg', './assets/aircraft/spitfire.svg', './assets/aircraft/sr71.svg', './assets/aircraft/s37.svg', './assets/aircraft/zhiguli.svg', './assets/aircraft/a380.svg', './assets/aircraft/b787.svg', './assets/aircraft/mriya.svg']; 
 const LEAFLET_ASSETS = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
