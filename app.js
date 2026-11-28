@@ -1,4 +1,4 @@
-/* НАЕБАЦИЯ v1.64. Исходная навигационная логика v1.58 сохранена. */
+/* НАЕБАЦИЯ v1.65. Исходная навигационная логика v1.58 сохранена. */
 // === КОНЕЦ БЛОКА 10 ===
 
 // === БЛОК 11: CONFIG ===
@@ -145,7 +145,7 @@ function exportNaebaciaBackup() {
     }
     // При переполнении localStorage сохраняем ещё и последнюю копию журнала из памяти.
     if (rtFlightLog) storage[FLIGHT_LOG_KEY]=JSON.stringify(rtFlightLog);
-    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.64',
+    const obj={format:'naebacia-local-backup',version:1,appVersion:'1.65',
       exportedAt:new Date().toISOString(),storage};
     const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json;charset=utf-8'});
     const url=URL.createObjectURL(blob);
@@ -421,6 +421,38 @@ const VOR_IDX = ACTIVE_PROFILE.vorIndex; // оставлен для миграц
 
 // === БЛОК 15: DATA: ROUTES ===
 const ROUTES = ACTIVE_PROFILE.routes;
+const REGION_CHOICE_KEY='naebacia_region_choice_v165';
+let activeRegionChoice='global';
+try{activeRegionChoice=localStorage.getItem(REGION_CHOICE_KEY)||'global';}catch(e){}
+if(!['global','krasny-kut','sasovo'].includes(activeRegionChoice))activeRegionChoice='global';
+let cachedKrasnyLayers=null;
+function setActiveRegion(value){
+  if(!['global','krasny-kut','sasovo'].includes(value))return;
+  const switchingFromSasovo=activeRegionChoice==='sasovo';
+  if(value==='sasovo'&&(!switchingFromSasovo||!cachedKrasnyLayers)){
+    cachedKrasnyLayers={};
+    for(const el of document.querySelectorAll('#regionalRouteList input[type=checkbox],#toggleZones,#toggleSectors,#toggleCircle'))cachedKrasnyLayers[el.id]=el.checked;
+  }
+  activeRegionChoice=value;
+  if(value!=='sasovo'&&switchingFromSasovo&&cachedKrasnyLayers){
+    for(const [id,checked] of Object.entries(cachedKrasnyLayers)){const el=document.getElementById(id);if(el)el.checked=checked;}
+    cachedKrasnyLayers=null;
+  }
+  try{localStorage.setItem(REGION_CHOICE_KEY,value);}catch(e){}
+  const list=document.getElementById('regionalRouteList'),empty=document.getElementById('regionRoutesEmpty');
+  if(list)list.hidden=value==='sasovo';
+  if(empty)empty.hidden=value!=='sasovo';
+  const st=document.getElementById('regionStatus');
+  if(st)st.textContent=value==='sasovo'?'Местные маршруты и зоны Сасово пока не заполнены. Общие НРТС доступны.':
+    value==='global'?'Глобальный набор: общие данные и доступные маршруты.':'Местные слои Красного Кута.';
+  document.querySelectorAll('#regionalRouteList input[type=checkbox]').forEach(cb=>{if(value==='sasovo')cb.checked=false;});
+  if(value==='sasovo'){
+    for(const id of ['toggleZones','toggleSectors','toggleCircle']){const el=document.getElementById(id);if(el)el.checked=false;}
+  }
+  const chooser=document.getElementById('regionChoice');if(chooser)chooser.value=value;
+  renderRoutes();renderAreas();renderCircle();
+}
+
 let routeLayers = { A4: [], A5: [], LOCAL: [], GAGARIN_FWD: [], GAGARIN_BACK: [] };
 const USER_ROUTES_KEY = 'naebacia_user_routes_v1';
 const USER_ROUTE_PREFIX = 'USER_';
@@ -644,7 +676,7 @@ function setMagneticDeclinationFromInput() {
   appliedMagneticDeclination=n;
   try{localStorage.setItem(MAG_DECL_KEY,String(n));}catch(e){console.warn('Не удалось сохранить магнитное склонение:',e);}
   displayMagneticDeclination('Применено '+(n>0?'+':'')+n+'°. Сохранено на этом устройстве.');
-  refreshAfterMagneticDeclinationChange();
+  refreshAfterMagneticDeclinationChange();renderRulerLine();
 }
 function resetMagneticDeclination() {
   appliedMagneticDeclination=Number(ACTIVE_PROFILE.magneticDeclinationDeg)||0;
@@ -847,6 +879,11 @@ function updatePlaneVisualRotation(){
 if(mapRotationAvailable)map.on('rotate',()=>{updatePlaneVisualRotation();if(followMode&&currentTab==='rtnav')centerFollowedAircraft(false);});
 
 
+function recenterAircraft(){
+  const p=simActive&&simPoint?simPoint:getLiveGpsPosition();
+  if(!p){showMapContextNotice('Нет свежей GPS/SIM позиции ВС');return;}
+  map.panTo([p.lat,p.lon],{animate:true,duration:.4});
+}
 function isFollowOn() { return followMode; }
 
 // Когда HSI открыт, центрирование приходится на свободную область НАД прибором,
@@ -1392,7 +1429,7 @@ function renderNavaidMarkers(){
   const bounds=navaidCatalogVisibleOnMap&&zoom>=6&&typeof map.getBounds==='function'
     ?map.getBounds().pad(0.1):null;
   const selected=new Set(navaidWorkIds);
-  if(navaidSpotlightId)selected.add(navaidSpotlightId);
+  if(navaidSpotlightId&&navaidCatalogVisibleOnMap)selected.add(navaidSpotlightId);
   // На общем масштабе не создаём сотни маркеров. При приближении показываем
   // все маршрутные NDB/VOR внутри экрана (не DME-only); пользовательские — всегда.
   let nearby=bounds?navaidCatalog.filter(a=>a.catalogSource==='ENR4.1'&&
@@ -1409,8 +1446,7 @@ function renderNavaidMarkers(){
       zoom<6?'Приблизьте карту до масштаба 6+, чтобы увидеть NDB/VOR из АИП.':
       'На карте: '+nearby.length+(available>180?' из '+available:'')+' дополнительных NDB/VOR в видимой области.';
   }
-  const visible=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&
-    (a.catalogSource!=='ENR4.1'||selected.has(a.id))).concat(nearby);
+  const visible=navaidCatalog.filter(a=>navaidHasCoordinates(a)&&selected.has(a.id)).concat(nearby);
   const desired=new Set(visible.map(a=>a.id));
   for(const [id,marker] of previous)if(!desired.has(id)){map.removeLayer(marker);previous.delete(id);}
   navaidMapMarkers=[];
@@ -1463,6 +1499,47 @@ function buildStationPopup(idx){
   html+='<hr><b>От '+safeText(cur.source)+':</b><br>МПР '+mpr.toFixed(0)+'° · '+(distance(cur,a)/1000).toFixed(1)+' км';
   return html+freshnessWarning(cur)+routePopupAddControl(a.name,a.lat,a.lon);
 }
+const navaidDirections=Object.create(null);
+const navaidDistanceUnits=Object.create(null);
+function stationDirection(a){return navaidDirections[a.id]||(navaidIsVor(a)?'from':'mpr');}
+function stationDistanceKm(a,i){
+  const el=document.getElementById('vorDist'+(i+1));if(!el)return null;
+  const parsed=parseDistance(el.value.trim());
+  return parsed===null?null:parsed*(navaidDistanceUnits[a.id]==='nm'?1.852:1);
+}
+function changeNavaidDirection(id,value){
+  const a=PRESET.find(x=>x.id===id);if(!a)return;
+  const old=stationDirection(a);
+  if(old!==value){
+    const input=document.getElementById('brg'+(PRESET.indexOf(a)+1));
+    if(input&&input.value.trim()){
+      const n=Number(input.value.trim().replace(',','.'));
+      if(Number.isFinite(n))input.value=String(Number(norm360(n+180).toFixed(2)));
+    }
+  }
+  navaidDirections[id]=value;
+  const idx=PRESET.indexOf(a),label=document.getElementById('stationBrgLabel'+(idx+1));
+  if(label)label.textContent=(navaidIsVor(a)?(value==='to'?'Курс НА':'Радиал ОТ'):(value==='mps'?'МПС':'МПР'))+':';
+  preview();
+}
+function changeNavaidDistanceUnit(id,value){
+  const old=navaidDistanceUnits[id]||'km';if(old===value)return;
+  const a=PRESET.find(x=>x.id===id);if(!a)return;
+  const input=document.getElementById('vorDist'+(PRESET.indexOf(a)+1));
+  if(input&&input.value.trim()){
+    const n=parseDistance(input.value.trim());
+    if(n!==null)input.value=String(Number((n*(old==='km'?1/1.852:1.852)).toFixed(3)));
+  }
+  navaidDistanceUnits[id]=value;preview();
+}
+function stationBearingFromInput(a,mag){
+  const mode=stationDirection(a);
+  return norm360(mag+getDecl()+((navaidIsVor(a)?mode==='to':mode==='mpr')?180:0));
+}
+function stationBearingForGPS(a,gps){
+  const radial=norm360(trueBearing(a,gps)-getDecl());
+  return norm360(radial+((navaidIsVor(a)?stationDirection(a)==='to':stationDirection(a)==='mpr')?180:0));
+}
 function stationInputSnapshot(){
   const values={};
   PRESET.forEach((a,i)=>{
@@ -1484,8 +1561,11 @@ function syncWorkingNavaids(keepInputs=true){
       return '<div class="oprs navaid-work-block" id="block'+num+'">'+title+
         '<div class="navaid-work-missing">DME-only · '+safeText(near)+'. Без радиала и МПР.<br><small>Фактическое показание DME (наклонная дальность) не моделируется.</small></div></div>';
     }
-    const input='<div class="row"><label>'+(vor?'Радиал':'МПР')+':</label> <input id="brg'+num+'" value="'+safeText(previous.brg||'')+'" placeholder="—" inputmode="numeric" oninput="preview()"> °</div>';
-    const dme=vor&&a.sourceType!=='DVOR'?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> км</div>':'';
+    const mode=stationDirection(a);
+    const direction='<select class="navaid-compact-select" aria-label="Направление относительно маяка" onchange="changeNavaidDirection(\''+a.id+'\',this.value)">'+(vor?'<option value="from"'+(mode==='from'?' selected':'')+'>ОТ</option><option value="to"'+(mode==='to'?' selected':'')+'>НА</option>':'<option value="mpr"'+(mode==='mpr'?' selected':'')+'>МПР</option><option value="mps"'+(mode==='mps'?' selected':'')+'>МПС</option>')+'</select>';
+    const input='<div class="row"><label id="stationBrgLabel'+num+'">'+(vor?(mode==='to'?'Курс НА':'Радиал ОТ'):(mode==='mps'?'МПС':'МПР'))+':</label> <input id="brg'+num+'" value="'+safeText(previous.brg||'')+'" placeholder="—" inputmode="numeric" oninput="preview()"> ° '+direction+'</div>';
+    const unit=navaidDistanceUnits[a.id]||'km';
+    const dme=vor&&a.sourceType!=='DVOR'?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> <select class="navaid-compact-select" aria-label="Единицы дальности DME" onchange="changeNavaidDistanceUnit(\''+a.id+'\',this.value)"><option value="km"'+(unit==='km'?' selected':'')+'>км</option><option value="nm"'+(unit==='nm'?' selected':'')+'>NM</option></select></div>':'';
     return '<div class="oprs navaid-work-block'+(vor?' vor':'')+'" id="block'+num+'">'+title+input+dme+'<div class="calc-line" id="calc'+num+'"></div></div>';
   }).join('') || '<div class="hint">Список пуст. Добавьте маяки из библиотеки или нажмите «Обновить».</div>';
   document.getElementById('stationCount').textContent=PRESET.length+' в списке · '+navaidCatalog.length+' в библиотеке';
@@ -1535,6 +1615,7 @@ function navaidDistanceSort(a,b,origin){
   return x-y;
 }
 function updateNearbyNavaids(){
+  if(!document.getElementById('navaidRefreshOverlay').hidden)return;
   const pressAt=Date.now();
   navaidRefreshPresses=navaidRefreshPresses.filter(t=>pressAt-t<60000);
   navaidRefreshPresses.push(pressAt);
@@ -2204,8 +2285,9 @@ function preview(){
     if(!input||!el)return;
     const v=input.value.trim(), num=Number(v.replace(',','.'));
     if(!v||!Number.isFinite(num)){el.innerHTML='';return;}
-    const ips=navaidIsVor(a)?norm360(num+decl):norm360(num+180+decl);
-    el.innerHTML=(navaidIsVor(a)?'Радиал':'МПР')+' '+num.toFixed(0)+'° → <b>ИПС '+ips.toFixed(0)+'°</b>';
+    const ips=stationBearingFromInput(a,num);
+    const mode=stationDirection(a);const label=navaidIsVor(a)?(mode==='to'?'Курс НА':'Радиал ОТ'):(mode==='mps'?'МПС':'МПР');
+    el.innerHTML=label+' '+num.toFixed(0)+'° → <b>ИПС '+ips.toFixed(0)+'°</b>';
   });
 }
 // === КОНЕЦ БЛОКА 31 ===
@@ -2219,9 +2301,9 @@ function alignToGPS(){
   PRESET.forEach((a,i)=>{
     if(!navaidHasCoordinates(a)||navaidIsDmeOnly(a))return;
     const input=document.getElementById('brg'+(i+1));if(!input)return;
-    input.value=(navaidIsVor(a)?norm360(trueBearing(a,gps)-getDecl()):norm360(trueBearing(gps,a)-getDecl())).toFixed(0);
+    input.value=stationBearingForGPS(a,gps).toFixed(0);
     const distInput=document.getElementById('vorDist'+(i+1));
-    if(navaidIsVor(a)&&distInput)distInput.value=(distance(gps,a)/1000).toFixed(2);
+    if(navaidIsVor(a)&&distInput)distInput.value=((distance(gps,a)/1000)/(navaidDistanceUnits[a.id]==='nm'?1.852:1)).toFixed(2);
   });
   preview();resultEl.textContent='Пеленги, радиалы и доступные дальности приведены к достоверному GPS (расстояние по карте, не наклонная DME). Нажмите «Рассчитать» для проверки.';
 }
@@ -2367,6 +2449,43 @@ function getCurrentSpeedKmh(targetPt) {
   return wGround > 0.1 ? wGround : null;
 }
 
+function destinationFromMagnetic(start,magneticDeg,km){
+  if(!start||!Number.isFinite(start.lat)||!Number.isFinite(start.lon)||!Number.isFinite(magneticDeg)||!Number.isFinite(km)||km<=0||km>2000)return null;
+  const radius=6371.0,theta=toRad(norm360(magneticDeg+getDecl()));
+  const delta=km/radius,phi=toRad(start.lat),lambda=toRad(start.lon);
+  const lat2=Math.asin(Math.sin(phi)*Math.cos(delta)+Math.cos(phi)*Math.sin(delta)*Math.cos(theta));
+  const lon2=lambda+Math.atan2(Math.sin(theta)*Math.sin(delta)*Math.cos(phi),Math.cos(delta)-Math.sin(phi)*Math.sin(lat2));
+  return {lat:toDeg(lat2),lon:((toDeg(lon2)+540)%360)-180};
+}
+function parseBearingAndDistance(bearingId,distId,unitId){
+  const textB=document.getElementById(bearingId)?.value.trim()||'';
+  const textD=document.getElementById(distId)?.value.trim()||'';
+  if(!textB||!textD)return null;
+  const bearing=Number(textB.replace(',','.')),d=Number(textD.replace(',','.'));
+  if(!Number.isFinite(bearing)||bearing<0||bearing>=360||!Number.isFinite(d)||d<=0)return null;
+  const km=d*(document.getElementById(unitId)?.value==='nm'?1.852:1);
+  return km<=2000?{bearing,km}:null;
+}
+function toggleBearingTargetForm(){const e=document.getElementById('bearingTargetForm');e.hidden=!e.hidden;}
+function createBearingTarget(){
+  const v=parseBearingAndDistance('targetBearing','targetDistance','targetDistanceUnit');
+  const cur=simActive&&simPoint?simPoint:getLiveGpsPosition();
+  if(!cur){alert('Нужна свежая позиция GPS или активный SIM.');return;}
+  if(!v){alert('Введите ЗМПУ 0–359° и дальность от 0 до 2000 км.');return;}
+  const point=destinationFromMagnetic(cur,v.bearing,v.km);
+  if(point){setNavTarget(point.lat,point.lon);showMapContextNotice('Цель построена по ЗМПУ и дальности');}
+}
+function toggleBearingRouteForm(){const e=document.getElementById('bearingRouteForm');e.hidden=!e.hidden;}
+function addBearingRoutePoint(){
+  if(!routeEditorDraft){alert('Сначала откройте редактор своего маршрута.');return;}
+  const v=parseBearingAndDistance('routeBearing','routeDistance','routeDistanceUnit');
+  if(!v){alert('Введите корректные ЗМПУ и дальность.');return;}
+  const last=routeEditorDraft.points.at(-1);
+  const origin=last||(simActive&&simPoint?simPoint:getLiveGpsPosition());
+  if(!origin){alert('Для первого ППМ нужна свежая GPS/SIM позиция.');return;}
+  const pt=destinationFromMagnetic(origin,v.bearing,v.km);
+  if(pt){editorAddCoordinate(pt.lat,pt.lon,routeEditorDraft.points.length);routeEditorMapMode='none';updateRouteEditorUI();}
+}
 function startTargetEdit() {
   targetEditMode = !targetEditMode;
   if(targetEditMode && routeEditorDraft) {routeEditorMapMode='none';routeEditorMoveIndex=-1;updateRouteEditorUI();}
@@ -2496,10 +2615,38 @@ function buildNavPopupHtml() {
   return html + freshnessWarning(n.cur);
 }
 
+function installTargetLongDrag(marker){
+  const el=marker.getElement();if(!el)return;
+  let timer=null,activeId=null,starting=null,didMove=false;
+  el.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    starting={x:e.clientX,y:e.clientY,pointerId:e.pointerId};didMove=false;
+    timer=setTimeout(()=>{
+      timer=null;if(!starting||starting.pointerId!==e.pointerId)return;
+      activeId=e.pointerId;map.dragging.disable();el.style.touchAction='none';
+      el.setPointerCapture?.(activeId);
+      showMapContextNotice('🎯 Переместите цель и отпустите');
+    },550);
+  });
+  el.addEventListener('pointermove',e=>{
+    if(timer&&starting&&Math.hypot(e.clientX-starting.x,e.clientY-starting.y)>9){clearTimeout(timer);timer=null;}
+    if(activeId!==e.pointerId)return;
+    e.preventDefault();e.stopPropagation();didMove=true;
+    marker.setLatLng(map.mouseEventToLatLng(e));
+  });
+  const stop=e=>{
+    if(timer){clearTimeout(timer);timer=null;}
+    if(activeId!==e.pointerId){starting=null;return;}
+    activeId=null;starting=null;map.dragging.enable();
+    const ll=marker.getLatLng();
+    if(didMove&&navTarget){mapContextSuppressClickUntil=Date.now()+950;setNavTarget(ll.lat,ll.lng);}
+  };
+  for(const t of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(t,stop);
+}
 function updateNavUI() {
   updateMyPositionUI();
   if (navLine) { navLine.forEach(l => map.removeLayer(l)); navLine = null; }
-  if (navTargetMarker) { map.removeLayer(navTargetMarker); navTargetMarker = null; }
+  if (navTargetMarker && !navTarget) { map.removeLayer(navTargetMarker); navTargetMarker = null; }
   const cur = getCurrentPosition();
   if (navTarget && !navLineStart && hsiState.mode === 'direct' && cur) {
     navLineStart = { lat:cur.lat, lon:cur.lon };
@@ -2508,8 +2655,15 @@ function updateNavUI() {
 
   if (navTarget) {
     const popupFn = () => buildNavPopupHtml();
-    navTargetMarker = L.marker([navTarget.lat, navTarget.lon], { icon: targetIcon() }).addTo(map);
-    bindLivePopup(navTargetMarker, popupFn, { autoPan: true });
+    if(!navTargetMarker){
+      navTargetMarker = L.marker([navTarget.lat, navTarget.lon], { icon: targetIcon() }).addTo(map);
+      bindLivePopup(navTargetMarker, popupFn, { autoPan: true });
+      installTargetLongDrag(navTargetMarker);
+    } else {
+      const old=navTargetMarker.getLatLng();
+      if(Math.abs(old.lat-navTarget.lat)>1e-9||Math.abs(old.lng-navTarget.lon)>1e-9)
+        navTargetMarker.setLatLng([navTarget.lat,navTarget.lon]);
+    }
     if (navLineStart && hsiState.mode === 'direct') {
       navLine = makeClickableLine(
         [[navLineStart.lat, navLineStart.lon], [navTarget.lat, navTarget.lon]],
@@ -2656,6 +2810,73 @@ async function naebaciaCopyPopupCoords(lat,lon) {
     showMapContextNotice('Координаты скопированы: '+txt);
   } catch(e) { prompt('Скопируйте координаты:',txt); }
 }
+// v1.65: две независимые draggable-точки, мультитач через отдельные pointerId.
+let rulerActive=false,rulerPoints=null,rulerMarkers=[],rulerLine=null;
+let rulerUnit='km',rulerAngleMode='mag',rulerReversed=false;
+const rulerPointers=new Map();
+function toggleRuler(force){
+  const enable=typeof force==='boolean'?force:!rulerActive;
+  rulerActive=enable;
+  const widget=document.getElementById('rulerReadout');if(widget)widget.hidden=!enable;
+  if(!enable){
+    rulerPointers.clear();map.dragging.enable();
+    rulerMarkers.forEach(m=>map.removeLayer(m));rulerMarkers=[];
+    if(rulerLine){map.removeLayer(rulerLine);rulerLine=null;}
+    return;
+  }
+  if(!rulerPoints){
+    const size=map.getSize();
+    const a=map.containerPointToLatLng([size.x*.35,size.y*.55]);
+    const b=map.containerPointToLatLng([size.x*.65,size.y*.45]);
+    rulerPoints=[{lat:a.lat,lon:a.lng},{lat:b.lat,lon:b.lng}];
+  }
+  for(let i=0;i<2;i++){
+    const icon=L.divIcon({className:'naebacia-ruler-handle',html:'<div style="background:#fff;border:3px solid #007fa8;border-radius:50%;width:29px;height:29px;display:grid;place-items:center;font-weight:800;color:#006487;box-shadow:0 2px 8px #0006">'+(i?'Б':'А')+'</div>',iconSize:[35,35],iconAnchor:[17,17]});
+    const m=L.marker([rulerPoints[i].lat,rulerPoints[i].lon],{icon,zIndexOffset:900,keyboard:false}).addTo(map);
+    rulerMarkers.push(m);
+    const el=m.getElement();if(!el)continue;
+    el.style.touchAction='none';
+    el.addEventListener('pointerdown',e=>{
+      if(e.button!==0&&e.pointerType==='mouse')return;
+      e.preventDefault();e.stopPropagation();
+      rulerPointers.set(e.pointerId,i);
+      el.setPointerCapture?.(e.pointerId);
+      map.dragging.disable();
+    });
+    el.addEventListener('pointermove',e=>{
+      if(rulerPointers.get(e.pointerId)!==i)return;
+      e.preventDefault();e.stopPropagation();
+      const ll=map.mouseEventToLatLng(e);
+      rulerPoints[i]={lat:ll.lat,lon:ll.lng};m.setLatLng(ll);renderRulerLine();
+    });
+    const stop=e=>{
+      if(!rulerPointers.has(e.pointerId))return;
+      rulerPointers.delete(e.pointerId);e.stopPropagation();
+      if(!rulerPointers.size)map.dragging.enable();
+    };
+    el.addEventListener('pointerup',stop);el.addEventListener('pointercancel',stop);el.addEventListener('lostpointercapture',stop);
+  }
+  rulerLine=L.polyline(rulerPoints.map(p=>[p.lat,p.lon]),{color:'#007fa8',weight:3,dashArray:'9 5',interactive:false}).addTo(map);
+  renderRulerLine();
+}
+function greatCircleMeters(a,b){
+  const phi1=toRad(a.lat),phi2=toRad(b.lat),dl=toRad(b.lon-a.lon),dp=phi2-phi1;
+  const h=Math.sin(dp/2)**2+Math.cos(phi1)*Math.cos(phi2)*Math.sin(dl/2)**2;
+  return 12742000*Math.asin(Math.min(1,Math.sqrt(Math.max(0,h))));
+}
+function renderRulerLine(){
+  if(!rulerActive||!rulerPoints)return;
+  if(rulerLine)rulerLine.setLatLngs(rulerPoints.map(p=>[p.lat,p.lon]));
+  const a=rulerPoints[rulerReversed?1:0],b=rulerPoints[rulerReversed?0:1];
+  const km=greatCircleMeters(a,b)/1000;
+  const trueDeg=trueBearing(a,b),deg=rulerAngleMode==='mag'?norm360(trueDeg-getDecl()):trueDeg;
+  const d=document.getElementById('rulerDistance');if(d)d.textContent=(rulerUnit==='km'?km:km/1.852).toFixed(2)+(rulerUnit==='km'?' км':' NM');
+  const ag=document.getElementById('rulerAngle');if(ag)ag.textContent=deg.toFixed(1)+'° '+(rulerAngleMode==='mag'?'МПУ':'ИПУ');
+  const title=document.getElementById('rulerDirection');if(title)title.textContent=rulerReversed?'Б → А':'А → Б';
+}
+function cycleRulerDistance(){rulerUnit=rulerUnit==='km'?'nm':'km';renderRulerLine();}
+function cycleRulerAngle(){rulerAngleMode=rulerAngleMode==='mag'?'true':'mag';renderRulerLine();}
+function swapRulerDirection(){rulerReversed=!rulerReversed;renderRulerLine();}
 function openMapContextAt(lat,lon) {
   if(routeEditorDraft || !Number.isFinite(lat)||!Number.isFinite(lon)||
      Math.abs(lat)>90 || Math.abs(lon)>180)return;
@@ -2675,9 +2896,16 @@ function openMapContextAt(lat,lon) {
         'onclick="naebaciaSetPopupSimPosition('+latitude+','+longitude+')">✈ Установить ВС здесь · SIM</button>'
       : '<button type="button" style="display:block;margin:5px 0;padding:9px;width:100%;font-weight:bold" ' +
         'onclick="naebaciaSetPopupOwnPosition('+latitude+','+longitude+')">📍 Моё место</button>')+
+    '<button type="button" style="display:block;margin:5px 0;padding:9px;width:100%" onclick="activateRulerAt('+latitude+','+longitude+')">📐 Линейка отсюда</button>'+
     '<button type="button" style="display:block;padding:9px;width:100%" ' +
       'onclick="naebaciaCopyPopupCoords('+latitude+','+longitude+')">Копировать координаты</button></div>';
   L.popup({closeButton:true,maxWidth:265}).setLatLng([lat,lon]).setContent(content).openOn(map);
+}
+function activateRulerAt(lat,lon){
+  if(rulerActive)toggleRuler(false);
+  const p=map.containerPointToLatLng(map.latLngToContainerPoint([lat,lon]).add([95,-45]));
+  rulerPoints=[{lat,lon},{lat:p.lat,lon:p.lng}];
+  map.closePopup();toggleRuler(true);
 }
 function clearMapLongPressTimer() {
   if(mapLongPressTimer!==null)clearTimeout(mapLongPressTimer);
@@ -4081,7 +4309,7 @@ function flightLogExportObject() {
   const toIso = t => Number.isFinite(Number(t)) ? new Date(Number(t)).toISOString() : null;
   return {
     format: 'naebacia-flight-log',
-    version: 3, appVersion: '1.64',
+    version: 3, appVersion: '1.65',
     source: 'browser-geolocation',
     createdAt: toIso(rtFlightLog.createdAt),
     exportedAt: new Date().toISOString(),
@@ -4658,10 +4886,10 @@ function calculate() {
     if(!Number.isFinite(value))return;
     const vor=navaidIsVor(a);
     const distInput=document.getElementById('vorDist'+(i+1));
-    const dist=vor&&distInput?parseDistance(distInput.value.trim()):null;
+    const dist=vor&&distInput?stationDistanceKm(a,i):null;
     sources.push({idx:i,type:vor?'VOR':'NDB',name:a.name,
-      data:{lat:a.lat,lon:a.lon},ips:norm360(value+(vor?0:180)+decl),
-      inputLabel:(vor?'Радиал ':'МПР ')+value.toFixed(0)+'°',color:a.color||'#2473b6',dist});
+      data:{lat:a.lat,lon:a.lon},ips:stationBearingFromInput(a,value),
+      inputLabel:(vor?(stationDirection(a)==='to'?'Курс НА ':'Радиал ОТ '):(stationDirection(a)==='mps'?'МПС ':'МПР '))+value.toFixed(0)+'°',color:a.color||'#2473b6',dist});
   });
 
   const resultEl = document.getElementById('result');
@@ -5116,6 +5344,7 @@ updateRouteEditorUI();
 initJokePreference();
 renderCircle();
 renderAreas();
+setActiveRegion(activeRegionChoice);
 document.getElementById('toggleAltitudeColors').checked = localStorage.getItem(ALT_COLORS_KEY) === '1';
 toggleAltitudeView();
 updateNavUI();
