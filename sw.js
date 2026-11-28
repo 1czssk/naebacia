@@ -1,5 +1,5 @@
 /* НАЕБАЦИЯ v1.65 — редактор маршрутов, обновлённый PWA-кэш */
-const CACHE = 'naebacia-v1-65-r1-navigation-tools';
+const CACHE = 'naebacia-v1-65-r2-sasovo-regions';
 const SHELL = ['./','./index.html','./app.js','./assets/aircraft/aircraft-skins.js','./manifest.json','./assets/data/navaids-russia.json',
   './regions/krasny-kut.json','./regions/saint-petersburg.json','./regions/lipetsk.json',
   './regions/sasovo.json','./regions/ulyanovsk.json','./regions/buguruslan.json','./assets/icons/icon-192.png','./assets/icons/icon-512.png',

@@ -420,40 +420,60 @@ const VOR_IDX = ACTIVE_PROFILE.vorIndex; // оставлен для миграц
 // === КОНЕЦ БЛОКА 14 ===
 
 // === БЛОК 15: DATA: ROUTES ===
-const ROUTES = ACTIVE_PROFILE.routes;
+const SASOVO_PROFILE = (()=>{try{return JSON.parse(document.getElementById('naebaciaEmbeddedSasovo').textContent);}catch(e){console.warn('Данные Сасово недоступны',e);return {routes:{},zones:[],sectors:[]};}})();
+const KRASNY_ROUTE_KEYS = Object.keys(ACTIVE_PROFILE.routes);
+const SASOVO_ROUTE_KEYS = Object.keys(SASOVO_PROFILE.routes||{});
+const ROUTES = {...ACTIVE_PROFILE.routes,...(SASOVO_PROFILE.routes||{})};
+const REGION_START_POINTS={
+  'krasny-kut':{lat:ACTIVE_PROFILE.airfield.kta.lat,lon:ACTIVE_PROFILE.airfield.kta.lon},
+  'sasovo':{lat:SASOVO_PROFILE.startPoint?.lat||54.356666667,lon:SASOVO_PROFILE.startPoint?.lon||41.978333333}
+};
+let simStartOverride=null;
 const REGION_CHOICE_KEY='naebacia_region_choice_v165';
 let activeRegionChoice='global';
 try{activeRegionChoice=localStorage.getItem(REGION_CHOICE_KEY)||'global';}catch(e){}
 if(!['global','krasny-kut','sasovo'].includes(activeRegionChoice))activeRegionChoice='global';
-let cachedKrasnyLayers=null;
+const regionalLayerPreferences={global:{},'krasny-kut':{},sasovo:{}};
+function regionalKeyIsVisible(key){
+  if(key.startsWith(USER_ROUTE_PREFIX))return true;
+  return activeRegionChoice==='krasny-kut'?KRASNY_ROUTE_KEYS.includes(key):
+    activeRegionChoice==='sasovo'?SASOVO_ROUTE_KEYS.includes(key):false;
+}
 function setActiveRegion(value){
   if(!['global','krasny-kut','sasovo'].includes(value))return;
-  const switchingFromSasovo=activeRegionChoice==='sasovo';
-  if(value==='sasovo'&&(!switchingFromSasovo||!cachedKrasnyLayers)){
-    cachedKrasnyLayers={};
-    for(const el of document.querySelectorAll('#regionalRouteList input[type=checkbox],#toggleZones,#toggleSectors,#toggleCircle'))cachedKrasnyLayers[el.id]=el.checked;
-  }
+  const previous=activeRegionChoice;
+  const pref=regionalLayerPreferences[previous]||{};
+  for(const el of document.querySelectorAll('#regionalRouteList input[type=checkbox],#toggleZones,#toggleSectors,#toggleCircle'))pref[el.id]=el.checked;
   activeRegionChoice=value;
-  if(value!=='sasovo'&&switchingFromSasovo&&cachedKrasnyLayers){
-    for(const [id,checked] of Object.entries(cachedKrasnyLayers)){const el=document.getElementById(id);if(el)el.checked=checked;}
-    cachedKrasnyLayers=null;
-  }
   try{localStorage.setItem(REGION_CHOICE_KEY,value);}catch(e){}
-  const list=document.getElementById('regionalRouteList'),empty=document.getElementById('regionRoutesEmpty');
-  if(list)list.hidden=value==='sasovo';
-  if(empty)empty.hidden=value!=='sasovo';
-  const st=document.getElementById('regionStatus');
-  if(st)st.textContent=value==='sasovo'?'Местные маршруты и зоны Сасово пока не заполнены. Общие НРТС доступны.':
-    value==='global'?'Глобальный набор: общие данные и доступные маршруты.':'Местные слои Красного Кута.';
-  document.querySelectorAll('#regionalRouteList input[type=checkbox]').forEach(cb=>{if(value==='sasovo')cb.checked=false;});
-  if(value==='sasovo'){
-    for(const id of ['toggleZones','toggleSectors','toggleCircle']){const el=document.getElementById(id);if(el)el.checked=false;}
-  }
+  const saved=regionalLayerPreferences[value]||{};
   const chooser=document.getElementById('regionChoice');if(chooser)chooser.value=value;
+  const list=document.getElementById('regionalRouteList');
+  if(list){
+    list.innerHTML=Object.entries(ROUTES).filter(([key])=>regionalKeyIsVisible(key)&&!key.startsWith(USER_ROUTE_PREFIX))
+      .map(([key,route])=>'<div class="route-toggle"><input type="checkbox" id="route'+key+'" onchange="renderRoutes()" '+(saved['route'+key]?'checked':'')+'><span class="route-swatch" style="background:'+route.color+'"></span><label for="route'+key+'">'+safeText(route.name)+'</label></div>').join('');
+  }
+  const empty=document.getElementById('regionRoutesEmpty');if(empty)empty.hidden=!!(list&&list.children.length);
+  const isKrasny=value==='krasny-kut',isSasovo=value==='sasovo';
+  const zones=document.getElementById('toggleZones'),sectors=document.getElementById('toggleSectors'),circle=document.getElementById('toggleCircle');
+  if(zones)zones.checked=(isKrasny||isSasovo)&&!!saved.toggleZones;
+  if(sectors)sectors.checked=isKrasny&&!!saved.toggleSectors;
+  if(circle)circle.checked=isKrasny&&!!saved.toggleCircle;
+  if(zones?.closest('.route-toggle'))zones.closest('.route-toggle').querySelector('label').textContent=isSasovo?'Зоны Сасово (14; R 3–10 км)':'Зоны (ПЗ) — R 2,5 км';
+  const secRow=sectors?.closest('.route-toggle');if(secRow)secRow.hidden=!isKrasny;
+  const circBox=circle?.closest('.circle-box');if(circBox)circBox.hidden=!isKrasny;
+  const status=document.getElementById('regionStatus');
+  if(status)status.textContent=isSasovo?'Сасово 2: маршруты №453–462, перелёты на Пителино, 14 зон. Круг пока отсутствует.':
+    isKrasny?'Местные маршруты, зоны, секторы и круг Красного Кута.':'Глобально: только общие НРТС и пользовательские маршруты.';
+  // Центрируем обзор по выбранной базе, но не телепортируем действующий GPS/SIM.
+  if(value!==previous && (isKrasny||isSasovo)){
+    if(!simActive&&!rtTracking){const start=REGION_START_POINTS[value];map.setView([start.lat,start.lon],Math.max(10,map.getZoom()));}
+  }
   renderRoutes();renderAreas();renderCircle();
+  buildHSISelects();refreshHSIPanel();
 }
 
-let routeLayers = { A4: [], A5: [], LOCAL: [], GAGARIN_FWD: [], GAGARIN_BACK: [] };
+let routeLayers = Object.fromEntries(Object.keys(ROUTES).map(key=>[key,[]]));
 const USER_ROUTES_KEY = 'naebacia_user_routes_v1';
 const USER_ROUTE_PREFIX = 'USER_';
 let userRoutes = [];
@@ -1828,11 +1848,11 @@ function buildRoutePointPopup(routeKey, idx, allIndices) {
 }
 
 function renderRoutes() {
-  ['A4', 'A5', 'LOCAL', 'GAGARIN_FWD', 'GAGARIN_BACK'].forEach(key => {
+  [...KRASNY_ROUTE_KEYS,...SASOVO_ROUTE_KEYS].forEach(key => {
     routeLayers[key].forEach(l => map.removeLayer(l));
     routeLayers[key] = [];
     const cb = document.getElementById('route' + key);
-    if (!cb || !cb.checked) return;
+    if (!regionalKeyIsVisible(key)||!cb || !cb.checked) return;
     const route = ROUTES[key];
 
     for (let i = 0; i < route.points.length - 1; i++) {
@@ -1903,8 +1923,9 @@ function extractNum(id) {
 function buildZonePopup(z) {
   let html = '<b>' + z.id + '</b> · ' + z.name;
   html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
-  html += 'Удаление от КТА: <b>' + z.s + ' км</b><br>';
-  html += 'ЗМПУ в зону: <b>' + fmtZmpu(z.zmpu) + '</b>';
+  if(Number.isFinite(z.s))html += 'Удаление от КТА: <b>' + z.s + ' км</b><br>';
+  if(Number.isFinite(z.zmpu))html += 'ЗМПУ в зону: <b>' + fmtZmpu(z.zmpu) + '</b>';
+  if(Number.isFinite(z.radiusKm))html += 'Радиус: <b>' + z.radiusKm + ' км</b><br>Тип: '+safeText(z.kind)+'<br>'; 
   return html+routePopupAddControl(z.id+' '+z.name,z.lat,z.lon);
 }
 
@@ -1920,11 +1941,11 @@ function renderAreas() {
   // --- Зоны (ПЗ), R = 2,5 км ---
   areaLayers.zones.forEach(l => map.removeLayer(l));
   areaLayers.zones = [];
-  if (document.getElementById('toggleZones').checked) {
-    ZONES.forEach(z => {
+  if (activeRegionChoice!=='global' && document.getElementById('toggleZones').checked) {
+    (activeRegionChoice==='sasovo'?SASOVO_PROFILE.zones:ZONES).forEach(z => {
       const circle = L.circle([z.lat, z.lon], {
-        radius: 2500, color: '#dc3232', weight: 2, opacity: 0.8,
-        fillColor: '#dc3232', fillOpacity: 0.15
+        radius: (z.radiusKm||2.5)*1000, color: activeRegionChoice==='sasovo'?(z.radiusKm>=6?'#cb1919':'#f0008b'):'#dc3232', weight: 2, opacity: 0.8,
+        fillColor: activeRegionChoice==='sasovo'?(z.radiusKm>=6?'#cb1919':'#f0008b'):'#dc3232', fillOpacity: 0.15
       }).addTo(map);
       bindLivePopup(circle, () => buildZonePopup(z), { autoPan: true });
       areaLayers.zones.push(circle);
@@ -1934,7 +1955,7 @@ function renderAreas() {
       areaLayers.zones.push(dot);
 
       const label = L.marker([z.lat, z.lon], {
-        icon: makeAreaLabel(z.lat, 2500, '#ffc8c8', extractNum(z.id)),
+        icon: makeAreaLabel(z.lat, (z.radiusKm||2.5)*1000, '#ffc8c8', extractNum(z.id)),
         interactive: false, keyboard: false
       }).addTo(map);
       areaLayers.zones.push(label);
@@ -1944,7 +1965,7 @@ function renderAreas() {
   // --- Сектора (ЗПП), R = 5 км ---
   areaLayers.sectors.forEach(l => map.removeLayer(l));
   areaLayers.sectors = [];
-  if (document.getElementById('toggleSectors').checked) {
+  if (activeRegionChoice==='krasny-kut' && document.getElementById('toggleSectors').checked) {
     SECTORS.forEach(s => {
       const circle = L.circle([s.lat, s.lon], {
         radius: 5000, color: '#3232dc', weight: 2, opacity: 0.8,
@@ -2124,7 +2145,7 @@ function renderCircle() {
   const cb = document.getElementById('toggleCircle');
   const typeEl = document.getElementById('circleType');
   const type = typeEl && typeEl.checked ? 'big' : 'small';
-  if (!cb || !cb.checked) return;
+  if (activeRegionChoice!=='krasny-kut'||!cb || !cb.checked) return;
 
   const runway20 = !!document.getElementById('circleRunway20')?.checked;
   const decl = getDecl();
@@ -3720,10 +3741,10 @@ function guidanceSummaryHtml(p) {
 }
 function buildHSISelects() {
   const r=document.getElementById('hsiRouteSelect');
-  const routeSignature=Object.entries(ROUTES).map(([key,v])=>key+':'+v.name+':'+v.points.length).join('|');
+  const routeSignature=activeRegionChoice+'|'+Object.entries(ROUTES).map(([key,v])=>key+':'+v.name+':'+v.points.length).join('|');
   if(r.dataset.signature!==routeSignature){
     r.innerHTML='<option value="">Выберите маршрут</option>';
-    Object.entries(ROUTES).forEach(([key,route])=>r.add(new Option(route.name,key)));
+    Object.entries(ROUTES).filter(([key])=>regionalKeyIsVisible(key)||key===hsiState.routeKey).forEach(([key,route])=>r.add(new Option(route.name,key)));
     r.dataset.signature=routeSignature;
   }
   const legSelect=document.getElementById('hsiLegSelect');
@@ -5221,8 +5242,9 @@ function startSimulator(){
   // При включении SIM корректно закрываем настоящий полёт и отпускаем GPS-наблюдение.
   const lastPosition=getCurrentPosition();
   if(rtTracking)stopRT();
-  const start=lastPosition&&Number.isFinite(lastPosition.lat)&&Number.isFinite(lastPosition.lon)?
-    {lat:lastPosition.lat,lon:lastPosition.lon}:map.getCenter();
+  const start=activeRegionChoice==='sasovo'?REGION_START_POINTS.sasovo:
+    (lastPosition&&Number.isFinite(lastPosition.lat)&&Number.isFinite(lastPosition.lon)?
+      {lat:lastPosition.lat,lon:lastPosition.lon}:(REGION_START_POINTS[activeRegionChoice]||map.getCenter()));
   simSavedNavStart=navLineStart?{...navLineStart}:null;
   simSavedNavTarget=navTarget?{lat:navTarget.lat,lon:navTarget.lon}:null;
   simSavedHSI=JSON.parse(JSON.stringify(hsiState));
@@ -5345,6 +5367,9 @@ initJokePreference();
 renderCircle();
 renderAreas();
 setActiveRegion(activeRegionChoice);
+if(activeRegionChoice==='sasovo'&&!rtTracking&&!simActive){
+  const start=REGION_START_POINTS.sasovo;map.setView([start.lat,start.lon],10);
+}
 document.getElementById('toggleAltitudeColors').checked = localStorage.getItem(ALT_COLORS_KEY) === '1';
 toggleAltitudeView();
 updateNavUI();
