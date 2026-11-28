@@ -443,7 +443,7 @@ function setActiveRegion(value){
   if(!['global','krasny-kut','sasovo'].includes(value))return;
   const previous=activeRegionChoice;
   const pref=regionalLayerPreferences[previous]||{};
-  for(const el of document.querySelectorAll('#regionalRouteList input[type=checkbox],#toggleZones,#toggleSectors,#toggleCircle'))pref[el.id]=el.checked;
+  for(const el of document.querySelectorAll('#regionalRouteList input[type=checkbox],#toggleZones,#toggleInstrumentZones,#toggleSectors,#toggleCircle'))pref[el.id]=el.checked;
   activeRegionChoice=value;
   try{localStorage.setItem(REGION_CHOICE_KEY,value);}catch(e){}
   const saved=regionalLayerPreferences[value]||{};
@@ -455,15 +455,18 @@ function setActiveRegion(value){
   }
   const empty=document.getElementById('regionRoutesEmpty');if(empty)empty.hidden=!!(list&&list.children.length);
   const isKrasny=value==='krasny-kut',isSasovo=value==='sasovo';
-  const zones=document.getElementById('toggleZones'),sectors=document.getElementById('toggleSectors'),circle=document.getElementById('toggleCircle');
+  const zones=document.getElementById('toggleZones'),instrumentZones=document.getElementById('toggleInstrumentZones'),sectors=document.getElementById('toggleSectors'),circle=document.getElementById('toggleCircle');
   if(zones)zones.checked=(isKrasny||isSasovo)&&!!saved.toggleZones;
+  if(instrumentZones)instrumentZones.checked=isSasovo&&!!saved.toggleInstrumentZones;
   if(sectors)sectors.checked=isKrasny&&!!saved.toggleSectors;
   if(circle)circle.checked=isKrasny&&!!saved.toggleCircle;
-  if(zones?.closest('.route-toggle'))zones.closest('.route-toggle').querySelector('label').textContent=isSasovo?'Зоны Сасово (14; R 3–10 км)':'Зоны (ПЗ) — R 2,5 км';
+  if(zones?.closest('.route-toggle'))zones.closest('.route-toggle').querySelector('label').textContent=isSasovo?'Пилотажные зоны (№1–8)':'Зоны (ПЗ) — R 2,5 км';
+  const instrumentRow=instrumentZones?.closest('.route-toggle');if(instrumentRow)instrumentRow.hidden=!isSasovo;
   const secRow=sectors?.closest('.route-toggle');if(secRow)secRow.hidden=!isKrasny;
+  const areaHeading=document.getElementById('regionalAreasHeading');if(areaHeading)areaHeading.textContent=isSasovo?'Зоны Сасово':isKrasny?'Зоны и секторы':'Региональные зоны';
   const circBox=circle?.closest('.circle-box');if(circBox)circBox.hidden=!isKrasny;
   const status=document.getElementById('regionStatus');
-  if(status)status.textContent=isSasovo?'Сасово 2: маршруты №453–462, перелёты на Пителино, 14 зон. Круг пока отсутствует.':
+  if(status)status.textContent=isSasovo?'Сасово 2: маршруты №453–462 и Пителино, пилотажные зоны №1–8, зоны полётов по приборам №9–14. Секторов и круга нет.':
     isKrasny?'Местные маршруты, зоны, секторы и круг Красного Кута.':'Глобально: только общие НРТС и пользовательские маршруты.';
   // Центрируем обзор по выбранной базе, но не телепортируем действующий GPS/SIM.
   if(value!==previous && (isKrasny||isSasovo)){
@@ -1540,6 +1543,9 @@ function changeNavaidDirection(id,value){
   navaidDirections[id]=value;
   const idx=PRESET.indexOf(a),label=document.getElementById('stationBrgLabel'+(idx+1));
   if(label)label.textContent=(navaidIsVor(a)?(value==='to'?'Курс НА':'Радиал ОТ'):(value==='mps'?'МПС':'МПР'))+':';
+  const button=document.getElementById('navaidMode'+(idx+1));
+  if(button){button.textContent=navaidIsVor(a)?(value==='to'?'НА':'ОТ'):(value==='mps'?'МПС':'МПР');
+    button.setAttribute('aria-label','Режим '+button.textContent+'. Нажмите для смены направления');}
   preview();
 }
 function changeNavaidDistanceUnit(id,value){
@@ -1550,7 +1556,18 @@ function changeNavaidDistanceUnit(id,value){
     const n=parseDistance(input.value.trim());
     if(n!==null)input.value=String(Number((n*(old==='km'?1/1.852:1.852)).toFixed(3)));
   }
-  navaidDistanceUnits[id]=value;preview();
+  navaidDistanceUnits[id]=value;
+  const button=document.getElementById('navaidUnit'+(PRESET.indexOf(a)+1));
+  if(button){button.textContent=value==='nm'?'NM':'км';button.setAttribute('aria-label','Единицы '+button.textContent+'. Нажмите для переключения');}
+  preview();
+}
+function toggleNavaidDirection(id){
+  const a=PRESET.find(x=>x.id===id);if(!a)return;
+  const current=stationDirection(a);
+  changeNavaidDirection(id,navaidIsVor(a)?(current==='to'?'from':'to'):(current==='mpr'?'mps':'mpr'));
+}
+function toggleNavaidDistanceUnit(id){
+  changeNavaidDistanceUnit(id,(navaidDistanceUnits[id]||'km')==='km'?'nm':'km');
 }
 function stationBearingFromInput(a,mag){
   const mode=stationDirection(a);
@@ -1582,10 +1599,10 @@ function syncWorkingNavaids(keepInputs=true){
         '<div class="navaid-work-missing">DME-only · '+safeText(near)+'. Без радиала и МПР.<br><small>Фактическое показание DME (наклонная дальность) не моделируется.</small></div></div>';
     }
     const mode=stationDirection(a);
-    const direction='<select class="navaid-compact-select" aria-label="Направление относительно маяка" onchange="changeNavaidDirection(\''+a.id+'\',this.value)">'+(vor?'<option value="from"'+(mode==='from'?' selected':'')+'>ОТ</option><option value="to"'+(mode==='to'?' selected':'')+'>НА</option>':'<option value="mpr"'+(mode==='mpr'?' selected':'')+'>МПР</option><option value="mps"'+(mode==='mps'?' selected':'')+'>МПС</option>')+'</select>';
+    const direction='<button type="button" class="navaid-cycle-button" id="navaidMode'+num+'" aria-label="Режим направления. Нажмите для смены" title="Переключить направление одним нажатием" onclick="toggleNavaidDirection(\''+a.id+'\')">'+(vor?(mode==='to'?'НА':'ОТ'):(mode==='mps'?'МПС':'МПР'))+'</button>';
     const input='<div class="row"><label id="stationBrgLabel'+num+'">'+(vor?(mode==='to'?'Курс НА':'Радиал ОТ'):(mode==='mps'?'МПС':'МПР'))+':</label> <input id="brg'+num+'" value="'+safeText(previous.brg||'')+'" placeholder="—" inputmode="numeric" oninput="preview()"> ° '+direction+'</div>';
     const unit=navaidDistanceUnits[a.id]||'km';
-    const dme=vor&&a.sourceType!=='DVOR'?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> <select class="navaid-compact-select" aria-label="Единицы дальности DME" onchange="changeNavaidDistanceUnit(\''+a.id+'\',this.value)"><option value="km"'+(unit==='km'?' selected':'')+'>км</option><option value="nm"'+(unit==='nm'?' selected':'')+'>NM</option></select></div>':'';
+    const dme=vor&&a.sourceType!=='DVOR'?'<div class="row"><label>Дальность:</label> <input id="vorDist'+num+'" value="'+safeText(previous.dist||'')+'" placeholder="—" inputmode="decimal" oninput="preview()"> <button type="button" class="navaid-cycle-button" id="navaidUnit'+num+'" aria-label="Единицы дальности. Нажмите для переключения" title="км / морские мили — одним нажатием" onclick="toggleNavaidDistanceUnit(\''+a.id+'\')">'+(unit==='nm'?'NM':'км')+'</button></div>':'';
     return '<div class="oprs navaid-work-block'+(vor?' vor':'')+'" id="block'+num+'">'+title+input+dme+'<div class="calc-line" id="calc'+num+'"></div></div>';
   }).join('') || '<div class="hint">Список пуст. Добавьте маяки из библиотеки или нажмите «Обновить».</div>';
   document.getElementById('stationCount').textContent=PRESET.length+' в списке · '+navaidCatalog.length+' в библиотеке';
@@ -1925,7 +1942,17 @@ function buildZonePopup(z) {
   html += '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">';
   if(Number.isFinite(z.s))html += 'Удаление от КТА: <b>' + z.s + ' км</b><br>';
   if(Number.isFinite(z.zmpu))html += 'ЗМПУ в зону: <b>' + fmtZmpu(z.zmpu) + '</b>';
-  if(Number.isFinite(z.radiusKm))html += 'Радиус: <b>' + z.radiusKm + ' км</b><br>Тип: '+safeText(z.kind)+'<br>'; 
+  if(Number.isFinite(z.radiusKm))html += 'Радиус: <b>' + z.radiusKm + ' км</b><br>Тип: '+safeText(z.kind)+'<br>';
+  if(Array.isArray(z.approachVariants) && z.approachVariants.length){
+    html += '<div style="margin-top:5px"><b>По схеме Сасово:</b><br>';
+    for(const v of z.approachVariants){
+      html += (z.approachVariants.length>1?'<small>'+safeText(v.label)+':</small> ':'')+
+        'Удаление <b>'+safeText(v.distanceKm)+' км</b>'+
+        (Number.isFinite(v.mpr)?' · МПР <b>'+fmtZmpu(v.mpr)+'</b>':'')+
+        (Number.isFinite(v.mpu)?' · МПУ <b>'+fmtZmpu(v.mpu)+'</b>':'')+'<br>';
+    }
+    html += '<small>Табличные значения из присланной схемы; не измерение от текущей позиции ВС. Актуальность не проверена.</small></div>';
+  }
   return html+routePopupAddControl(z.id+' '+z.name,z.lat,z.lon);
 }
 
@@ -1941,11 +1968,19 @@ function renderAreas() {
   // --- Зоны (ПЗ), R = 2,5 км ---
   areaLayers.zones.forEach(l => map.removeLayer(l));
   areaLayers.zones = [];
-  if (activeRegionChoice!=='global' && document.getElementById('toggleZones').checked) {
-    (activeRegionChoice==='sasovo'?SASOVO_PROFILE.zones:ZONES).forEach(z => {
+  const showPilot=document.getElementById('toggleZones')?.checked;
+  const showInstrument=document.getElementById('toggleInstrumentZones')?.checked;
+  if ((activeRegionChoice==='krasny-kut' && showPilot) ||
+      (activeRegionChoice==='sasovo' && (showPilot || showInstrument))) {
+    const visibleZones=activeRegionChoice==='sasovo'
+      ? SASOVO_PROFILE.zones.filter(z=>z.kind==='пилотажная'?showPilot:z.kind==='полёты по приборам'?showInstrument:false)
+      : ZONES;
+    visibleZones.forEach(z => {
+      const sasovoPilot=activeRegionChoice==='sasovo'&&z.kind==='пилотажная';
+      const fill=activeRegionChoice==='sasovo'?(sasovoPilot?'#f0008b':'#cb1919'):'#dc3232';
       const circle = L.circle([z.lat, z.lon], {
-        radius: (z.radiusKm||2.5)*1000, color: activeRegionChoice==='sasovo'?(z.radiusKm>=6?'#cb1919':'#f0008b'):'#dc3232', weight: 2, opacity: 0.8,
-        fillColor: activeRegionChoice==='sasovo'?(z.radiusKm>=6?'#cb1919':'#f0008b'):'#dc3232', fillOpacity: 0.15
+        radius: (z.radiusKm||2.5)*1000, color: fill, weight: 2, opacity: 0.8,
+        fillColor: fill, fillOpacity: 0.15
       }).addTo(map);
       bindLivePopup(circle, () => buildZonePopup(z), { autoPan: true });
       areaLayers.zones.push(circle);
@@ -1989,6 +2024,7 @@ function renderAreas() {
 
 map.on('zoomend', () => {
   if (document.getElementById('toggleZones').checked ||
+      document.getElementById('toggleInstrumentZones')?.checked ||
       document.getElementById('toggleSectors').checked) {
     renderAreas();
   }
@@ -2835,10 +2871,57 @@ async function naebaciaCopyPopupCoords(lat,lon) {
 let rulerActive=false,rulerPoints=null,rulerMarkers=[],rulerLine=null;
 let rulerUnit='km',rulerAngleMode='mag',rulerReversed=false;
 const rulerPointers=new Map();
+
+// Перемещаем только плашку линейки, за выделенный заголовок.
+// Каждое касание отслеживается по pointerId, чтобы не мешать мультитачу маркеров А/Б.
+let rulerWindowPointer=null;
+function initRulerWindowDrag(){
+  const panel=document.getElementById('rulerReadout');
+  const handle=document.getElementById('rulerDragHandle');
+  if(!panel||!handle||handle.dataset.dragReady)return;
+  handle.dataset.dragReady='1';
+  handle.addEventListener('pointerdown',e=>{
+    if(rulerWindowPointer!==null || (e.pointerType==='mouse'&&e.button!==0))return;
+    const r=panel.getBoundingClientRect();
+    panel.style.setProperty('--ruler-left',r.left+'px');
+    panel.style.setProperty('--ruler-top',r.top+'px');
+    panel.classList.add('ruler-custom-position');
+    rulerWindowPointer={id:e.pointerId,startX:e.clientX,startY:e.clientY,left:r.left,top:r.top};
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();e.stopPropagation();
+  });
+  handle.addEventListener('pointermove',e=>{
+    const drag=rulerWindowPointer;
+    if(!drag || drag.id!==e.pointerId)return;
+    const width=panel.offsetWidth,height=panel.offsetHeight;
+    const left=Math.max(0,Math.min(window.innerWidth-width,drag.left+e.clientX-drag.startX));
+    const top=Math.max(0,Math.min(window.innerHeight-height,drag.top+e.clientY-drag.startY));
+    panel.style.setProperty('--ruler-left',left+'px');
+    panel.style.setProperty('--ruler-top',top+'px');
+    e.preventDefault();e.stopPropagation();
+  });
+  const end=e=>{
+    if(!rulerWindowPointer || rulerWindowPointer.id!==e.pointerId)return;
+    rulerWindowPointer=null;
+    if(handle.hasPointerCapture(e.pointerId))handle.releasePointerCapture(e.pointerId);
+    e.stopPropagation();
+  };
+  handle.addEventListener('pointerup',end);
+  handle.addEventListener('pointercancel',end);
+  handle.addEventListener('lostpointercapture',e=>{if(rulerWindowPointer?.id===e.pointerId)rulerWindowPointer=null;});
+  window.addEventListener('resize',()=>{
+    if(!panel.classList.contains('ruler-custom-position'))return;
+    const r=panel.getBoundingClientRect();
+    panel.style.setProperty('--ruler-left',Math.max(0,Math.min(window.innerWidth-panel.offsetWidth,r.left))+'px');
+    panel.style.setProperty('--ruler-top',Math.max(0,Math.min(window.innerHeight-panel.offsetHeight,r.top))+'px');
+  });
+}
+
 function toggleRuler(force){
   const enable=typeof force==='boolean'?force:!rulerActive;
   rulerActive=enable;
   const widget=document.getElementById('rulerReadout');if(widget)widget.hidden=!enable;
+  if(enable)initRulerWindowDrag();
   if(!enable){
     rulerPointers.clear();map.dragging.enable();
     rulerMarkers.forEach(m=>map.removeLayer(m));rulerMarkers=[];
